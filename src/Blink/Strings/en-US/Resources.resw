@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="App.Title" xml:space="preserve"><value>Blink</value><comment>Application window title.</comment></data>
+  <data name="Nav.Places" xml:space="preserve"><value>Places</value><comment>Navigation pane heading for known folders.</comment></data>
+  <data name="Nav.Drives" xml:space="preserve"><value>Drives</value><comment>Navigation pane heading for logical drives.</comment></data>
+  <data name="Nav.Home" xml:space="preserve"><value>Home</value><comment>Current user's profile folder.</comment></data>
+  <data name="Nav.Desktop" xml:space="preserve"><value>Desktop</value><comment>Current user's desktop folder.</comment></data>
+  <data name="Nav.Downloads" xml:space="preserve"><value>Downloads</value><comment>Current user's downloads folder.</comment></data>
+  <data name="Nav.Documents" xml:space="preserve"><value>Documents</value><comment>Current user's documents folder.</comment></data>
+  <data name="Location.ThisPC" xml:space="preserve"><value>This PC</value><comment>Blink-native virtual location.</comment></data>
+  <data name="ThisPC.Places" xml:space="preserve"><value>Folder</value><comment>Type label for a This PC place.</comment></data>
+  <data name="ThisPC.Drive" xml:space="preserve"><value>Drive</value><comment>Type label for a local volume.</comment></data>
+  <data name="Toolbar.Back" xml:space="preserve"><value>Back</value><comment>Navigate to the previous folder.</comment></data>
+  <data name="Toolbar.Forward" xml:space="preserve"><value>Forward</value><comment>Navigate to the next folder in history.</comment></data>
+  <data name="Toolbar.Up" xml:space="preserve"><value>Up</value><comment>Navigate to the parent folder.</comment></data>
+  <data name="Toolbar.Refresh" xml:space="preserve"><value>Refresh</value><comment>Reload the current folder.</comment></data>
+  <data name="Toolbar.PathPlaceholder" xml:space="preserve"><value>Enter a folder path</value><comment>Address bar placeholder.</comment></data>
+  <data name="Toolbar.SearchPlaceholder" xml:space="preserve"><value>Search names or extensions</value><comment>Search input placeholder.</comment></data>
+  <data name="Toolbar.SortBy" xml:space="preserve"><value>Sort by {0}</value><comment>Tooltip for a folder column sort button.</comment></data>
+  <data name="Toolbar.View" xml:space="preserve"><value>View</value><comment>Folder view selector accessible name.</comment></data>
+  <data name="Toolbar.Sort" xml:space="preserve"><value>Sort</value><comment>Folder sort selector accessible name.</comment></data>
+  <data name="View.Details" xml:space="preserve"><value>Details</value><comment>Detailed folder view.</comment></data>
+  <data name="View.List" xml:space="preserve"><value>List</value><comment>Compact folder list view.</comment></data>
+  <data name="View.Grid" xml:space="preserve"><value>Grid</value><comment>Folder icon grid view.</comment></data>
+  <data name="View.ShowHiddenItems" xml:space="preserve"><value>Show hidden items</value><comment>Window-wide hidden items toggle.</comment></data>
+  <data name="View.ShowHiddenItemsHint" xml:space="preserve"><value>Applies to all tabs and the navigation tree. System items stay hidden.</value><comment>Hidden items scope and system items policy.</comment></data>
+  <data name="Sort.Ascending" xml:space="preserve"><value>Ascending</value><comment>Current folder sort direction.</comment></data>
+  <data name="Sort.Descending" xml:space="preserve"><value>Descending</value><comment>Current folder sort direction.</comment></data>
+  <data name="FileSize.Bytes" xml:space="preserve"><value>B</value><comment>File size unit: bytes.</comment></data>
+  <data name="FileSize.Kilobytes" xml:space="preserve"><value>KB</value><comment>File size unit: kibibytes as displayed by Blink.</comment></data>
+  <data name="FileSize.Megabytes" xml:space="preserve"><value>MB</value><comment>File size unit: mebibytes as displayed by Blink.</comment></data>
+  <data name="FileSize.Gigabytes" xml:space="preserve"><value>GB</value><comment>File size unit: gibibytes as displayed by Blink.</comment></data>
+  <data name="FileSize.Terabytes" xml:space="preserve"><value>TB</value><comment>File size unit: tebibytes as displayed by Blink.</comment></data>
+  <data name="Common.NotAvailable" xml:space="preserve"><value>-</value><comment>Placeholder for an unavailable display value.</comment></data>
+  <data name="Column.Name" xml:space="preserve"><value>Name</value><comment>Folder list name column.</comment></data>
+  <data name="Column.Type" xml:space="preserve"><value>Type</value><comment>Folder list type column.</comment></data>
+  <data name="Column.Size" xml:space="preserve"><value>Size</value><comment>Folder list size column.</comment></data>
+  <data name="Column.Modified" xml:space="preserve"><value>Modified</value><comment>Folder list modified-time column.</comment></data>
+  <data name="Status.Selected" xml:space="preserve"><value>{0} selected</value><comment>Selected item count.</comment></data>
+  <data name="Status.IndexNotConnected" xml:space="preserve"><value>Index: Not connected</value><comment>IndexService is not connected.</comment></data>
+  <data name="Status.Loading" xml:space="preserve"><value>Loading  {0}</value><comment>Local folder enumeration is running.</comment></data>
+  <data name="Status.LoadingThisPC" xml:space="preserve"><value>Loading This PC</value><comment>Blink-native This PC content is loading.</comment></data>
+  <data name="Status.ThisPCReadyCount" xml:space="preserve"><value>Ready  -  {0} locations</value><comment>Committed This PC item count.</comment></data>
+  <data name="Status.ThisPCFailed" xml:space="preserve"><value>Unable to refresh This PC. Showing the previous locations. (Win32 {0})</value><comment>Failed This PC refresh preserves committed content.</comment></data>
+  <data name="Status.Empty" xml:space="preserve"><value>Ready  -  empty folder</value><comment>The committed folder contains no entries.</comment></data>
+  <data name="Status.ChooseFolder" xml:space="preserve"><value>Ready  -  choose a folder</value><comment>No committed folder is available.</comment></data>
+  <data name="Status.ReadyCount" xml:space="preserve"><value>Ready  -  {0} items</value><comment>Committed folder item count.</comment></data>
+  <data name="Status.InvalidPath" xml:space="preserve"><value>Folder path is invalid</value><comment>Address bar input is not a valid navigation target.</comment></data>
+  <data name="Status.ZeroSelected" xml:space="preserve"><value>0 selected</value><comment>Diagnostic list selection count.</comment></data>
+  <data name="Browse.PathNotFound" xml:space="preserve"><value>Path not found. Showing the previous folder. (Win32 {0})</value><comment>Failed navigation for a missing path.</comment></data>
+  <data name="Browse.AccessDenied" xml:space="preserve"><value>Access denied. Showing the previous folder. (Win32 {0})</value><comment>Failed navigation for an inaccessible path.</comment></data>
+  <data name="Browse.Failed" xml:space="preserve"><value>Unable to open this folder. Showing the previous folder. (Win32 {0})</value><comment>Fallback for other browse errors.</comment></data>
+  <data name="FileType.Folder" xml:space="preserve"><value>Folder</value><comment>Display label for a directory.</comment></data>
+  <data name="FileType.TextDocument" xml:space="preserve"><value>Text document</value><comment>Display label for text/log files.</comment></data>
+  <data name="FileType.CppSource" xml:space="preserve"><value>C++ source</value><comment>Display label for C++ source files.</comment></data>
+  <data name="FileType.Image" xml:space="preserve"><value>Image</value><comment>Display label for image files.</comment></data>
+  <data name="FileType.CompressedArchive" xml:space="preserve"><value>Compressed archive</value><comment>Display label for archive files.</comment></data>
+  <data name="FileType.Application" xml:space="preserve"><value>Application</value><comment>Display label for executable/installer files.</comment></data>
+  <data name="FileType.File" xml:space="preserve"><value>File</value><comment>Generic display label for a file without an extension.</comment></data>
+  <data name="FileType.FileSuffix" xml:space="preserve"><value>{0} file</value><comment>Display label suffix for an unclassified extension.</comment></data>
+  <data name="Status.BuildingIndex" xml:space="preserve"><value>Building index on a worker thread...</value><comment>Prototype diagnostic command status.</comment></data>
+  <data name="Status.IndexBuildFailed" xml:space="preserve"><value>Index build failed</value><comment>Prototype diagnostic command status.</comment></data>
+  <data name="Status.IndexReady" xml:space="preserve"><value>Index ready: {0} files, {1} directories, {2}s; {3}</value><comment>Prototype diagnostic command status.</comment></data>
+  <data name="Status.SavedYes" xml:space="preserve"><value>saved=yes</value><comment>Index save succeeded.</comment></data>
+  <data name="Status.SavedError" xml:space="preserve"><value>saved=no, error={0}</value><comment>Index save failed.</comment></data>
+  <data name="Status.SearchingLocal" xml:space="preserve"><value>Searching without rescanning...</value><comment>Prototype local search status.</comment></data>
+  <data name="Status.LocalSearchResult" xml:space="preserve"><value>Index search: {0} results in {1} ms</value><comment>Prototype local search result status.</comment></data>
+  <data name="Status.QueryingIndexService" xml:space="preserve"><value>Querying IndexService...</value><comment>IndexService status request.</comment></data>
+  <data name="Status.IndexServiceUnavailable" xml:space="preserve"><value>IndexService unavailable (Win32 {0})</value><comment>IndexService could not be reached.</comment></data>
+  <data name="Status.IndexService" xml:space="preserve"><value>IndexService: {0}, files={1}, dirs={2}, error={3}</value><comment>IndexService status response.</comment></data>
+  <data name="Status.StartingFastIndex" xml:space="preserve"><value>Starting privileged MFT/USN index...</value><comment>Prototype diagnostic command status.</comment></data>
+  <data name="Status.FastIndexRequest" xml:space="preserve"><value>MFT/USN request: {0}, operation={1}, error={2}</value><comment>Prototype diagnostic command status.</comment></data>
+  <data name="Status.SearchingFastIndex" xml:space="preserve"><value>Searching IndexService without a DFS rescan...</value><comment>Prototype diagnostic command status.</comment></data>
+  <data name="Status.FastSearchState" xml:space="preserve"><value>Fast search state={0}, error={1}</value><comment>Prototype IndexService search error status.</comment></data>
+  <data name="Status.FastSearch" xml:space="preserve"><value>Fast search: {0} results; state={1}</value><comment>Prototype IndexService search result status.</comment></data>
+  <data name="Status.SelectOneFile" xml:space="preserve"><value>Select one file first</value><comment>File operation requires a file selection.</comment></data>
+  <data name="Status.ReadingProperties" xml:space="preserve"><value>Reading properties on a worker thread...</value><comment>Property probe status.</comment></data>
+  <data name="Status.PropertiesFailed" xml:space="preserve"><value>Properties failed (Win32 {0})</value><comment>Property probe error status.</comment></data>
+  <data name="Status.Properties" xml:space="preserve"><value>Properties: {0}; ACL={1}; metadata={2}; streams={3}</value><comment>Property probe result status.</comment></data>
+  <data name="Status.CopyFileProbeRequiresFile" xml:space="preserve"><value>CopyFile2 probe requires a file selection</value><comment>Copy probe requires a file rather than a directory.</comment></data>
+  <data name="Status.CopyRunning" xml:space="preserve"><value>CopyFile2 running in the background...</value><comment>Copy probe status.</comment></data>
+  <data name="Status.CopyResult" xml:space="preserve"><value>CopyFile2: status=0x</value><comment>Copy probe result status.</comment></data>
+  <data name="Status.CopyCanceled" xml:space="preserve"><value>, canceled</value><comment>Copy probe cancellation suffix.</comment></data>
+  <data name="Status.CopyComplete" xml:space="preserve"><value>, complete</value><comment>Copy probe completion suffix.</comment></data>
+  <data name="Status.StartingProvider" xml:space="preserve"><value>Starting isolated ProviderHost: </value><comment>Provider prototype status.</comment></data>
+  <data name="Status.ProviderStartFailed" xml:space="preserve"><value>ProviderHost start failed</value><comment>Provider prototype error status.</comment></data>
+  <data name="Status.Provider" xml:space="preserve"><value>Provider </value><comment>Provider prototype result status.</comment></data>
+  <data name="Status.ProviderResult" xml:space="preserve"><value>Provider {0}: {1}, {2}, error={3}</value><comment>Provider prototype result status.</comment></data>
+  <data name="Status.SuccessYes" xml:space="preserve"><value>success=yes</value><comment>Provider prototype result field.</comment></data>
+  <data name="Status.SuccessNo" xml:space="preserve"><value>success=no</value><comment>Provider prototype result field.</comment></data>
+  <data name="Status.CanceledYes" xml:space="preserve"><value>canceled=yes</value><comment>Provider prototype result field.</comment></data>
+  <data name="Status.CanceledNo" xml:space="preserve"><value>canceled=no</value><comment>Provider prototype result field.</comment></data>
+  <data name="Status.SelectAllFailed" xml:space="preserve"><value>Unable to select all items. Try again.</value></data>
+  <data name="Status.OpeningFile" xml:space="preserve"><value>Opening {0}</value></data>
+  <data name="Status.OpenDispatched" xml:space="preserve"><value>Open request sent to Windows: {0}</value></data>
+  <data name="Status.OpenChanged" xml:space="preserve"><value>This item has changed. Refresh the folder before opening it.</value></data>
+  <data name="Status.OpenNoAssociation" xml:space="preserve"><value>No default app is associated with this file: {0}</value></data>
+  <data name="Status.OpenFailed" xml:space="preserve"><value>Unable to open {0}. (HRESULT {1})</value></data>
+  <data name="Status.OpenTimedOut" xml:space="preserve"><value>The open request did not finish in time. Check the target app before retrying.</value></data>
+  <data name="Command.Open" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="Command.Cut" xml:space="preserve">
+    <value>Cut</value>
+  </data>
+  <data name="Command.Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Command.Rename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="Command.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Command.PermanentDelete" xml:space="preserve">
+    <value>Permanently delete</value>
+  </data>
+  <data name="Command.Properties" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="Command.Paste" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="Command.NewFolder" xml:space="preserve">
+    <value>New folder</value>
+  </data>
+  <data name="Command.View" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Command.UnavailableSuffix" xml:space="preserve">
+    <value> (not available yet)</value>
+  </data>
+  <data name="Status.CommandNotImplemented" xml:space="preserve">
+    <value>{0} is not available yet.</value>
+  </data>
+  <data name="Status.CommandBusy" xml:space="preserve">
+    <value>The folder is updating. Try again shortly.</value>
+  </data>
+  <data name="Status.CommandStale" xml:space="preserve">
+    <value>The page has changed. Open the menu again.</value>
+  </data>
+  <data name="Status.CommandFolderRequired" xml:space="preserve">
+    <value>Open a folder to use this command.</value>
+  </data>
+  <data name="Status.CommandSelectionRequired" xml:space="preserve">
+    <value>Select an item first.</value>
+  </data>
+  <data name="Status.CommandSingleRequired" xml:space="preserve">
+    <value>Select one item for this command.</value>
+  </data>
+  <data name="Status.WatchUnavailable" xml:space="preserve">
+    <value>Automatic updates unavailable ({0}). Use Refresh.</value>
+  </data>
+  <data name="Index.PanelTitle" xml:space="preserve">
+    <value>Index service status</value>
+  </data>
+  <data name="Index.Volume" xml:space="preserve">
+    <value>Local volume</value>
+  </data>
+  <data name="Index.RefreshStatus" xml:space="preserve">
+    <value>Refresh status / reconnect</value>
+  </data>
+  <data name="Index.Enable" xml:space="preserve"><value>Enable indexing</value></data>
+  <data name="Index.EnableDescription" xml:space="preserve"><value>Enabling indexing for the first time requires Windows administrator confirmation.</value></data>
+  <data name="Index.BuildSelected" xml:space="preserve"><value>Index selected drive</value></data>
+  <data name="Index.BuildDescription" xml:space="preserve"><value>Build the index for the selected drive to search its files.</value></data>
+  <data name="Index.EnableCancelled" xml:space="preserve"><value>Administrator confirmation was cancelled. Indexing has not been enabled.</value></data>
+  <data name="Index.Checking" xml:space="preserve">
+    <value>Index: Checking…</value>
+  </data>
+  <data name="Index.Connected" xml:space="preserve">
+    <value>Index: Connected</value>
+  </data>
+  <data name="Index.Disconnected" xml:space="preserve">
+    <value>Index: Unavailable</value>
+  </data>
+  <data name="Index.ServiceRunning" xml:space="preserve">
+    <value>The index service is running.</value>
+  </data>
+  <data name="Index.ServiceStarting" xml:space="preserve">
+    <value>The index service is starting.</value>
+  </data>
+  <data name="Index.ServiceStopping" xml:space="preserve">
+    <value>The index service is stopping.</value>
+  </data>
+  <data name="Index.ServiceStopped" xml:space="preserve">
+    <value>The index service is stopped.</value>
+  </data>
+  <data name="Index.ServiceFaulted" xml:space="preserve">
+    <value>The index service reported a failure.</value>
+  </data>
+  <data name="Index.ConnectionError" xml:space="preserve">
+    <value>Could not read the index service ({0}). Local browsing is still available.</value>
+  </data>
+  <data name="Index.OperationProgress" xml:space="preserve">
+    <value>Service operation in progress: {0} records processed.</value>
+  </data>
+  <data name="Index.VolumeCounts" xml:space="preserve">
+    <value>{0} files, {1} folders</value>
+  </data>
+  <data name="Index.VolumeError" xml:space="preserve">
+    <value>Error: {0}</value>
+  </data>
+  <data name="Index.Healthy" xml:space="preserve">
+    <value>Ready to search</value>
+  </data>
+  <data name="Index.CatchingUp" xml:space="preserve">
+    <value>Catching up</value>
+  </data>
+  <data name="Index.RebuildRequired" xml:space="preserve">
+    <value>Rebuild required</value>
+  </data>
+  <data name="Index.Rebuilding" xml:space="preserve">
+    <value>Rebuilding</value>
+  </data>
+  <data name="Index.Unavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="Index.Corrupted" xml:space="preserve">
+    <value>Index data damaged</value>
+  </data>
+  <data name="Index.Unconfirmed" xml:space="preserve">
+    <value>Status not confirmed</value>
+  </data>
+  <data name="Search.Scope" xml:space="preserve"><value>Search scope</value></data>
+  <data name="Search.Advanced" xml:space="preserve"><value>Advanced search</value></data>
+  <data name="Search.FollowLocation" xml:space="preserve"><value>Follow current location</value></data>
+  <data name="Search.SelectedVolumes" xml:space="preserve"><value>Selected drives</value></data>
+  <data name="Search.SelectedVolumesHint" xml:space="preserve"><value>For example C:;D: (or comma / space separated)</value></data>
+  <data name="Search.SelectedFolder" xml:space="preserve"><value>Selected folder</value></data>
+  <data name="Search.FolderHint" xml:space="preserve"><value>Enter the full folder path</value></data>
+  <data name="Search.UseCurrentFolder" xml:space="preserve"><value>Use current location</value></data>
+  <data name="Search.IncludeSubfolders" xml:space="preserve"><value>Include subfolders</value></data>
+  <data name="Search.FolderOnly" xml:space="preserve"><value>This folder only</value></data>
+  <data name="Search.ScopeSummary" xml:space="preserve"><value>Scope: {0}</value></data>
+  <data name="Search.ScopeDraftSummary" xml:space="preserve"><value>Scope: {0} · changes apply when you search</value></data>
+  <data name="Search.ScopeNotSet" xml:space="preserve"><value>Choose a search location</value></data>
+  <data name="Search.AdvancedHint" xml:space="preserve"><value>Follow location searches all drives from This PC, or the current drive from a folder. Press Enter or Search to apply changes.</value></data>
+  <data name="Search.CurrentFolderUnavailable" xml:space="preserve"><value>The current location is not a folder</value></data>
+  <data name="Search.Mode" xml:space="preserve"><value>Match mode</value></data>
+  <data name="Search.AllVolumes" xml:space="preserve"><value>All local drives</value></data>
+  <data name="Search.CurrentFolder" xml:space="preserve"><value>Current folder</value></data>
+  <data name="Search.Substring" xml:space="preserve"><value>Name contains</value></data>
+  <data name="Search.Prefix" xml:space="preserve"><value>Name starts with</value></data>
+  <data name="Search.Extension" xml:space="preserve"><value>Extension</value></data>
+  <data name="Search.Submit" xml:space="preserve"><value>Search</value></data>
+  <data name="Search.Retry" xml:space="preserve"><value>Retry unfinished volumes</value></data>
+  <data name="Search.Leave" xml:space="preserve"><value>Back to folder</value></data>
+  <data name="Search.Locate" xml:space="preserve"><value>Locate</value></data>
+  <data name="Search.VolumeStates" xml:space="preserve"><value>Volume index states</value></data>
+  <data name="Search.Queued" xml:space="preserve"><value>Search queued. Please wait.</value></data>
+  <data name="Search.Searching" xml:space="preserve"><value>Searching for “{0}”; {1} items received.</value></data>
+  <data name="Search.Preparing" xml:space="preserve"><value>The index is preparing. Retry “{0}” shortly.</value></data>
+  <data name="Search.Partial" xml:space="preserve"><value>“{0}”: showing {1} items; some volumes are unfinished.</value></data>
+  <data name="Search.Unavailable" xml:space="preserve"><value>“{0}”: indexed search is unavailable. Folder browsing remains available.</value></data>
+  <data name="Search.Results" xml:space="preserve"><value>“{0}”: {1} results.</value></data>
+  <data name="Search.Limit" xml:space="preserve"><value>The per-volume limit of {0} results was reached. Narrow the search scope.</value></data>
+  <data name="Search.Validating" xml:space="preserve"><value>Checking that the result is still valid…</value></data>
+  <data name="Search.Unsupported" xml:space="preserve"><value>Indexed search or result actions are not supported for this directory or link.</value></data>
+  <data name="Search.ActionError" xml:space="preserve"><value>This result could not be used (error {0}).</value></data>
+  <data name="Search.ErrorCode" xml:space="preserve"><value>Error {0}</value></data>
+  <data name="Search.ResultChanged" xml:space="preserve"><value>The result changed. Search again before opening or locating it.</value></data>
+  <data name="Search.InvalidQuery" xml:space="preserve"><value>Enter valid search text and a search location.</value></data>
+  <data name="Search.Exact" xml:space="preserve"><value>Exact name</value></data>
+  <data name="Search.ExactPartial" xml:space="preserve"><value>“{0}”: showing {1} items; exact results could not be fully checked.</value></data>
+  <data name="Search.ExactLimit" xml:space="preserve"><value>Name candidates reached the per-volume limit of {0}. Exact matches may be missing. Narrow the scope.</value></data>
+  <data name="NewFolder.Create" xml:space="preserve"><value>Create</value></data>
+  <data name="NewFolder.Name" xml:space="preserve"><value>Folder name</value></data>
+  <data name="NewFolder.InvalidName" xml:space="preserve"><value>Enter a valid name without paths, reserved names, or trailing dots/spaces.</value></data>
+  <data name="NewFolder.DefaultName" xml:space="preserve"><value>New folder</value></data>
+  <data name="NewFolder.Conflict" xml:space="preserve"><value>An item with this name already exists. Choose another name.</value></data>
+  <data name="NewFolder.RetryName" xml:space="preserve"><value>Retry / change name</value></data>
+  <data name="NewFolder.DialogFailed" xml:space="preserve"><value>Could not start the file operation. Please try again.</value></data>
+  <data name="Operation.Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Operation.Completed" xml:space="preserve"><value>Created folder: {0}</value></data>
+  <data name="Operation.Cancelled" xml:space="preserve"><value>Folder creation cancelled: {0}</value></data>
+  <data name="Operation.Cancelling" xml:space="preserve"><value>Cancelling folder creation: {0}</value></data>
+  <data name="Operation.Failed" xml:space="preserve"><value>Could not create “{0}”: {1}</value></data>
+  <data name="Operation.Running" xml:space="preserve"><value>Creating folder: {0}</value></data>
+  <data name="Operation.DirectoryChanged" xml:space="preserve"><value>The destination folder changed. Refresh before trying again.</value></data>
+  <data name="Operation.Unsupported" xml:space="preserve"><value>Creating folders here is not supported yet. Open the actual local folder.</value></data>
+  <data name="NewFolder.Unavailable" xml:space="preserve"><value>Creating a folder here is unavailable. Refresh or open the actual local folder.</value></data>
+  <data name="Rename.Name" xml:space="preserve"><value>New name</value></data>
+  <data name="Operation.TargetChanged" xml:space="preserve"><value>The selected item changed. Refresh before trying again.</value></data>
+  <data name="Operation.RenameCompleted" xml:space="preserve"><value>Renamed to: {0}</value></data>
+  <data name="Operation.RenameUnchanged" xml:space="preserve"><value>Name unchanged: {0}</value></data>
+  <data name="Operation.RenameCancelled" xml:space="preserve"><value>Rename cancelled: {0}</value></data>
+  <data name="Operation.RenameCancelling" xml:space="preserve"><value>Cancelling rename: {0}</value></data>
+  <data name="Operation.RenameFailed" xml:space="preserve"><value>Could not rename to “{0}”: {1}</value></data>
+  <data name="Operation.RenameRunning" xml:space="preserve"><value>Renaming to: {0}</value></data>
+  <data name="Copy.Name" xml:space="preserve"><value>Destination file name</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Copy.TargetChanged" xml:space="preserve"><value>The source item or destination folder changed. Refresh and copy again.</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.CopyLimited" xml:space="preserve"><value>Transfer ordinary local files and folders. Links, virtual items and special storage are not supported.</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.Preparing" xml:space="preserve"><value>Preparing clipboard items…</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.Copied" xml:space="preserve"><value>Copied to clipboard: {0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.Failed" xml:space="preserve"><value>File clipboard operation failed: {0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.Unavailable" xml:space="preserve"><value>The file clipboard is unavailable. Try again.</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyCompleted" xml:space="preserve"><value>Copied to: {0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyCancelled" xml:space="preserve"><value>Copy cancelled: {0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyCancelling" xml:space="preserve"><value>Cancelling copy: {0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyFailed" xml:space="preserve"><value>Could not copy to “{0}”: {1}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyRunning" xml:space="preserve"><value>Copying to: {0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyBytes" xml:space="preserve"><value> ({0} / {1} bytes)</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyPartial" xml:space="preserve"><value>An incomplete destination file remains. Inspect it before retrying.</value><comment>Single ordinary file copy.</comment></data>
+  <data name="CopyConflict.Title" xml:space="preserve"><value>File already exists</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Description" xml:space="preserve"><value>The destination already contains an item with this name. Choose what to do.</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Source" xml:space="preserve"><value>Source: {0}</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Destination" xml:space="preserve"><value>Destination: {0}</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Replace" xml:space="preserve"><value>Replace</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Skip" xml:space="preserve"><value>Skip</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.KeepBoth" xml:space="preserve"><value>Keep both</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Cancel" xml:space="preserve"><value>Cancel</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.ReplaceUnavailable" xml:space="preserve"><value>This item cannot replace the destination. Choose Skip or Keep both.</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.KeepBothDescription" xml:space="preserve"><value>Keep the existing item and add a number to the copy’s name.</value><comment>File copy conflict choice.</comment></data>
+  <data name="Operation.CopySkipped" xml:space="preserve"><value>Skipped: {0}</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.PrepareFailed" xml:space="preserve"><value>Could not prepare the conflict choices. Try again.</value><comment>Conflict preparation failed.</comment></data>
+  <data name="Copy.Unsupported" xml:space="preserve"><value>This file’s storage attributes or data streams cannot be copied completely yet. The source file was preserved.</value><comment>Copy support boundary.</comment></data>
+  <data name="Clipboard.TooManyFiles" xml:space="preserve"><value>You can transfer up to 1,024 items at a time.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Clipboard.CopiedMany" xml:space="preserve"><value>Copied {0} files to the clipboard.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchRunning" xml:space="preserve"><value>Copying files.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchCompleted" xml:space="preserve"><value>Copy queue completed.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchCancelled" xml:space="preserve"><value>Copy queue cancelled.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchCancelling" xml:space="preserve"><value>Cancelling the copy queue.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchFailed" xml:space="preserve"><value>Copy queue stopped.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchSummary" xml:space="preserve"><value>{0} items: {1} copied, {2} skipped, {3} failed, {4} cancelled, {5} remaining.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchCurrent" xml:space="preserve"><value>File {0}: {1}</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchPartial" xml:space="preserve"><value>{0} items reported incomplete copies. Check their paths in the tooltip.</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Clipboard.Cancelling" xml:space="preserve"><value>Cancelling item preparation. Please wait.</value><comment>File copy preparation cancellation.</comment></data>
+  <data name="Clipboard.Cancelled" xml:space="preserve"><value>Item preparation cancelled.</value><comment>File copy preparation cancellation.</comment></data>
+  <data name="Clipboard.CopiedItems" xml:space="preserve"><value>Copied {0} items to the clipboard.</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Name" xml:space="preserve"><value>New destination folder name</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Scanning" xml:space="preserve"><value>Checking folder contents: {0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Running" xml:space="preserve"><value>Copying folder to: {0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Completed" xml:space="preserve"><value>Folder copied to: {0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Cancelled" xml:space="preserve"><value>Folder copy cancelled: {0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Cancelling" xml:space="preserve"><value>Cancelling folder copy: {0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Failed" xml:space="preserve"><value>Could not copy folder to: {0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Counts" xml:space="preserve"><value>{0} files copied; {1} folders created.</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.FailurePath" xml:space="preserve"><value>Failed at: {0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.PartialHistory" xml:space="preserve"><value>{0} attempts left incomplete folder trees. Earlier copies remain; inspect paths in the tooltip.</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.HistoryLimited" xml:space="preserve"><value>Only the first 32 paths within the display limit are shown; the count includes all incomplete attempts.</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.RetryNewName" xml:space="preserve"><value>Enter a new folder name to start another copy. Earlier incomplete copies remain at their reported paths.</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.PartialPath" xml:space="preserve"><value>The earlier incomplete folder remains at: {0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Skipped" xml:space="preserve"><value>Folder copy skipped: {0}</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.Title" xml:space="preserve"><value>Folder name already exists</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.Description" xml:space="preserve"><value>Merge into the existing folder, or choose Skip, Keep both, or Cancel. Conflicting files are handled individually.</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.Merge" xml:space="preserve"><value>Merge</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.ReplaceUnavailable" xml:space="preserve"><value>This item cannot be merged with the destination. Choose Skip or Keep both.</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.KeepBothDescription" xml:space="preserve"><value>Copy to the first available numbered folder name. If a new tree was already created, a failure keeps that partial tree for inspection.</value><comment>Directory root conflict choices.</comment></data>
+  <data name="Move.Title" xml:space="preserve"><value>Move</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Name" xml:space="preserve"><value>Destination name</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Running" xml:space="preserve"><value>Moving items.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Completed" xml:space="preserve"><value>Move queue completed.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Unchanged" xml:space="preserve"><value>The selected items are already in this folder.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Skipped" xml:space="preserve"><value>Move queue skipped.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Cancelled" xml:space="preserve"><value>Move queue cancelled. Completed moves remain in their destinations.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Cancelling" xml:space="preserve"><value>Cancelling the move queue.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Failed" xml:space="preserve"><value>Move queue stopped.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Summary" xml:space="preserve"><value>{0} items: {1} moved, {2} unchanged, {3} skipped, {4} failed, {5} cancelled, {6} remaining.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Current" xml:space="preserve"><value>Item {0}: {1}</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Warning" xml:space="preserve"><value>{0} items moved with a follow-up check warning. Review their paths in the tooltip.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.CrossVolume" xml:space="preserve"><value>The item could not be moved between these volumes.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Unsupported" xml:space="preserve"><value>This item or storage type cannot be moved yet.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.TargetChanged" xml:space="preserve"><value>The source item or destination folder changed. Refresh and try again.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.AlreadySubmitted" xml:space="preserve"><value>This cut selection has already been submitted. Finish or cancel its move queue, then cut again for another move.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="MoveConflict.Title" xml:space="preserve"><value>Move destination already exists</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="MoveConflict.Description" xml:space="preserve"><value>An item with this name already exists. Skip this item, move it under another name, or cancel the remaining queue.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="MoveConflict.KeepBothDescription" xml:space="preserve"><value>Keep the existing item and move the source under a numbered name.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Clipboard.CutItems" xml:space="preserve"><value>{0} items ready to move. Paste into a destination folder to move them.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Partial" xml:space="preserve"><value>{0} items were not fully moved. Destination copies and remaining sources are kept.</value><comment>Cross-volume move partial completion.</comment></data>
+  <data name="Move.SkipRemaining" xml:space="preserve"><value>Skip this item and continue</value><comment>Cross-volume move partial completion.</comment></data>
+  <data name="Move.DirectoryProgress" xml:space="preserve"><value>Copied {0} files and {1} folders; removed {2} source files and {3} source folders.</value><comment>Cross-volume directory move progress.</comment></data>
+  <data name="Delete.ConfirmTitle" xml:space="preserve"><value>Permanently delete these items?</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.ConfirmPermanent" xml:space="preserve"><value>Permanently delete</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.ConfirmDescription" xml:space="preserve"><value>Permanently delete {0} selected items, including folder contents? They will not go to the Recycle Bin.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.RecycleRunning" xml:space="preserve"><value>Moving selected items to the Recycle Bin.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.PermanentRunning" xml:space="preserve"><value>Permanently deleting selected items.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Completed" xml:space="preserve"><value>Delete queue completed.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Cancelled" xml:space="preserve"><value>Delete queue cancelled. Completed removals remain in effect.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Cancelling" xml:space="preserve"><value>Cancelling the delete queue.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Failed" xml:space="preserve"><value>Delete queue stopped.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Summary" xml:space="preserve"><value>{0} items: {1} recycled, {2} permanently deleted, {3} skipped, {4} failed, {5} cancelled, {6} remaining.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Current" xml:space="preserve"><value>Item {0}: {1}</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Progress" xml:space="preserve"><value>System progress: {0}/{1}.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Partial" xml:space="preserve"><value>{0} folder items may be partly removed. Check their remaining contents before retrying or skipping.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Warning" xml:space="preserve"><value>{0} removals completed with a follow-up warning. Review their paths in the tooltip.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.RecycleUnavailable" xml:space="preserve"><value>The system Recycle Bin cannot be used here. No permanent deletion was requested.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.TargetChanged" xml:space="preserve"><value>The selected item or parent folder changed. Refresh and try again.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Retry" xml:space="preserve"><value>Retry current item</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Skip" xml:space="preserve"><value>Skip current item</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.DialogFailed" xml:space="preserve"><value>The permanent-delete confirmation could not be shown.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.CaptureFailed" xml:space="preserve"><value>The selection could not be read. Refresh the folder or select no more than 1024 items.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Properties.Name" xml:space="preserve"><value>Name</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Location" xml:space="preserve"><value>Location</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Selection" xml:space="preserve"><value>Selection</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.SelectionValue" xml:space="preserve"><value>{0} items: {1} files, {2} folders</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Type" xml:space="preserve"><value>Type</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Size" xml:space="preserve"><value>Size</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Allocated" xml:space="preserve"><value>Size on disk</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Contains" xml:space="preserve"><value>Contents</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.ContainsValue" xml:space="preserve"><value>{0} files, {1} subfolders</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Created" xml:space="preserve"><value>Created</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Modified" xml:space="preserve"><value>Modified</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Accessed" xml:space="preserve"><value>Accessed</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Attributes" xml:space="preserve"><value>Attributes</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.CommonAttributes" xml:space="preserve"><value>Common attributes</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.ReadOnly" xml:space="preserve"><value>Read-only</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Hidden" xml:space="preserve"><value>Hidden</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.System" xml:space="preserve"><value>System</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Archive" xml:space="preserve"><value>Archive</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Compressed" xml:space="preserve"><value>Compressed</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Encrypted" xml:space="preserve"><value>Encrypted</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Sparse" xml:space="preserve"><value>Sparse</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Link" xml:space="preserve"><value>Link</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Offline" xml:space="preserve"><value>Offline</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.None" xml:space="preserve"><value>None</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Unavailable" xml:space="preserve"><value>Unavailable</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.MultipleTypes" xml:space="preserve"><value>Multiple types</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.MultipleValues" xml:space="preserve"><value>Multiple values</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Bytes" xml:space="preserve"><value>{0} ({1} bytes)</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Counted" xml:space="preserve"><value>Counted so far: {0}</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Reading" xml:space="preserve"><value>Reading properties and calculating folder contents…</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Cancelled" xml:space="preserve"><value>Calculation cancelled. Counts may be incomplete.</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Partial" xml:space="preserve"><value>Some properties could not be read. Counts are incomplete.</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Complete" xml:space="preserve"><value>Calculation complete.</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.UnavailableCount" xml:space="preserve"><value>{0} locations could not be read.</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Close" xml:space="preserve"><value>Close</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.ReadFailed" xml:space="preserve"><value>The properties window could not be opened. Refresh the folder and try again.</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.FolderNote" xml:space="preserve"><value>Folder totals include descendants. Link targets are excluded; hardlink names are counted separately.</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.CaptureFailed" xml:space="preserve"><value>The selection could not be read. Refresh the folder or select no more than 1024 items.</value></data>
+  <data name="DragDrop.Busy" xml:space="preserve"><value>Another file operation is in progress.</value></data>
+  <data name="DragDrop.InvalidTarget" xml:space="preserve"><value>Drop onto an available folder or drive.</value></data>
+  <data name="DragDrop.Preparing" xml:space="preserve"><value>Preparing file transfer…</value></data>
+  <data name="DragDrop.Unsupported" xml:space="preserve"><value>These items cannot be transferred.</value></data>
+  <data name="DragDrop.NoOperation" xml:space="preserve"><value>This location or key combination does not support this drop.</value></data>
+  <data name="DragDrop.MoveTo" xml:space="preserve"><value>Move to {0}</value></data>
+  <data name="DragDrop.CopyTo" xml:space="preserve"><value>Copy to {0}</value></data>
+  <data name="DragDrop.SourceUnavailable" xml:space="preserve"><value>The selection could not be dragged. Refresh the folder and try again.</value></data>
+  <data name="DragDrop.Failed" xml:space="preserve"><value>Could not transfer these items: {0}</value></data>
+  <data name="DirectoryCopy.WaitingForConflict" xml:space="preserve"><value>Waiting for a choice for: {0}</value><comment>Directory merge feedback.</comment></data>
+  <data name="DirectoryCopy.SkippedCounts" xml:space="preserve"><value>{0} files and {1} folders skipped.</value><comment>Directory merge feedback.</comment></data>
+  <data name="Search.MenuError" xml:space="preserve"><value>Cannot open the Windows context menu ({0}).</value></data>
+  <data name="Search.NativeDispatched" xml:space="preserve"><value>Handed to Windows. Check the system or application window for progress.</value></data>
+  <data name="Search.PathCopied" xml:space="preserve"><value>File path copied.</value></data>
+  <data name="Search.ParentCopied" xml:space="preserve"><value>Containing folder path copied.</value></data>
+  <data name="Search.MenuPasteParent" xml:space="preserve"><value>Paste into containing folder</value></data>
+  <data name="Search.MenuCopyPath" xml:space="preserve"><value>Copy full path</value></data>
+  <data name="Search.MenuCopyParentPath" xml:space="preserve"><value>Copy containing folder path</value></data>
+  <data name="Search.MenuSystemOptions" xml:space="preserve"><value>Compression and more system options…</value></data>
+</root>

@@ -1,0 +1,111 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Core", "src\Blink.Core\Blink.Core.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Index", "src\Blink.Index\Blink.Index.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB102}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Index.Contracts", "src\Blink.Index.Contracts\Blink.Index.Contracts.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.IndexService", "src\Blink.IndexService\Blink.IndexService.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Phase05.Tests", "tests\Blink.Phase05.Tests\Blink.Phase05.Tests.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10D}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Properties", "src\Blink.Properties\Blink.Properties.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB103}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Transfer", "src\Blink.Transfer\Blink.Transfer.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB104}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Provider.Contracts", "src\Blink.Provider.Contracts\Blink.Provider.Contracts.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB105}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Provider.Fake", "src\Blink.Provider.Fake\Blink.Provider.Fake.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB106}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.ProviderHost", "src\Blink.ProviderHost\Blink.ProviderHost.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB107}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Transfer.Tests", "tests\Blink.Transfer.Tests\Blink.Transfer.Tests.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB108}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Phase0.Tests", "tests\Blink.Phase0.Tests\Blink.Phase0.Tests.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB109}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.Phase1.Tests", "tests\Blink.Phase1.Tests\Blink.Phase1.Tests.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10E}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink", "src\Blink\Blink.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.FileActivationHost", "src\Blink.FileActivationHost\Blink.FileActivationHost.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10F}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Blink.ShellMenuHost", "src\Blink.ShellMenuHost\Blink.ShellMenuHost.vcxproj", "{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB110}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB110}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB110}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB110}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB110}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10F}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10F}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10F}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10F}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB102}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB102}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB102}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB102}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10C}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10C}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10C}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10C}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10D}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10D}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10D}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10D}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB103}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB103}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB103}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB103}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB104}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB104}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB104}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB104}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB105}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB105}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB105}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB105}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB106}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB106}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB106}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB106}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB107}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB107}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB107}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB107}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB108}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB108}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB108}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB108}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB109}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB109}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB109}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB109}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10E}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10E}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10E}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10E}.Release|x64.Build.0 = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10A}.Debug|x64.ActiveCfg = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10A}.Debug|x64.Build.0 = Debug|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10A}.Release|x64.ActiveCfg = Release|x64
+		{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10A}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

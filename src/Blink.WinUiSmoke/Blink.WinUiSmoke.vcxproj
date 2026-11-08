@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{4F7F2B3E-8B7C-4E14-A9E3-0C742C6C0B52}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>Blink.WinUiSmoke</RootNamespace>
+    <TargetName>Blink.WinUiSmoke</TargetName>
+    <CppWinRTOptimized Condition="'$(SmokeDeclarativeResources)' == 'true'">true</CppWinRTOptimized>
+    <CppWinRTRootNamespaceAutoMerge Condition="'$(SmokeDeclarativeResources)' == 'true'">true</CppWinRTRootNamespaceAutoMerge>
+    <MinimalCoreWin Condition="'$(SmokeDeclarativeResources)' == 'true'">true</MinimalCoreWin>
+    <DefaultLanguage Condition="'$(SmokeDeclarativeResources)' == 'true'">en-US</DefaultLanguage>
+    <ApplicationType>Desktop</ApplicationType>
+    <AppContainerApplication>false</AppContainerApplication>
+    <DesktopCompatible>true</DesktopCompatible>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSdkUndockedRegFreeWinRTInitialize>true</WindowsAppSdkUndockedRegFreeWinRTInitialize>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <AppxPackage>false</AppxPackage>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+    <LinkIncremental Condition="'$(Configuration)'=='Debug'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)'=='Release'">false</LinkIncremental>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutputPath>$(MSBuildProjectDirectory)\x64\Debug$(SmokeOutputSuffix)\</OutputPath>
+    <OutDir>$(MSBuildProjectDirectory)\x64\Debug$(SmokeOutputSuffix)\</OutDir>
+    <IntDir>$(MSBuildProjectDirectory)\x64\Debug$(SmokeOutputSuffix)\obj\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutputPath>$(MSBuildProjectDirectory)\x64\Release$(SmokeOutputSuffix)\</OutputPath>
+    <OutDir>$(MSBuildProjectDirectory)\x64\Release$(SmokeOutputSuffix)\</OutDir>
+    <IntDir>$(MSBuildProjectDirectory)\x64\Release$(SmokeOutputSuffix)\obj\</IntDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(SmokeDeclarativeResources)' == 'true'">
+    <XamlMetaDataProviderCpp>$(IntDir)Generated Files\XamlMetaDataProvider.cpp</XamlMetaDataProviderCpp>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories Condition="'$(SmokeDeclarativeResources)' == 'true'">$(ProjectDir)src;$(ProjectDir);$(IntDir);$(GeneratedFilesDir)sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles Condition="'$(SmokeDeclarativeResources)' == 'true'">$(IntDir)XamlMetaDataProvider.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <PreprocessorDefinitions Condition="'$(SmokeGeneratedMainWrapper)' == 'true'">DISABLE_XAML_GENERATED_MAIN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" Condition="'$(SmokeDeclarativeResources)' != 'true'" />
+    <ClCompile Include="src\App.xaml.cpp" Condition="'$(SmokeDeclarativeResources)' == 'true'" />
+    <ClCompile Include="src\declarative_main.cpp" Condition="'$(SmokeDeclarativeResources)' == 'true' and '$(SmokeGeneratedStartup)' != 'true'" />
+    <ClCompile Include="src\generated_xaml_main.cpp" Condition="'$(SmokeGeneratedStartup)' == 'true' and '$(SmokeGeneratedMainWrapper)' != 'true'" />
+    <ClCompile Include="src\generated_main_wrapper.cpp" Condition="'$(SmokeGeneratedMainWrapper)' == 'true'" />
+    <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" Condition="'$(SmokeDeclarativeResources)' == 'true'" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(SmokeDeclarativeResources)' == 'true'">
+    <ApplicationDefinition Include="App.xaml">
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <ClInclude Include="src\App.xaml.h">
+      <DependentUpon>App.xaml</DependentUpon>
+    </ClInclude>
+    <ClInclude Include="src\smoke_telemetry.h" />
+    <Reference Include="Microsoft.UI.Xaml">
+      <HintPath>$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Xaml.winmd</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Windows SDK 10.0.26100.0 contains duplicate contract revisions. MIDL
+       accepts the highest revision for this diagnostic-only XAML probe. -->
+  <Target Name="SmokeRemoveDuplicateSdkWinmd" AfterTargets="GetCppWinRTPlatformWinMDReferences" Condition="'$(SmokeDeclarativeResources)' == 'true'">
+    <ItemGroup>
+      <CppWinRTPlatformWinMDReferences Remove="$(WindowsSDK_MetadataPathVersioned)\Windows.AI.Actions.ActionsContract\7.0.0.0\Windows.AI.Actions.ActionsContract.winmd" />
+      <CppWinRTPlatformWinMDReferences Remove="$(WindowsSDK_MetadataPathVersioned)\Windows.Management.Update.WindowsUpdateContract\1.0.0.0\Windows.Management.Update.WindowsUpdateContract.winmd" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Unpackaged diagnostic host: the desktop C++ target does not always put
+       native XAML markup passes on the normal resource dependency chain. -->
+  <Target Name="SmokeCompileDeclarativeXamlBeforeCompile"
+          DependsOnTargets="MarkupCompilePass1;MarkupCompilePass2;CppWinRTAddXamlMetaDataProviderCpp"
+          Condition="'$(SmokeDeclarativeResources)' == 'true'" />
+
+  <Target Name="SmokeIncludeGeneratedXamlCpp"
+          AfterTargets="CppWinRTComputeXamlGeneratedCompileInputs"
+          BeforeTargets="ClCompile"
+          Condition="'$(SmokeDeclarativeResources)' == 'true'">
+    <ItemGroup>
+      <ClCompile Include="$(IntDir)XamlTypeInfo.g.cpp"
+                 Condition="Exists('$(IntDir)XamlTypeInfo.g.cpp')">
+      </ClCompile>
+      <ClCompile Include="$(IntDir)XamlTypeInfo.Impl.g.cpp"
+                 Condition="Exists('$(IntDir)XamlTypeInfo.Impl.g.cpp')">
+      </ClCompile>
+      <ClCompile Remove="$(XamlMetaDataProviderCpp)" />
+      <ClCompile Include="$(XamlMetaDataProviderCpp)"
+                 Condition="Exists('$(XamlMetaDataProviderCpp)')">
+      </ClCompile>
+      <ClCompile Update="$(XamlMetaDataProviderCpp)">
+        <CompilerIteration></CompilerIteration>
+      </ClCompile>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="SmokeAddWinUiMetadataForMarkup"
+          BeforeTargets="MarkupCompilePass1;MarkupCompilePass2"
+          DependsOnTargets="CppWinRTImplicitlyExpandTargetPlatform;GetCppWinRTPlatformWinMDReferences"
+          Condition="'$(SmokeDeclarativeResources)' == 'true'">
+    <ItemGroup>
+      <ReferencePath Include="$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Xaml.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <WinMDReferenceToCompile Include="$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Xaml.winmd" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
+    <PackageReference Include="Microsoft.Windows.CppWinRT" Version="2.0.250303.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <!-- MarkupCompilePass2 publishes generated XAML C++ sources.  It must run
+       before CppWinRT computes the C++ compile inputs; placing this target in
+       BeforeClCompileTargets preserves the normal CppWinRT generation order
+       without maintaining a second generated-source list here. -->
+  <PropertyGroup Condition="'$(SmokeDeclarativeResources)' == 'true'">
+    <BeforeClCompileTargets>SmokeCompileDeclarativeXamlBeforeCompile;$(BeforeClCompileTargets)</BeforeClCompileTargets>
+  </PropertyGroup>
+</Project>

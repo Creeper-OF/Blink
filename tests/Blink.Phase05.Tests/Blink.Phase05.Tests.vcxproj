@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10D}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>BlinkPhase05Tests</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemDefinitionGroup>
+      <ClCompile>
+        <PrecompiledHeader>NotUsing</PrecompiledHeader>
+        <PreprocessorDefinitions>BLINK_INDEX_ENABLE_TEST_ACCESS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+        <AdditionalIncludeDirectories>$(MSBuildProjectDirectory)\..\..\src\Blink.Core\include;$(MSBuildProjectDirectory)\..\..\src\Blink.Index.Contracts\include;$(MSBuildProjectDirectory)\..\..\src\Blink.IndexService\include;$(MSBuildProjectDirectory)\..\..\src\Blink.Index\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link><SubSystem>Console</SubSystem></Link>
+  </ItemDefinitionGroup>
+  <ItemGroup><ClCompile Include="src\main.cpp" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Blink.Core\Blink.Core.vcxproj"><Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}</Project></ProjectReference>
+    <ProjectReference Include="..\..\src\Blink.Index.Contracts\Blink.Index.Contracts.vcxproj"><Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}</Project></ProjectReference>
+    <ProjectReference Include="..\..\src\Blink.Index\Blink.Index.vcxproj"><Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB102}</Project></ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

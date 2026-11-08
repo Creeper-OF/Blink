@@ -1,0 +1,15 @@
+# Phase1D Slice16 删除与系统回收站
+
+当前：完整Debug/Release构建均exit0，各自结束后串行普通回归各1240 PASS/0 FAIL/4权限1314 SKIP，新增49项删除检查。194构建输入、291资源、冻结合同/旧EXE与工作区核对通过；证据见本轮native-validation.json。整体目标active，主模型/compiler1，无子代理，人工UI/真实剪贴板/服务验收继续暂缓。
+
+普通Delete明确请求Windows系统回收站，PreDelete若没有recycle标志则否决，不能转成永久删除。Shift+Delete必须明确确认，确认事实也在队列与后端校验；不建立自定义垃圾目录/数据库。使用IFileOperation的实际PostDelete回调、原链接结果与回收Shell项判断，PerformOperations或排队返回S_OK本身不算完成。系统HRESULT、原生完成与提交后警告分别保留。
+
+IFileOperation要求STA，同一个FileOperationCoordinator owned action等待一个临时STA线程串行处理批量项目，不另建任务队列/服务。原有监听Stop prerequisites先排空，再执行；普通用户权限，不通过IndexService请求文件操作。选中父/源身份在实际操作前核对，硬链接按名称独立处理，链接对象不应删除其目标内容；取消、已完成前缀、未开始尾项、失败重试/跳过与可能部分目录删除如实显示。
+
+Delete/Shift+Delete及菜单复用FolderCommandPolicy，捕获原选择后永久模式才显示确认；普通回收无重复确认。已删除目录的根/子目录标签退回源父目录，历史中的失效位置也更新为父目录，尊重正在去别处的用户导航；不把原子文件身份相同但属于不同目录的硬链接自动选中。仍存在的部分删除来源保留当前位置并刷新。
+
+独立API确认在.build/phase1d-slice16/research/recycle-probe：STA/global Advise、文件及非空目录回收并按返回Shell项原样恢复（含ADS）、veto非回收PreDelete、确认的永久模式。四项观察通过且fixture清理，不计普通产品PASS；最初standalone include遗漏SDK winrt路径的编译失败保留。真实无回收站的可移动/网络卷、磁盘故障仍需后续环境/综合验收，不用模拟冒充。
+
+本轮新增普通/native回归后完整Debug/Release各自构建结束再测试，核对冻结输入、en/zh/fallback资源、合同、旧EXE及工作区；只使用唯一自有样本，不枚举/清空用户回收站。回收测试仅恢复或清理这次操作返回的自有Shell项。后续继续合并覆盖、拖放、属性、外部效果反馈及既定SFTP/自建网盘Provider范围，不因一个模块通过宣称整项目完成。
+
+非空目录永久删除的真实回调探针确认：根PostDelete可以先返回COPYENGINE_S_NOT_HANDLED，再处理子项；只在PerformOperations结束后核对原根链接实际消失，才记根完成。子项失败/取消且根仍在时保留可能部分删除。STA测试同时接受首个STA线程的MAINSTA类型。首轮1234/4/4日志和独立探针保留，新增空目录实际移除与子项取消两项回归，最终共49项新增删除检查。

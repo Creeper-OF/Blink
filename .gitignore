@@ -1,0 +1,37 @@
+# Visual C++ / MSBuild outputs
+x64/
+Debug/
+Release/
+*.obj
+*.pdb
+*.idb
+*.ilk
+*.tlog/
+*.lastbuildstate
+
+# NuGet restore/build intermediates
+obj/
+packages/
+*.nuget.g.props
+*.nuget.g.targets
+project.assets.json
+.nuget/
+.build/
+.vs/
+.tools/
+.blink-data/
+.acceptance-fixtures/
+
+# Phase 0 generated probes and runtime logs
+.phase0-bin/
+phase0-temp-*/
+Blink-startup.log
+*.log
+
+# Local scratch/work/session directories
+scratch/
+temp/
+tmp/
+work/
+session/
+sessions/

@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="App.Title" xml:space="preserve"><value>Blink</value><comment>应用窗口标题。</comment></data>
+  <data name="Nav.Places" xml:space="preserve"><value>位置</value><comment>已知文件夹导航标题。</comment></data>
+  <data name="Nav.Drives" xml:space="preserve"><value>驱动器</value><comment>逻辑驱动器导航标题。</comment></data>
+  <data name="Nav.Home" xml:space="preserve"><value>主文件夹</value><comment>当前用户配置文件文件夹。</comment></data>
+  <data name="Nav.Desktop" xml:space="preserve"><value>桌面</value><comment>当前用户桌面文件夹。</comment></data>
+  <data name="Nav.Downloads" xml:space="preserve"><value>下载</value><comment>当前用户下载文件夹。</comment></data>
+  <data name="Nav.Documents" xml:space="preserve"><value>文档</value><comment>当前用户文档文件夹。</comment></data>
+  <data name="Toolbar.Back" xml:space="preserve"><value>后退</value><comment>返回上一个文件夹。</comment></data>
+  <data name="Toolbar.Forward" xml:space="preserve"><value>前进</value><comment>前往历史记录中的下一个文件夹。</comment></data>
+  <data name="Toolbar.Up" xml:space="preserve"><value>上一级</value><comment>前往父文件夹。</comment></data>
+  <data name="Toolbar.Refresh" xml:space="preserve"><value>刷新</value><comment>重新加载当前文件夹。</comment></data>
+  <data name="Toolbar.PathPlaceholder" xml:space="preserve"><value>输入文件夹路径</value><comment>地址栏占位提示。</comment></data>
+  <data name="Toolbar.SearchPlaceholder" xml:space="preserve"><value>搜索名称或扩展名</value><comment>Phase 1A 中禁用的搜索框占位提示。</comment></data>
+  <data name="Toolbar.SortBy" xml:space="preserve"><value>按 {0} 排序</value><comment>文件夹列排序按钮提示。</comment></data>
+  <data name="Toolbar.View" xml:space="preserve"><value>视图</value><comment>文件夹视图选择器的辅助功能名称。</comment></data>
+  <data name="Toolbar.Sort" xml:space="preserve"><value>排序</value><comment>文件夹排序选择器的辅助功能名称。</comment></data>
+  <data name="View.Details" xml:space="preserve"><value>详细信息</value><comment>文件夹详细信息视图。</comment></data>
+  <data name="View.List" xml:space="preserve"><value>列表</value><comment>文件夹紧凑列表视图。</comment></data>
+  <data name="View.Grid" xml:space="preserve"><value>网格</value><comment>文件夹图标网格视图。</comment></data>
+  <data name="View.ShowHiddenItems" xml:space="preserve"><value>显示隐藏项目</value><comment>窗口级隐藏项目开关。</comment></data>
+  <data name="View.ShowHiddenItemsHint" xml:space="preserve"><value>作用于所有标签和导航树。系统项目仍保持隐藏。</value><comment>隐藏项目范围与系统项目策略。</comment></data>
+  <data name="Sort.Ascending" xml:space="preserve"><value>升序</value><comment>当前文件夹排序方向。</comment></data>
+  <data name="Sort.Descending" xml:space="preserve"><value>降序</value><comment>当前文件夹排序方向。</comment></data>
+  <data name="FileSize.Bytes" xml:space="preserve"><value>B</value><comment>文件大小单位：字节。</comment></data>
+  <data name="FileSize.Kilobytes" xml:space="preserve"><value>KB</value><comment>Blink 显示的 KiB 文件大小单位。</comment></data>
+  <data name="FileSize.Megabytes" xml:space="preserve"><value>MB</value><comment>Blink 显示的 MiB 文件大小单位。</comment></data>
+  <data name="FileSize.Gigabytes" xml:space="preserve"><value>GB</value><comment>Blink 显示的 GiB 文件大小单位。</comment></data>
+  <data name="FileSize.Terabytes" xml:space="preserve"><value>TB</value><comment>Blink 显示的 TiB 文件大小单位。</comment></data>
+  <data name="Common.NotAvailable" xml:space="preserve"><value>-</value><comment>不可用显示值的占位符。</comment></data>
+  <data name="Column.Name" xml:space="preserve"><value>名称</value><comment>文件夹列表名称列。</comment></data>
+  <data name="Column.Type" xml:space="preserve"><value>类型</value><comment>文件夹列表类型列。</comment></data>
+  <data name="Column.Size" xml:space="preserve"><value>大小</value><comment>文件夹列表大小列。</comment></data>
+  <data name="Column.Modified" xml:space="preserve"><value>修改时间</value><comment>文件夹列表修改时间列。</comment></data>
+  <data name="Status.Selected" xml:space="preserve"><value>已选择 {0} 项</value><comment>已选择的项目数。</comment></data>
+  <data name="Status.IndexNotConnected" xml:space="preserve"><value>索引：未连接</value><comment>IndexService 尚未连接。</comment></data>
+  <data name="Status.Loading" xml:space="preserve"><value>正在加载  {0}</value><comment>正在枚举本地文件夹。</comment></data>
+  <data name="Status.Empty" xml:space="preserve"><value>就绪  -  空文件夹</value><comment>已提交的文件夹没有条目。</comment></data>
+  <data name="Status.ChooseFolder" xml:space="preserve"><value>就绪  -  请选择文件夹</value><comment>当前没有已提交的文件夹。</comment></data>
+  <data name="Status.ReadyCount" xml:space="preserve"><value>就绪  -  {0} 项</value><comment>已提交文件夹中的项目数。</comment></data>
+  <data name="Status.InvalidPath" xml:space="preserve"><value>文件夹路径无效</value><comment>地址栏输入不是有效的导航目标。</comment></data>
+  <data name="Status.ZeroSelected" xml:space="preserve"><value>已选择 0 项</value><comment>诊断列表选择数。</comment></data>
+  <data name="Browse.PathNotFound" xml:space="preserve"><value>找不到该路径，仍显示之前的文件夹。（Win32 {0}）</value><comment>路径不存在时的导航错误。</comment></data>
+  <data name="Browse.AccessDenied" xml:space="preserve"><value>没有访问权限，仍显示之前的文件夹。（Win32 {0}）</value><comment>路径不可访问时的导航错误。</comment></data>
+  <data name="Browse.Failed" xml:space="preserve"><value>无法打开此文件夹，仍显示之前的文件夹。（Win32 {0}）</value><comment>其它浏览错误的回退文案。</comment></data>
+  <data name="FileType.Folder" xml:space="preserve"><value>文件夹</value><comment>目录的显示名称。</comment></data>
+  <data name="FileType.TextDocument" xml:space="preserve"><value>文本文档</value><comment>文本/日志文件的显示名称。</comment></data>
+  <data name="FileType.CppSource" xml:space="preserve"><value>C++ 源文件</value><comment>C++ 源文件的显示名称。</comment></data>
+  <data name="FileType.Image" xml:space="preserve"><value>图像</value><comment>图像文件的显示名称。</comment></data>
+  <data name="FileType.CompressedArchive" xml:space="preserve"><value>压缩存档</value><comment>压缩包的显示名称。</comment></data>
+  <data name="FileType.Application" xml:space="preserve"><value>应用程序</value><comment>可执行文件/安装程序的显示名称。</comment></data>
+  <data name="FileType.File" xml:space="preserve"><value>文件</value><comment>无扩展名文件的通用显示名称。</comment></data>
+  <data name="FileType.FileSuffix" xml:space="preserve"><value>{0} 文件</value><comment>未分类扩展名的显示名称后缀。</comment></data>
+  <data name="Status.BuildingIndex" xml:space="preserve"><value>正在工作线程中建立索引……</value><comment>原型诊断命令状态。</comment></data>
+  <data name="Status.IndexBuildFailed" xml:space="preserve"><value>索引建立失败</value><comment>原型诊断命令状态。</comment></data>
+  <data name="Status.IndexReady" xml:space="preserve"><value>索引已就绪：{0} 个文件，{1} 个文件夹，{2} 秒；{3}</value><comment>原型诊断命令状态。</comment></data>
+  <data name="Status.SavedYes" xml:space="preserve"><value>已保存</value><comment>索引保存成功。</comment></data>
+  <data name="Status.SavedError" xml:space="preserve"><value>保存失败，错误={0}</value><comment>索引保存失败。</comment></data>
+  <data name="Status.SearchingLocal" xml:space="preserve"><value>正在搜索，不重新扫描……</value><comment>原型本地搜索状态。</comment></data>
+  <data name="Status.LocalSearchResult" xml:space="preserve"><value>索引搜索：{0} 个结果，用时 {1} 毫秒</value><comment>原型本地搜索结果状态。</comment></data>
+  <data name="Status.QueryingIndexService" xml:space="preserve"><value>正在查询 IndexService……</value><comment>IndexService 状态请求。</comment></data>
+  <data name="Status.IndexServiceUnavailable" xml:space="preserve"><value>IndexService 不可用（Win32 {0}）</value><comment>无法连接 IndexService。</comment></data>
+  <data name="Status.IndexService" xml:space="preserve"><value>IndexService：{0}，文件={1}，文件夹={2}，错误={3}</value><comment>IndexService 状态响应。</comment></data>
+  <data name="Status.StartingFastIndex" xml:space="preserve"><value>正在启动特权 MFT/USN 索引……</value><comment>原型诊断命令状态。</comment></data>
+  <data name="Status.FastIndexRequest" xml:space="preserve"><value>MFT/USN 请求：{0}，操作={1}，错误={2}</value><comment>原型诊断命令状态。</comment></data>
+  <data name="Status.SearchingFastIndex" xml:space="preserve"><value>正在搜索 IndexService，不重新执行 DFS 扫描……</value><comment>原型 IndexService 搜索状态。</comment></data>
+  <data name="Status.FastSearchState" xml:space="preserve"><value>快速搜索状态={0}，错误={1}</value><comment>原型 IndexService 搜索错误状态。</comment></data>
+  <data name="Status.FastSearch" xml:space="preserve"><value>快速搜索：{0} 个结果；状态={1}</value><comment>原型 IndexService 搜索结果状态。</comment></data>
+  <data name="Status.SelectOneFile" xml:space="preserve"><value>请先选择一个文件</value><comment>文件操作需要选择文件。</comment></data>
+  <data name="Status.ReadingProperties" xml:space="preserve"><value>正在工作线程中读取属性……</value><comment>属性探针状态。</comment></data>
+  <data name="Status.PropertiesFailed" xml:space="preserve"><value>读取属性失败（Win32 {0}）</value><comment>属性探针错误状态。</comment></data>
+  <data name="Status.Properties" xml:space="preserve"><value>属性：{0}；ACL={1}；元数据={2}；流={3}</value><comment>属性探针结果状态。</comment></data>
+  <data name="Status.CopyFileProbeRequiresFile" xml:space="preserve"><value>CopyFile2 探针需要选择文件</value><comment>复制探针不能以目录为对象。</comment></data>
+  <data name="Status.CopyRunning" xml:space="preserve"><value>CopyFile2 正在后台运行……</value><comment>复制探针状态。</comment></data>
+  <data name="Status.CopyResult" xml:space="preserve"><value>CopyFile2：状态=0x</value><comment>复制探针结果状态。</comment></data>
+  <data name="Status.CopyCanceled" xml:space="preserve"><value>，已取消</value><comment>复制探针取消后缀。</comment></data>
+  <data name="Status.CopyComplete" xml:space="preserve"><value>，已完成</value><comment>复制探针完成后缀。</comment></data>
+  <data name="Status.StartingProvider" xml:space="preserve"><value>正在启动隔离的 ProviderHost： </value><comment>Provider 原型状态。</comment></data>
+  <data name="Status.ProviderStartFailed" xml:space="preserve"><value>ProviderHost 启动失败</value><comment>Provider 原型错误状态。</comment></data>
+  <data name="Status.Provider" xml:space="preserve"><value>Provider </value><comment>Provider 原型结果状态。</comment></data>
+  <data name="Status.ProviderResult" xml:space="preserve"><value>Provider {0}：{1}，{2}，错误={3}</value><comment>Provider 原型结果状态。</comment></data>
+  <data name="Status.SuccessYes" xml:space="preserve"><value>成功=是</value><comment>Provider 原型结果字段。</comment></data>
+  <data name="Status.SuccessNo" xml:space="preserve"><value>成功=否</value><comment>Provider 原型结果字段。</comment></data>
+  <data name="Status.CanceledYes" xml:space="preserve"><value>已取消=是</value><comment>Provider 原型结果字段。</comment></data>
+  <data name="Status.CanceledNo" xml:space="preserve"><value>已取消=否</value><comment>Provider 原型结果字段。</comment></data>
+  <data name="Location.ThisPC" xml:space="preserve"><value>此电脑</value><comment>Blink 原创的虚拟位置。</comment></data>
+  <data name="ThisPC.Places" xml:space="preserve"><value>文件夹</value><comment>This PC 中的文件夹类型标签。</comment></data>
+  <data name="ThisPC.Drive" xml:space="preserve"><value>驱动器</value><comment>This PC 中的本地卷类型标签。</comment></data>
+  <data name="Status.LoadingThisPC" xml:space="preserve"><value>正在加载此电脑</value><comment>此电脑内容正在加载。</comment></data>
+  <data name="Status.ThisPCReadyCount" xml:space="preserve"><value>就绪  -  {0} 个位置</value><comment>此电脑内容数量。</comment></data>
+  <data name="Status.ThisPCFailed" xml:space="preserve"><value>无法刷新此电脑，仍显示之前的位置。（Win32 {0}）</value><comment>此电脑刷新失败时保留已提交内容。</comment></data>
+  <data name="Status.SelectAllFailed" xml:space="preserve"><value>无法全选，请重试。</value></data>
+  <data name="Status.OpeningFile" xml:space="preserve"><value>正在打开 {0}</value></data>
+  <data name="Status.OpenDispatched" xml:space="preserve"><value>已向 Windows 提交打开请求：{0}</value></data>
+  <data name="Status.OpenChanged" xml:space="preserve"><value>文件已发生变化，请刷新目录后再打开。</value></data>
+  <data name="Status.OpenNoAssociation" xml:space="preserve"><value>此文件尚未关联默认应用：{0}</value></data>
+  <data name="Status.OpenFailed" xml:space="preserve"><value>无法打开 {0}。（HRESULT {1}）</value></data>
+  <data name="Status.OpenTimedOut" xml:space="preserve"><value>打开请求未及时完成，请检查目标应用后再重试。</value></data>
+  <data name="Command.Open" xml:space="preserve">
+    <value>打开</value>
+  </data>
+  <data name="Command.Cut" xml:space="preserve">
+    <value>剪切</value>
+  </data>
+  <data name="Command.Copy" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="Command.Rename" xml:space="preserve">
+    <value>重命名</value>
+  </data>
+  <data name="Command.Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Command.PermanentDelete" xml:space="preserve">
+    <value>永久删除</value>
+  </data>
+  <data name="Command.Properties" xml:space="preserve">
+    <value>属性</value>
+  </data>
+  <data name="Command.Paste" xml:space="preserve">
+    <value>粘贴</value>
+  </data>
+  <data name="Command.NewFolder" xml:space="preserve">
+    <value>新建文件夹</value>
+  </data>
+  <data name="Command.View" xml:space="preserve">
+    <value>查看</value>
+  </data>
+  <data name="Command.UnavailableSuffix" xml:space="preserve">
+    <value>（暂未开放）</value>
+  </data>
+  <data name="Status.CommandNotImplemented" xml:space="preserve">
+    <value>{0}功能暂未开放。</value>
+  </data>
+  <data name="Status.CommandBusy" xml:space="preserve">
+    <value>目录正在更新，请稍后重试。</value>
+  </data>
+  <data name="Status.CommandStale" xml:space="preserve">
+    <value>页面已变化，请重新打开菜单。</value>
+  </data>
+  <data name="Status.CommandFolderRequired" xml:space="preserve">
+    <value>此操作需要先打开文件夹。</value>
+  </data>
+  <data name="Status.CommandSelectionRequired" xml:space="preserve">
+    <value>请先选择项目。</value>
+  </data>
+  <data name="Status.CommandSingleRequired" xml:space="preserve">
+    <value>此操作需要选择一个项目。</value>
+  </data>
+  <data name="Status.WatchUnavailable" xml:space="preserve">
+    <value>自动更新不可用（{0}），请使用刷新。</value>
+  </data>
+  <data name="Index.PanelTitle" xml:space="preserve">
+    <value>索引服务状态</value>
+  </data>
+  <data name="Index.Volume" xml:space="preserve">
+    <value>本地卷</value>
+  </data>
+  <data name="Index.RefreshStatus" xml:space="preserve">
+    <value>刷新状态 / 重连</value>
+  </data>
+  <data name="Index.Enable" xml:space="preserve"><value>启用索引</value></data>
+  <data name="Index.EnableDescription" xml:space="preserve"><value>首次启用需要在 Windows 提示中确认管理员权限。</value></data>
+  <data name="Index.BuildSelected" xml:space="preserve"><value>建立所选磁盘索引</value></data>
+  <data name="Index.BuildDescription" xml:space="preserve"><value>为所选磁盘建立索引后，即可搜索其中的文件。</value></data>
+  <data name="Index.EnableCancelled" xml:space="preserve"><value>已取消管理员确认，索引尚未启用。</value></data>
+  <data name="Index.Checking" xml:space="preserve">
+    <value>索引：正在检查…</value>
+  </data>
+  <data name="Index.Connected" xml:space="preserve">
+    <value>索引：已连接</value>
+  </data>
+  <data name="Index.Disconnected" xml:space="preserve">
+    <value>索引：不可用</value>
+  </data>
+  <data name="Index.ServiceRunning" xml:space="preserve">
+    <value>索引服务正在运行。</value>
+  </data>
+  <data name="Index.ServiceStarting" xml:space="preserve">
+    <value>索引服务正在启动。</value>
+  </data>
+  <data name="Index.ServiceStopping" xml:space="preserve">
+    <value>索引服务正在停止。</value>
+  </data>
+  <data name="Index.ServiceStopped" xml:space="preserve">
+    <value>索引服务已停止。</value>
+  </data>
+  <data name="Index.ServiceFaulted" xml:space="preserve">
+    <value>索引服务报告故障。</value>
+  </data>
+  <data name="Index.ConnectionError" xml:space="preserve">
+    <value>无法读取索引服务（{0}）。本地浏览仍可使用。</value>
+  </data>
+  <data name="Index.OperationProgress" xml:space="preserve">
+    <value>服务正在处理索引：已处理 {0} 项记录。</value>
+  </data>
+  <data name="Index.VolumeCounts" xml:space="preserve">
+    <value>{0} 个文件，{1} 个文件夹</value>
+  </data>
+  <data name="Index.VolumeError" xml:space="preserve">
+    <value>错误：{0}</value>
+  </data>
+  <data name="Index.Healthy" xml:space="preserve">
+    <value>可搜索</value>
+  </data>
+  <data name="Index.CatchingUp" xml:space="preserve">
+    <value>正在追赶更新</value>
+  </data>
+  <data name="Index.RebuildRequired" xml:space="preserve">
+    <value>需要重建</value>
+  </data>
+  <data name="Index.Rebuilding" xml:space="preserve">
+    <value>正在重建</value>
+  </data>
+  <data name="Index.Unavailable" xml:space="preserve">
+    <value>不可用</value>
+  </data>
+  <data name="Index.Corrupted" xml:space="preserve">
+    <value>索引数据损坏</value>
+  </data>
+  <data name="Index.Unconfirmed" xml:space="preserve">
+    <value>状态待确认</value>
+  </data>
+  <data name="Search.Scope" xml:space="preserve"><value>搜索范围</value></data>
+  <data name="Search.Advanced" xml:space="preserve"><value>高级搜索</value></data>
+  <data name="Search.FollowLocation" xml:space="preserve"><value>跟随当前位置</value></data>
+  <data name="Search.SelectedVolumes" xml:space="preserve"><value>指定磁盘</value></data>
+  <data name="Search.SelectedVolumesHint" xml:space="preserve"><value>例如 C:;D:，也可用逗号或空格分隔</value></data>
+  <data name="Search.SelectedFolder" xml:space="preserve"><value>指定目录</value></data>
+  <data name="Search.FolderHint" xml:space="preserve"><value>输入目录的完整路径</value></data>
+  <data name="Search.UseCurrentFolder" xml:space="preserve"><value>使用当前位置</value></data>
+  <data name="Search.IncludeSubfolders" xml:space="preserve"><value>包含子文件夹</value></data>
+  <data name="Search.FolderOnly" xml:space="preserve"><value>仅此文件夹</value></data>
+  <data name="Search.ScopeSummary" xml:space="preserve"><value>搜索范围：{0}</value></data>
+  <data name="Search.ScopeDraftSummary" xml:space="preserve"><value>搜索范围：{0} · 按搜索后应用更改</value></data>
+  <data name="Search.ScopeNotSet" xml:space="preserve"><value>请设置搜索位置</value></data>
+  <data name="Search.AdvancedHint" xml:space="preserve"><value>跟随当前位置时，此电脑搜索所有磁盘，文件夹搜索所在磁盘。修改选项后按 Enter 或点击搜索。</value></data>
+  <data name="Search.CurrentFolderUnavailable" xml:space="preserve"><value>当前所在位置不是文件夹</value></data>
+  <data name="Search.Mode" xml:space="preserve"><value>匹配方式</value></data>
+  <data name="Search.AllVolumes" xml:space="preserve"><value>所有本地磁盘</value></data>
+  <data name="Search.CurrentFolder" xml:space="preserve"><value>当前文件夹</value></data>
+  <data name="Search.Substring" xml:space="preserve"><value>名称包含</value></data>
+  <data name="Search.Prefix" xml:space="preserve"><value>名称开头</value></data>
+  <data name="Search.Extension" xml:space="preserve"><value>扩展名</value></data>
+  <data name="Search.Submit" xml:space="preserve"><value>搜索</value></data>
+  <data name="Search.Retry" xml:space="preserve"><value>重试未完成卷</value></data>
+  <data name="Search.Leave" xml:space="preserve"><value>返回文件夹</value></data>
+  <data name="Search.Locate" xml:space="preserve"><value>定位</value></data>
+  <data name="Search.VolumeStates" xml:space="preserve"><value>各卷索引状态</value></data>
+  <data name="Search.Queued" xml:space="preserve"><value>搜索已排队，请稍候。</value></data>
+  <data name="Search.Searching" xml:space="preserve"><value>正在搜索“{0}”，已收到 {1} 项。</value></data>
+  <data name="Search.Preparing" xml:space="preserve"><value>索引正在准备，请稍后重试“{0}”。</value></data>
+  <data name="Search.Partial" xml:space="preserve"><value>“{0}”：显示 {1} 项；部分卷尚未完成。</value></data>
+  <data name="Search.Unavailable" xml:space="preserve"><value>“{0}”：索引搜索暂不可用，仍可浏览文件夹。</value></data>
+  <data name="Search.Results" xml:space="preserve"><value>“{0}”：{1} 项结果。</value></data>
+  <data name="Search.Limit" xml:space="preserve"><value>结果达到每卷 {0} 项上限，请缩小搜索范围。</value></data>
+  <data name="Search.Validating" xml:space="preserve"><value>正在检查结果是否仍有效……</value></data>
+  <data name="Search.Unsupported" xml:space="preserve"><value>此目录或链接暂不支持索引搜索或结果操作。</value></data>
+  <data name="Search.ActionError" xml:space="preserve"><value>无法操作此结果（错误 {0}）。</value></data>
+  <data name="Search.ErrorCode" xml:space="preserve"><value>错误 {0}</value></data>
+  <data name="Search.ResultChanged" xml:space="preserve"><value>结果已变化，无法打开或定位，请重新搜索。</value></data>
+  <data name="Search.InvalidQuery" xml:space="preserve"><value>请输入有效的搜索内容和搜索范围。</value></data>
+  <data name="Search.Exact" xml:space="preserve"><value>名称完全匹配</value></data>
+  <data name="Search.ExactPartial" xml:space="preserve"><value>“{0}”：显示 {1} 项，精确结果未能完全查询。</value></data>
+  <data name="Search.ExactLimit" xml:space="preserve"><value>名称候选达到每卷 {0} 项上限，精确结果可能遗漏。请缩小范围。</value></data>
+  <data name="NewFolder.Create" xml:space="preserve"><value>创建</value></data>
+  <data name="NewFolder.Name" xml:space="preserve"><value>文件夹名称</value></data>
+  <data name="NewFolder.InvalidName" xml:space="preserve"><value>请输入有效的名称，勿使用路径、保留名称或末尾的点和空格。</value></data>
+  <data name="NewFolder.DefaultName" xml:space="preserve"><value>新建文件夹</value></data>
+  <data name="NewFolder.Conflict" xml:space="preserve"><value>同名项目已存在，请输入其它名称。</value></data>
+  <data name="NewFolder.RetryName" xml:space="preserve"><value>重试／修改名称</value></data>
+  <data name="NewFolder.DialogFailed" xml:space="preserve"><value>无法开始文件操作，请重试。</value></data>
+  <data name="Operation.Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="Operation.Completed" xml:space="preserve"><value>已创建文件夹：{0}</value></data>
+  <data name="Operation.Cancelled" xml:space="preserve"><value>已取消创建文件夹：{0}</value></data>
+  <data name="Operation.Cancelling" xml:space="preserve"><value>正在取消创建文件夹：{0}</value></data>
+  <data name="Operation.Failed" xml:space="preserve"><value>无法创建“{0}”：{1}</value></data>
+  <data name="Operation.Running" xml:space="preserve"><value>正在创建文件夹：{0}</value></data>
+  <data name="Operation.DirectoryChanged" xml:space="preserve"><value>目标文件夹已变化，请刷新后重试。</value></data>
+  <data name="Operation.Unsupported" xml:space="preserve"><value>此位置暂不支持新建文件夹，请打开实际的本地目录。</value></data>
+  <data name="NewFolder.Unavailable" xml:space="preserve"><value>此位置暂时无法新建文件夹，请刷新或打开实际的本地目录。</value></data>
+  <data name="Rename.Name" xml:space="preserve"><value>新名称</value></data>
+  <data name="Operation.TargetChanged" xml:space="preserve"><value>所选项目已变化，请刷新后重试。</value></data>
+  <data name="Operation.RenameCompleted" xml:space="preserve"><value>已重命名为：{0}</value></data>
+  <data name="Operation.RenameUnchanged" xml:space="preserve"><value>名称未改变：{0}</value></data>
+  <data name="Operation.RenameCancelled" xml:space="preserve"><value>已取消重命名：{0}</value></data>
+  <data name="Operation.RenameCancelling" xml:space="preserve"><value>正在取消重命名：{0}</value></data>
+  <data name="Operation.RenameFailed" xml:space="preserve"><value>无法重命名为“{0}”：{1}</value></data>
+  <data name="Operation.RenameRunning" xml:space="preserve"><value>正在重命名为：{0}</value></data>
+  <data name="Copy.Name" xml:space="preserve"><value>目标文件名</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Copy.TargetChanged" xml:space="preserve"><value>源项目或目标文件夹已变化，请刷新后重新复制。</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.CopyLimited" xml:space="preserve"><value>仅支持普通本地文件和文件夹的传输，暂不支持链接、虚拟项目及特殊存储。</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.Preparing" xml:space="preserve"><value>正在准备剪贴板项目…</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.Copied" xml:space="preserve"><value>已复制到剪贴板：{0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.Failed" xml:space="preserve"><value>文件剪贴板操作失败：{0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Clipboard.Unavailable" xml:space="preserve"><value>文件剪贴板暂不可用，请重试。</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyCompleted" xml:space="preserve"><value>已复制到：{0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyCancelled" xml:space="preserve"><value>已取消复制：{0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyCancelling" xml:space="preserve"><value>正在取消复制：{0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyFailed" xml:space="preserve"><value>无法复制到“{0}”：{1}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyRunning" xml:space="preserve"><value>正在复制到：{0}</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyBytes" xml:space="preserve"><value>（{0} / {1} 字节）</value><comment>Single ordinary file copy.</comment></data>
+  <data name="Operation.CopyPartial" xml:space="preserve"><value>目标位置留有未完成的文件，请检查后再重试。</value><comment>Single ordinary file copy.</comment></data>
+  <data name="CopyConflict.Title" xml:space="preserve"><value>文件已存在</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Description" xml:space="preserve"><value>目标位置已存在同名项目，请选择处理方式。</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Source" xml:space="preserve"><value>源文件：{0}</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Destination" xml:space="preserve"><value>目标文件：{0}</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Replace" xml:space="preserve"><value>替换</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Skip" xml:space="preserve"><value>跳过</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.KeepBoth" xml:space="preserve"><value>保留两份</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.Cancel" xml:space="preserve"><value>取消</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.ReplaceUnavailable" xml:space="preserve"><value>此项目无法替换目标，请选择跳过或保留两份。</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.KeepBothDescription" xml:space="preserve"><value>保留现有项目，并为副本名称添加序号。</value><comment>File copy conflict choice.</comment></data>
+  <data name="Operation.CopySkipped" xml:space="preserve"><value>已跳过：{0}</value><comment>File copy conflict choice.</comment></data>
+  <data name="CopyConflict.PrepareFailed" xml:space="preserve"><value>无法准备冲突处理，请重试。</value><comment>Conflict preparation failed.</comment></data>
+  <data name="Copy.Unsupported" xml:space="preserve"><value>当前无法完整复制此文件的存储属性或数据流，源文件已保留。</value><comment>Copy support boundary.</comment></data>
+  <data name="Clipboard.TooManyFiles" xml:space="preserve"><value>每次最多传输 1,024 项。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Clipboard.CopiedMany" xml:space="preserve"><value>已将 {0} 个文件复制到剪贴板。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchRunning" xml:space="preserve"><value>正在复制文件队列。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchCompleted" xml:space="preserve"><value>复制队列已完成。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchCancelled" xml:space="preserve"><value>复制队列已取消。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchCancelling" xml:space="preserve"><value>正在取消复制队列。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchFailed" xml:space="preserve"><value>复制队列已停止。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchSummary" xml:space="preserve"><value>共 {0} 个：已复制 {1}，已跳过 {2}，失败 {3}，已取消 {4}，剩余 {5}。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchCurrent" xml:space="preserve"><value>第 {0} 个：{1}</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Operation.CopyBatchPartial" xml:space="preserve"><value>有 {0} 个项目报告未完成副本，请检查提示中的路径。</value><comment>Multi-file copy queue.</comment></data>
+  <data name="Clipboard.Cancelling" xml:space="preserve"><value>正在取消项目准备，请稍候。</value><comment>File copy preparation cancellation.</comment></data>
+  <data name="Clipboard.Cancelled" xml:space="preserve"><value>项目准备已取消。</value><comment>File copy preparation cancellation.</comment></data>
+  <data name="Clipboard.CopiedItems" xml:space="preserve"><value>已将 {0} 个项目复制到剪贴板。</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Name" xml:space="preserve"><value>新的目标文件夹名称</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Scanning" xml:space="preserve"><value>正在检查文件夹内容：{0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Running" xml:space="preserve"><value>正在复制文件夹到：{0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Completed" xml:space="preserve"><value>文件夹已复制到：{0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Cancelled" xml:space="preserve"><value>文件夹复制已取消：{0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Cancelling" xml:space="preserve"><value>正在取消文件夹复制：{0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Failed" xml:space="preserve"><value>无法将文件夹复制到：{0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Counts" xml:space="preserve"><value>已复制 {0} 个文件；已创建 {1} 个文件夹。</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.FailurePath" xml:space="preserve"><value>失败位置：{0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.PartialHistory" xml:space="preserve"><value>{0} 次尝试留下了不完整目录。此前副本仍保留，请查看提示中的路径。</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.HistoryLimited" xml:space="preserve"><value>受显示长度限制，仅展示最早的至多 32 条路径；计数包含全部未完成尝试。</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.RetryNewName" xml:space="preserve"><value>请输入新的文件夹名称以开始另一份复制，之前未完成的副本会保留在已报告的位置。</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.PartialPath" xml:space="preserve"><value>此前未完成的目录仍保留在：{0}</value><comment>Single-directory copy presentation.</comment></data>
+  <data name="DirectoryCopy.Skipped" xml:space="preserve"><value>已跳过文件夹复制：{0}</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.Title" xml:space="preserve"><value>文件夹名称已存在</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.Description" xml:space="preserve"><value>可合并到已有文件夹，或选择跳过、保留两份、取消。内部同名文件将逐项询问。</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.Merge" xml:space="preserve"><value>合并</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.ReplaceUnavailable" xml:space="preserve"><value>此项目无法与目标合并，请选择跳过或保留两份。</value><comment>Directory root conflict choices.</comment></data>
+  <data name="DirectoryCopyConflict.KeepBothDescription" xml:space="preserve"><value>复制到首个可用的编号文件夹名称；新目录树建立后若失败，会保留真实副本供检查。</value><comment>Directory root conflict choices.</comment></data>
+  <data name="Move.Title" xml:space="preserve"><value>移动</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Name" xml:space="preserve"><value>目标名称</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Running" xml:space="preserve"><value>正在移动项目。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Completed" xml:space="preserve"><value>移动队列已完成。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Unchanged" xml:space="preserve"><value>所选项目已在此文件夹中，未发生移动。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Skipped" xml:space="preserve"><value>已跳过移动队列。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Cancelled" xml:space="preserve"><value>移动队列已取消，已移动的项目保留在目标位置。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Cancelling" xml:space="preserve"><value>正在取消移动队列。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Failed" xml:space="preserve"><value>移动队列已停止。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Summary" xml:space="preserve"><value>共 {0} 项：已移动 {1}，未变更 {2}，已跳过 {3}，失败 {4}，已取消 {5}，剩余 {6}。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Current" xml:space="preserve"><value>第 {0} 项：{1}</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Warning" xml:space="preserve"><value>{0} 项已移动，但后续检查存在警告；可在提示中查看路径。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.CrossVolume" xml:space="preserve"><value>无法在这两个磁盘卷之间移动该项目。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Unsupported" xml:space="preserve"><value>暂不支持移动此项目或存储类型。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.TargetChanged" xml:space="preserve"><value>来源项目或目标文件夹已变化，请刷新后重试。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.AlreadySubmitted" xml:space="preserve"><value>此批剪切项目已提交，请完成或取消现有移动队列；再次移动时请重新剪切。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="MoveConflict.Title" xml:space="preserve"><value>移动目标名称已存在</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="MoveConflict.Description" xml:space="preserve"><value>目标位置已有同名项目。可跳过当前项、保留两者，或取消剩余队列。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="MoveConflict.KeepBothDescription" xml:space="preserve"><value>保留已有项目，将来源移动为带编号的新名称。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Clipboard.CutItems" xml:space="preserve"><value>已剪切 {0} 项。粘贴到目标文件夹后才会移动。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="Move.Partial" xml:space="preserve"><value>有 {0} 项未完全移动，目标副本和剩余来源均已保留。</value><comment>Cross-volume move partial completion.</comment></data>
+  <data name="Move.SkipRemaining" xml:space="preserve"><value>跳过当前项并继续</value><comment>Cross-volume move partial completion.</comment></data>
+  <data name="Move.DirectoryProgress" xml:space="preserve"><value>已复制 {0} 个文件、{1} 个文件夹；已移除来源 {2} 个文件、{3} 个文件夹。</value><comment>Cross-volume directory move progress.</comment></data>
+  <data name="Delete.ConfirmTitle" xml:space="preserve"><value>永久删除这些项目？</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.ConfirmPermanent" xml:space="preserve"><value>永久删除</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.ConfirmDescription" xml:space="preserve"><value>确定永久删除所选的 {0} 个项目（包括文件夹内容）？这些项目不会进入回收站。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.RecycleRunning" xml:space="preserve"><value>正在将所选项目移入系统回收站。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.PermanentRunning" xml:space="preserve"><value>正在永久删除所选项目。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Completed" xml:space="preserve"><value>删除队列已完成。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Cancelled" xml:space="preserve"><value>删除队列已取消，已经完成的移除仍然有效。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Cancelling" xml:space="preserve"><value>正在取消删除队列。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Failed" xml:space="preserve"><value>删除队列已停止。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Summary" xml:space="preserve"><value>共 {0} 项：已回收 {1}，已永久删除 {2}，已跳过 {3}，失败 {4}，已取消 {5}，剩余 {6}。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Current" xml:space="preserve"><value>第 {0} 项：{1}</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Progress" xml:space="preserve"><value>系统处理进度：{0}/{1}。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Partial" xml:space="preserve"><value>有 {0} 个文件夹可能已部分删除，请检查剩余内容后再重试或跳过。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Warning" xml:space="preserve"><value>有 {0} 项已移除，但后续检查存在警告，可在提示中查看路径。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.RecycleUnavailable" xml:space="preserve"><value>此位置无法使用系统回收站，本次未请求永久删除。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.TargetChanged" xml:space="preserve"><value>所选项目或父文件夹已变化，请刷新后重试。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Retry" xml:space="preserve"><value>重试当前项</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.Skip" xml:space="preserve"><value>跳过当前项</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.DialogFailed" xml:space="preserve"><value>无法打开永久删除确认窗口。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Delete.CaptureFailed" xml:space="preserve"><value>无法读取当前选择，请刷新目录或将选择减少到最多 1024 项。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
+  <data name="Properties.Name" xml:space="preserve"><value>名称</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Location" xml:space="preserve"><value>位置</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Selection" xml:space="preserve"><value>选择</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.SelectionValue" xml:space="preserve"><value>{0} 项：{1} 个文件、{2} 个文件夹</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Type" xml:space="preserve"><value>类型</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Size" xml:space="preserve"><value>大小</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Allocated" xml:space="preserve"><value>占用空间</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Contains" xml:space="preserve"><value>包含</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.ContainsValue" xml:space="preserve"><value>{0} 个文件、{1} 个子文件夹</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Created" xml:space="preserve"><value>创建时间</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Modified" xml:space="preserve"><value>修改时间</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Accessed" xml:space="preserve"><value>访问时间</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Attributes" xml:space="preserve"><value>属性</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.CommonAttributes" xml:space="preserve"><value>共有属性</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.ReadOnly" xml:space="preserve"><value>只读</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Hidden" xml:space="preserve"><value>隐藏</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.System" xml:space="preserve"><value>系统</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Archive" xml:space="preserve"><value>存档</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Compressed" xml:space="preserve"><value>压缩</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Encrypted" xml:space="preserve"><value>加密</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Sparse" xml:space="preserve"><value>稀疏</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Link" xml:space="preserve"><value>链接</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Offline" xml:space="preserve"><value>脱机</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.None" xml:space="preserve"><value>无</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Unavailable" xml:space="preserve"><value>不可用</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.MultipleTypes" xml:space="preserve"><value>多种类型</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.MultipleValues" xml:space="preserve"><value>多个值</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Bytes" xml:space="preserve"><value>{0}（{1} 字节）</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Counted" xml:space="preserve"><value>已统计：{0}</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Reading" xml:space="preserve"><value>正在读取属性并统计文件夹内容…</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Cancelled" xml:space="preserve"><value>已取消统计，数量可能不完整。</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Partial" xml:space="preserve"><value>部分属性无法读取，数量不完整。</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Complete" xml:space="preserve"><value>统计完成。</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.UnavailableCount" xml:space="preserve"><value>{0} 处无法读取。</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.Close" xml:space="preserve"><value>关闭</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.ReadFailed" xml:space="preserve"><value>无法打开属性窗口，请刷新文件夹后重试。</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.FolderNote" xml:space="preserve"><value>文件夹大小包含子项；不累计链接目标，硬链接按名称分别统计。</value><comment>Read-only file properties and directory totals.</comment></data>
+  <data name="Properties.CaptureFailed" xml:space="preserve"><value>无法读取所选项目，请刷新文件夹或选择不超过 1024 项。</value></data>
+  <data name="DragDrop.Busy" xml:space="preserve"><value>另一个文件操作正在进行。</value></data>
+  <data name="DragDrop.InvalidTarget" xml:space="preserve"><value>请拖放到可用的文件夹或驱动器。</value></data>
+  <data name="DragDrop.Preparing" xml:space="preserve"><value>正在准备文件传输…</value></data>
+  <data name="DragDrop.Unsupported" xml:space="preserve"><value>无法传输这些项目。</value></data>
+  <data name="DragDrop.NoOperation" xml:space="preserve"><value>此位置或按键组合不支持当前拖放操作。</value></data>
+  <data name="DragDrop.MoveTo" xml:space="preserve"><value>移动到 {0}</value></data>
+  <data name="DragDrop.CopyTo" xml:space="preserve"><value>复制到 {0}</value></data>
+  <data name="DragDrop.SourceUnavailable" xml:space="preserve"><value>无法拖动所选项目，请刷新文件夹后重试。</value></data>
+  <data name="DragDrop.Failed" xml:space="preserve"><value>无法传输这些项目：{0}</value></data>
+  <data name="DirectoryCopy.WaitingForConflict" xml:space="preserve"><value>等待选择处理方式：{0}</value><comment>Directory merge feedback.</comment></data>
+  <data name="DirectoryCopy.SkippedCounts" xml:space="preserve"><value>已跳过 {0} 个文件、{1} 个文件夹。</value><comment>Directory merge feedback.</comment></data>
+  <data name="Search.MenuError" xml:space="preserve"><value>无法打开 Windows 右键菜单（{0}）。</value></data>
+  <data name="Search.NativeDispatched" xml:space="preserve"><value>已交给 Windows 处理，请查看系统或应用窗口中的进度。</value></data>
+  <data name="Search.PathCopied" xml:space="preserve"><value>已复制文件完整路径。</value></data>
+  <data name="Search.ParentCopied" xml:space="preserve"><value>已复制所在目录路径。</value></data>
+  <data name="Search.MenuPasteParent" xml:space="preserve"><value>粘贴到所在目录</value></data>
+  <data name="Search.MenuCopyPath" xml:space="preserve"><value>复制完整路径</value></data>
+  <data name="Search.MenuCopyParentPath" xml:space="preserve"><value>复制所在目录路径</value></data>
+  <data name="Search.MenuSystemOptions" xml:space="preserve"><value>压缩与更多系统选项…</value></data>
+</root>

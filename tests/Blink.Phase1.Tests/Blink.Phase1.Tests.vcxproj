@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10E}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>BlinkPhase1Tests</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <ResolveNuGetPackages>false</ResolveNuGetPackages>
+    <RestorePackagesPath Condition="'$(RestorePackagesPath)' == ''">$(MSBuildProjectDirectory)\..\..\.nuget\packages</RestorePackagesPath>
+    <NuGetPackageRoot Condition="'$(NuGetPackageRoot)' == ''">$(MSBuildProjectDirectory)\..\..\.nuget\packages\</NuGetPackageRoot>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PreprocessorDefinitions>BLINK_LOCALIZATION_DISABLE_RESOURCE_LOADER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MSBuildProjectDirectory)\..\..\src\Blink\include;$(MSBuildProjectDirectory)\..\..\src\Blink.Core\include;$(MSBuildProjectDirectory)\..\..\src\Blink.Index.Contracts\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link><SubSystem>Console</SubSystem></Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\CopyTransferPresentation.h" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\FileOperationOrigin.h" />
+    <ClCompile Include="..\..\src\Blink\src\BrowseController.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\FolderWatcher.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\IndexServiceState.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\SearchState.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\SearchResultValidation.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\SearchViewModel.cpp" />
+    <ClCompile Include="src\IndexServiceSetupTests.cpp" />
+    <ClInclude Include="src\IndexServiceSetupTests.h" />
+    <ClCompile Include="src\IndexServiceLiveProbe.cpp" />
+    <ClInclude Include="src\IndexServiceLiveProbe.h" />
+    <ClCompile Include="src\SearchIntegrationTests.cpp" />
+    <ClCompile Include="src\SearchExactTests.cpp" />
+    <ClCompile Include="src\SearchContextMenuTests.cpp" />
+    <ClInclude Include="src\SearchContextMenuTests.h" />
+    <ClCompile Include="..\..\src\Blink\src\SearchContextCommands.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\ShellContextMenu.cpp" />
+    <ClCompile Include="src\FileOperationTests.cpp" />
+    <ClCompile Include="src\RenameOperationTests.cpp" />
+    <ClCompile Include="src\FileCopyOperationTests.cpp" />
+    <ClCompile Include="src\FileCopyConflictTests.cpp" />
+    <ClCompile Include="src\FileCopyBatchTests.cpp" />
+    <ClCompile Include="src\MixedCopyBatchTests.cpp" />
+    <ClCompile Include="src\DirectoryCopyOperationTests.cpp" />
+    <ClCompile Include="src\DirectoryCopyCoordinatorTests.cpp" />
+    <ClCompile Include="src\ClipboardFileTransferTests.cpp" />
+    <ClCompile Include="src\ClipboardCopySourceTests.cpp" />
+    <ClCompile Include="src\CopyPresentationTests.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\FileCopyOperation.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\DirectoryCopyOperation.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\ClipboardFileTransfer.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\DirectoryLease.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\RenameOperation.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\MoveOperation.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\HandleRename.cpp" />
+    <ClCompile Include="src\MoveOperationTests.cpp" />
+    <ClCompile Include="src\MoveCoordinatorTests.cpp" />
+    <ClCompile Include="src\MoveBatchTests.cpp" />
+    <ClInclude Include="src\MoveBatchTests.h" />
+    <ClCompile Include="src\MoveTransferTests.cpp" />
+    <ClCompile Include="src\ItemPropertiesTests.cpp" />
+    <ClCompile Include="src\FileDragDropTests.cpp" />
+    <ClCompile Include="src\FileReplaceTests.cpp" />
+    <ClInclude Include="src\FileReplaceTests.h" />
+    <ClCompile Include="src\DirectoryMergeTests.cpp" />
+    <ClInclude Include="src\DirectoryMergeTests.h" />
+    <ClInclude Include="src\FileDragDropTests.h" />
+    <ClInclude Include="src\ItemPropertiesTests.h" />
+    <ClCompile Include="..\..\src\Blink\src\ItemProperties.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\FileDragData.cpp" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\FileDragData.h" />
+    <ClCompile Include="..\..\src\Blink\src\FileDragDropModel.cpp" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\FileDragDropModel.h" />
+    <ClCompile Include="src\DeleteOperationTests.cpp" />
+    <ClInclude Include="src\DeleteOperationTests.h" />
+    <ClCompile Include="src\FolderRelocationTests.cpp" />
+    <ClInclude Include="src\FolderRelocationTests.h" />
+    <ClCompile Include="src\CrossVolumeMoveTests.cpp" />
+    <ClInclude Include="src\CrossVolumeMoveTests.h" />
+    <ClInclude Include="src\MoveTransferTests.h" />
+    <ClCompile Include="src\FolderNavigationTests.cpp" />
+    <ClInclude Include="src\FolderNavigationTests.h" />
+    <ClInclude Include="src\MoveCoordinatorTests.h" />
+    <ClInclude Include="src\MoveOperationTests.h" />
+
+    <ClCompile Include="src\FileOperationCoordinatorTests.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\DeleteOperation.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\FileOperationCoordinator.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\FileOperations.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\SearchCoordinator.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\IndexServiceCoordinator.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\BrowseState.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\FileActivationController.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\FileActivation.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\NavigationModel.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\NavigationPane.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\TabState.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\TabWindowState.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\FolderViewFormatting.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\Localization.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\Location.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\NavigationTree.cpp" />
+    <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\FileCopyBatchTests.h" />
+    <ClInclude Include="src\MixedCopyBatchTests.h" />
+    <ClInclude Include="src\DirectoryCopyOperationTests.h" />
+    <ClInclude Include="src\DirectoryCopyCoordinatorTests.h" />
+    <ClInclude Include="src\ClipboardCopySourceTests.h" />
+    <ClInclude Include="src\CopyPresentationTests.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Blink.Core\Blink.Core.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\Blink.Index.Contracts\Blink.Index.Contracts.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\Blink.FileActivationHost\Blink.FileActivationHost.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10F}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.CppWinRT" Version="2.0.250303.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

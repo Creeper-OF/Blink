@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10A}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>Blink</RootNamespace>
+    <TargetName>Blink</TargetName>
+    <ApplicationType>Desktop</ApplicationType>
+    <AppContainerApplication>false</AppContainerApplication>
+    <DesktopCompatible>true</DesktopCompatible>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSdkUndockedRegFreeWinRTInitialize>true</WindowsAppSdkUndockedRegFreeWinRTInitialize>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <AppxPackage>false</AppxPackage>
+    <CppWinRTOptimized>true</CppWinRTOptimized>
+    <CppWinRTRootNamespaceAutoMerge>true</CppWinRTRootNamespaceAutoMerge>
+    <MinimalCoreWin>true</MinimalCoreWin>
+    <DefaultLanguage>en-US</DefaultLanguage>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+    <LinkIncremental Condition="'$(Configuration)'=='Debug'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)'=='Release'">false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutputPath>$(MSBuildProjectDirectory)\x64\Debug\</OutputPath>
+    <OutDir>$(MSBuildProjectDirectory)\x64\Debug\</OutDir>
+    <IntDir>$(MSBuildProjectDirectory)\x64\Debug\obj\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutputPath>$(MSBuildProjectDirectory)\x64\Release\</OutputPath>
+    <OutDir>$(MSBuildProjectDirectory)\x64\Release\</OutDir>
+    <IntDir>$(MSBuildProjectDirectory)\x64\Release\obj\</IntDir>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <XamlMetaDataProviderCpp>$(IntDir)Generated Files\XamlMetaDataProvider.cpp</XamlMetaDataProviderCpp>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(BlinkOutputDirectory)'!=''">
+    <OutputPath>$(BlinkOutputDirectory)</OutputPath>
+    <OutDir>$(BlinkOutputDirectory)</OutDir>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalIncludeDirectories>
+        $(MSBuildProjectDirectory)\include;
+        $(MSBuildProjectDirectory)\..\Blink.Core\include;
+        $(MSBuildProjectDirectory)\..\Blink.Index\include;
+        $(MSBuildProjectDirectory)\..\Blink.Properties\include;
+        $(MSBuildProjectDirectory)\..\Blink.Transfer\include;
+        $(MSBuildProjectDirectory)\..\Blink.Provider.Contracts\include;
+        $(MSBuildProjectDirectory)\..\Blink.Index.Contracts\include;
+        $(MSBuildProjectDirectory)\src;
+        $(MSBuildProjectDirectory);
+        $(IntDir);
+        $(GeneratedFilesDir)sources;
+        %(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>Shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ProviderHost.exe" "$(OutDir)Blink.ProviderHost.exe"
+copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.IndexService.exe" "$(OutDir)Blink.IndexService.exe"
+copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.FileActivationHost.exe" "$(OutDir)Blink.FileActivationHost.exe"
+copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(OutDir)Blink.ShellMenuHost.exe"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClInclude Include="include\Blink\App\CopyTransferPresentation.h" />
+    <ClInclude Include="include\Blink\App\ItemProperties.h" />
+    <ClInclude Include="include\Blink\App\PropertiesPresentation.h" />
+    <ClInclude Include="include\Blink\App\PropertiesDialog.h" />
+    <ClInclude Include="include\Blink\App\DeleteOperation.h" />
+    <ClInclude Include="include\Blink\App\DeletePresentation.h" />
+    <ClInclude Include="include\Blink\App\DeleteConfirmationDialog.h" />
+    <ClInclude Include="include\Blink\App\FileOperationRelocation.h" />
+    <ClInclude Include="include\Blink\App\MoveTransferPresentation.h" />
+    <ClInclude Include="include\Blink\App\FileOperationOrigin.h" />
+    <ClInclude Include="include\Blink\App\BrowseController.h" />
+    <ClInclude Include="include\Blink\App\BrowseState.h" />
+    <ClInclude Include="include\Blink\App\FileOperations.h" />
+    <ClInclude Include="include\Blink\App\DirectoryLease.h" />
+    <ClInclude Include="include\Blink\App\RenameOperation.h" />
+    <ClInclude Include="include\Blink\App\MoveOperation.h" />
+    <ClInclude Include="include\Blink\App\HandleRename.h" />
+    <ClInclude Include="include\Blink\App\FileCopyOperation.h" />
+    <ClInclude Include="include\Blink\App\DirectoryCopyOperation.h" />
+    <ClInclude Include="include\Blink\App\CopyConflictModel.h" />
+    <ClInclude Include="include\Blink\App\FileCopyConflictDialog.h" />
+    <ClInclude Include="include\Blink\App\ClipboardFileTransfer.h" />
+    <ClInclude Include="include\Blink\App\FileOperationCoordinator.h" />
+    <ClInclude Include="include\Blink\App\FileCopyBatch.h" />
+    <ClInclude Include="include\Blink\App\FolderNameDialog.h" />
+    <ClInclude Include="include\Blink\App\FileActivationController.h" />
+    <ClInclude Include="include\Blink\App\FileActivation.h" />
+    <ClInclude Include="include\Blink\App\NavigationModel.h" />
+    <ClInclude Include="include\Blink\App\NavigationPane.h" />
+    <ClInclude Include="include\Blink\App\TabState.h" />
+    <ClInclude Include="include\Blink\App\ItemVisibilityPolicy.h" />
+    <ClInclude Include="include\Blink\App\TabWindowState.h" />
+    <ClInclude Include="include\Blink\App\RowIdentity.h" />
+    <ClInclude Include="include\Blink\App\FolderViewFormatting.h" />
+    <ClInclude Include="include\Blink\App\FolderViewPresentation.h" />
+    <ClInclude Include="include\Blink\App\FolderCommandPolicy.h" />
+    <ClInclude Include="include\Blink\App\FolderChangeState.h" />
+    <ClInclude Include="include\Blink\App\FolderWatcher.h" />
+    <ClInclude Include="include\Blink\App\IndexServiceState.h" />
+    <ClInclude Include="include\Blink\App\SearchState.h" />
+    <ClInclude Include="include\Blink\App\SearchCoordinator.h" />
+    <ClInclude Include="include\Blink\App\SearchResultValidation.h" />
+    <ClInclude Include="include\Blink\App\SearchContextCommands.h" />
+    <ClInclude Include="include\Blink\App\SearchContextMenuPresentation.h" />
+    <ClInclude Include="include\Blink\App\ContextMenuAppearance.h" />
+    <ClInclude Include="include\Blink\App\ShellContextMenu.h" />
+    <ClInclude Include="include\Blink\App\ShellContextMenuController.h" />
+    <ClInclude Include="include\Blink\App\SearchViewModel.h" />
+    <ClInclude Include="include\Blink\App\SearchPresentation.h" />
+    <ClInclude Include="include\Blink\App\SearchRequestQueue.h" />
+    <ClInclude Include="include\Blink\App\IndexServiceCoordinator.h" />
+    <ClInclude Include="include\Blink\App\IndexServicePresentation.h" />
+    <ClInclude Include="include\Blink\App\Localization.h" />
+    <ClInclude Include="include\Blink\App\Location.h" />
+    <ClInclude Include="include\Blink\App\NavigationTree.h" />
+    <ClCompile Include="src\BrowseController.cpp" />
+    <ClCompile Include="src\FolderWatcher.cpp" />
+    <ClCompile Include="src\IndexServiceState.cpp" />
+    <ClCompile Include="src\SearchState.cpp" />
+    <ClCompile Include="src\SearchCoordinator.cpp" />
+    <ClCompile Include="src\SearchResultValidation.cpp" />
+    <ClCompile Include="src\SearchContextCommands.cpp" />
+    <ClCompile Include="src\SearchContextMenuPresentation.cpp" />
+    <ClCompile Include="src\ShellContextMenu.cpp" />
+    <ClCompile Include="src\ShellContextMenuController.cpp" />
+    <ClCompile Include="src\SearchViewModel.cpp" />
+    <ClCompile Include="src\SearchPresentation.cpp" />
+    <ClCompile Include="src\IndexServiceCoordinator.cpp" />
+    <ClCompile Include="src\IndexServicePresentation.cpp" />
+    <ClCompile Include="src\BrowseState.cpp" />
+    <ClCompile Include="src\FileOperations.cpp" />
+    <ClCompile Include="src\DirectoryLease.cpp" />
+    <ClCompile Include="src\RenameOperation.cpp" />
+    <ClCompile Include="src\ItemProperties.cpp" />
+    <ClCompile Include="src\FileDragData.cpp" />
+    <ClInclude Include="include\Blink\App\FileDragData.h" />
+    <ClCompile Include="src\FileDragDropModel.cpp" />
+    <ClInclude Include="include\Blink\App\FileDragDropModel.h" />
+    <ClCompile Include="src\FileDragDropController.cpp" />
+    <ClInclude Include="include\Blink\App\FileDragDropController.h" />
+    <ClCompile Include="src\PropertiesDialog.cpp" />
+    <ClCompile Include="src\DeleteOperation.cpp" />
+    <ClCompile Include="src\DeleteConfirmationDialog.cpp" />
+    <ClCompile Include="src\MoveOperation.cpp" />
+    <ClCompile Include="src\HandleRename.cpp" />
+    <ClCompile Include="src\FileCopyOperation.cpp" />
+    <ClCompile Include="src\DirectoryCopyOperation.cpp" />
+    <ClCompile Include="src\FileCopyConflictDialog.cpp" />
+    <ClCompile Include="src\ClipboardFileTransfer.cpp" />
+    <ClCompile Include="src\FileOperationCoordinator.cpp" />
+    <ClCompile Include="src\FolderNameDialog.cpp" />
+    <ClCompile Include="src\FileActivationController.cpp" />
+    <ClCompile Include="src\FileActivation.cpp" />
+    <ClCompile Include="src\NavigationModel.cpp" />
+    <ClCompile Include="src\NavigationPane.cpp" />
+    <ClCompile Include="src\TabState.cpp" />
+    <ClCompile Include="src\TabWindowState.cpp" />
+    <ClCompile Include="src\FolderViewFormatting.cpp" />
+    <ClCompile Include="src\FolderViewPresentation.cpp" />
+    <ClCompile Include="src\Localization.cpp" />
+    <ClCompile Include="src\Location.cpp" />
+    <ClCompile Include="src\NavigationTree.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\App.xaml.cpp" />
+    <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
+    <!-- App and generated factories need the metadata implementation. Keep
+         the large WinUI include out of ordinary model/controller sources. -->
+    <ClCompile Update="src\main.cpp;src\App.xaml.cpp;$(GeneratedFilesDir)module.g.cpp">
+      <ForcedIncludeFiles>$(IntDir)XamlMetaDataProvider.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+    </ClCompile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PRIResource Include="Strings\en-US\Resources.resw" />
+    <PRIResource Include="Strings\zh-CN\Resources.resw" />
+    <ApplicationDefinition Include="App.xaml">
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <ClInclude Include="App.xaml.h">
+      <DependentUpon>App.xaml</DependentUpon>
+    </ClInclude>
+    <Reference Include="Microsoft.UI.Xaml">
+      <HintPath>$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Xaml.winmd</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="BlinkRemoveDuplicateSdkWinmd" AfterTargets="GetCppWinRTPlatformWinMDReferences">
+    <ItemGroup>
+      <CppWinRTPlatformWinMDReferences Remove="$(WindowsSDK_MetadataPathVersioned)\Windows.AI.Actions.ActionsContract\7.0.0.0\Windows.AI.Actions.ActionsContract.winmd" />
+      <CppWinRTPlatformWinMDReferences Remove="$(WindowsSDK_MetadataPathVersioned)\Windows.Management.Update.WindowsUpdateContract\1.0.0.0\Windows.Management.Update.WindowsUpdateContract.winmd" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="BlinkCompileDeclarativeXamlBeforeCompile"
+          DependsOnTargets="MarkupCompilePass1;MarkupCompilePass2;CppWinRTAddXamlMetaDataProviderCpp" />
+
+  <Target Name="BlinkIncludeGeneratedXamlCpp"
+          AfterTargets="CppWinRTComputeXamlGeneratedCompileInputs"
+          BeforeTargets="ClCompile">
+    <ItemGroup>
+      <!-- XamlTypeInfo.g.cpp includes the generated App startup. Compile it
+           through main.cpp, where this project's App implementation is complete. -->
+      <ClCompile Remove="$(IntDir)XamlTypeInfo.g.cpp" />
+      <ClCompile Remove="$(IntDir)XamlTypeInfo.Impl.g.cpp" />
+      <ClCompile Remove="$(XamlMetaDataProviderCpp)" />
+      <ClCompile Include="$(XamlMetaDataProviderCpp)"
+                 Condition="Exists('$(XamlMetaDataProviderCpp)')" />
+      <ClCompile Update="$(XamlMetaDataProviderCpp)">
+        <CompilerIteration></CompilerIteration>
+        <ForcedIncludeFiles>$(IntDir)XamlMetaDataProvider.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      </ClCompile>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="BlinkKeepXamlMetadataInAppTranslationUnit" AfterTargets="MarkupCompilePass2">
+    <ItemGroup>
+      <ClCompile Remove="@(ClCompile)"
+                 Condition="'%(ClCompile.Filename)%(ClCompile.Extension)' == 'XamlTypeInfo.g.cpp' Or '%(ClCompile.Filename)%(ClCompile.Extension)' == 'XamlTypeInfo.Impl.g.cpp'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="BlinkAddWinUiMetadataForMarkup"
+          BeforeTargets="MarkupCompilePass1;MarkupCompilePass2"
+          DependsOnTargets="CppWinRTImplicitlyExpandTargetPlatform;GetCppWinRTPlatformWinMDReferences">
+    <ItemGroup>
+      <ReferencePath Include="$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Xaml.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <WinMDReferenceToCompile Include="$(PkgMicrosoft_WindowsAppSDK_WinUI)\metadata\Microsoft.UI.Xaml.winmd" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
+    <PackageReference Include="Microsoft.Windows.CppWinRT" Version="2.0.250303.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Blink.Core\Blink.Core.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.Index\Blink.Index.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB102}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.Properties\Blink.Properties.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB103}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.Transfer\Blink.Transfer.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB104}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.Provider.Contracts\Blink.Provider.Contracts.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB105}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.ProviderHost\Blink.ProviderHost.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB107}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.Index.Contracts\Blink.Index.Contracts.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.IndexService\Blink.IndexService.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10C}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.ShellMenuHost\Blink.ShellMenuHost.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB110}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\Blink.FileActivationHost\Blink.FileActivationHost.vcxproj">
+      <Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10F}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <PropertyGroup>
+    <BeforeClCompileTargets>BlinkCompileDeclarativeXamlBeforeCompile;$(BeforeClCompileTargets)</BeforeClCompileTargets>
+  </PropertyGroup>
+</Project>
