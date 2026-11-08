@@ -26,6 +26,10 @@ namespace blink::app
         bool source_removed{};
         std::optional<DirectoryCopyResult> directory_copy_result;
         std::uint64_t source_files_removed{}, source_directories_removed{};
+        bool merged{};
+        std::uint64_t files_skipped{}, directories_skipped{}, source_items_remaining{};
+        std::vector<DirectoryMoveRelocation> directory_relocations;
+        std::optional<bool> conflict_destination_is_directory;
     };
     enum class MoveBatchItemStage { Pending, Running, Moved, Unchanged, Skipped, Failed, Cancelled };
     struct MoveBatchItem
@@ -46,7 +50,7 @@ namespace blink::app
     [[nodiscard]] inline bool MoveHasPartialDestination(const MoveResult& result) noexcept
     {
         return !result.moved && ((result.copy_result && (result.copy_result->copied || result.copy_result->partial_file_left)) ||
-            (result.directory_copy_result && (result.directory_copy_result->copied || result.directory_copy_result->partial_tree_left ||
+            (result.directory_copy_result && (((!result.merged || !result.skipped) && result.directory_copy_result->copied) || result.directory_copy_result->partial_tree_left ||
                 result.directory_copy_result->directories_created || result.directory_copy_result->files_copied)));
     }
     [[nodiscard]] inline bool MoveHasSourceChanges(const MoveResult& result) noexcept
@@ -56,6 +60,15 @@ namespace blink::app
     [[nodiscard]] MoveResult MoveEntrySafely(const MoveRequest& request, const FileOperationCancellation& cancelled = {},
         const MoveProgressCallback& progress = {}, const NativeMoveFunction& native = {}) noexcept;
     using BeforeMoveSourceRemoval = std::function<DWORD()>;
+    // Merge moves every accepted leaf once, preserves existing destination
+    // directories, and only removes source directories that are actually empty.
+    // A normally completed traversal with explicit Skip returns success/skipped,
+    // never moved. Remaining planned descendants exclude the retained root;
+    // unexpected additions can raise this lower bound on failure. Completed
+    // directory relocations survive cancellation/partial results.
+    [[nodiscard]] MoveResult MoveDirectoryMergeSafely(const DirectoryCopyRequest& request,
+        const FileOperationCancellation& cancelled = {}, const MoveProgressCallback& progress = {},
+        const BeforeMoveSourceRemoval& before_removal = {}) noexcept;
     [[nodiscard]] MoveResult MoveFileAcrossVolumesSafely(const MoveRequest& request,
         const FileOperationCancellation& cancelled = {}, const MoveProgressCallback& progress = {},
         const BeforeMoveSourceRemoval& before_removal = {}) noexcept;

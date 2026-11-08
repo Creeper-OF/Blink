@@ -1,5 +1,7 @@
 #include "Blink/App/DirectoryCopyOperation.h"
 #include "Blink/App/DirectoryLease.h"
+#include "Blink/App/HandleRename.h"
+#include "Blink/App/MoveOperation.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -63,7 +65,8 @@ namespace blink::app
             FILE_BASIC_INFO basic{};
             blink::core::UniqueHandle source, destination, destination_metadata;
             std::vector<blink::core::FileEntry> children;
-            std::size_t depth{}, parent{};
+            std::vector<bool> removed_children;
+            std::size_t depth{}, parent{}, parent_child{};
             bool merged_existing{}, skipped{};
         };
         struct PlannedFile { std::size_t parent{}, child{}; };
@@ -189,6 +192,29 @@ namespace blink::app
             }
             return ERROR_SUCCESS;
         }
+        DWORD VerifyMoveInventory(PlannedDirectory& directory, const DirectoryCopyLimits& limits,
+            Budget& budget, const FileOperationCancellation& cancelled, detail::DirectoryMoveCopyResult& moving)
+        {
+            if (const auto error = CheckDirectory(directory.source.get(), &directory.source_identity, true, true); error)
+            { return error; }
+            const BudgetRestore restore{ budget, budget.used };
+            std::vector<blink::core::FileEntry> current;
+            if (const auto error = ReadChildren(directory, limits.max_entries, limits.max_depth, budget, cancelled, current); error)
+            { return error; }
+            const auto expected = static_cast<std::size_t>(std::count(directory.removed_children.begin(), directory.removed_children.end(), false));
+            if (current.size() > expected) { moving.source_items_remaining += current.size() - expected; }
+            if (current.size() != expected) { return ERROR_FILE_INVALID; }
+            std::size_t next{};
+            for (std::size_t index = 0; index < directory.children.size(); ++index)
+            {
+                if (directory.removed_children[index]) { continue; }
+                const auto& entry = directory.children[index];
+                if (current[next].name != entry.name || current[next].identity != entry.identity ||
+                    current[next].is_directory != entry.is_directory) { return ERROR_FILE_INVALID; }
+                ++next;
+            }
+            return ERROR_SUCCESS;
+        }
         DWORD ValidateFileStreams(HANDLE file)
         {
             std::vector<ULONGLONG> storage(512);
@@ -294,7 +320,7 @@ namespace blink::app
             { return ERROR_SUCCESS; }
             return ERROR_NOT_SUPPORTED;
         }
-        DWORD CreateOwnedDirectory(PlannedDirectory& directory, DirectoryCopyResult& result)
+        DWORD CreateOwnedDirectory(PlannedDirectory& directory, DirectoryCopyResult& result, const bool native_files)
         {
             // Fixed, already supported create shape; no release/reopen ownership
             // gap. The separate metadata handle must refer to this same ID.
@@ -309,7 +335,22 @@ namespace blink::app
             directory.destination_metadata = blink::core::UniqueHandle(CreateFile3(Native(directory.destination_path).c_str(),
                 FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES, ReadWriteSharing, OPEN_EXISTING, &parameters));
             if (!directory.destination_metadata) { return LastError(); }
-            return CheckDirectory(directory.destination_metadata.get(), &directory.destination_identity, true, true);
+            if (const auto error = CheckDirectory(directory.destination_metadata.get(), &directory.destination_identity, true, true); error)
+            { return error; }
+            if (native_files)
+            {
+                // Keep the original LIST_DIRECTORY guard until its read-only
+                // replacement is open and checked. Only the replacement's
+                // sharing changes; a LIST guard is held throughout conversion.
+                blink::core::UniqueHandle list(CreateFile3(Native(directory.destination_path).c_str(),
+                    FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                    ReadWriteSharing, OPEN_EXISTING, &parameters));
+                if (!list) { return LastError(); }
+                if (const auto error = CheckDirectory(list.get(), &directory.destination_identity, true, true); error)
+                { return error; }
+                directory.destination = std::move(list);
+            }
+            return ERROR_SUCCESS;
         }
         std::wstring KeepBothDirectoryName(const std::wstring& original, unsigned number, std::size_t maximum)
         {
@@ -418,7 +459,6 @@ namespace blink::app
             if (request.conflict_policy == FileCopyConflictPolicy::Cancel) { fail(ERROR_CANCELLED, {}); return result; }
             if (request.conflict_policy == FileCopyConflictPolicy::Replace) { fail(ERROR_NOT_SUPPORTED, {}); return result; }
             const bool merging = request.conflict_policy == FileCopyConflictPolicy::Merge;
-            if (moving && merging) { fail(ERROR_NOT_SUPPORTED, {}); return result; }
             if (request.conflict_policy != FileCopyConflictPolicy::Fail && request.conflict_policy != FileCopyConflictPolicy::KeepBoth && !merging)
             { fail(ERROR_INVALID_PARAMETER, {}); return result; }
             if (request.limits.max_entries > MaximumDirectoryCopyEntries || !request.limits.max_directories ||
@@ -439,6 +479,8 @@ namespace blink::app
             if (source_parent.error != ERROR_SUCCESS) { fail(source_parent.error, source_parent_path); return result; }
             auto destination_parent = detail::AcquireDirectoryLease(destination_parent_path, request.destination_parent_identity, cancelled);
             if (destination_parent.error != ERROR_SUCCESS) { fail(destination_parent.error, destination_parent_path); return result; }
+            const bool native_files = moving && merging &&
+                request.source.identity.volume_serial == request.destination_parent_identity.volume_serial;
             result.path = blink::core::JoinPath(destination_parent.path, request.destination_name);
             Budget budget{ request.limits.max_path_bytes };
             if (!budget.String(result.path) || !budget.String(source_parent_path) || !budget.String(destination_parent_path) ||
@@ -473,6 +515,7 @@ namespace blink::app
                 auto& directory = directories[index];
                 if (const auto error = ReadChildren(directory, request.limits.max_entries - entries, request.limits.max_depth,
                     budget, cancelled, directory.children); error != ERROR_SUCCESS) { fail(error, directory.source_path); return result; }
+                if (moving) { directory.removed_children.resize(directory.children.size()); }
                 entries += directory.children.size();
                 for (std::size_t child = 0; child < directory.children.size(); ++child)
                 {
@@ -489,7 +532,7 @@ namespace blink::app
                             [&entry](const PlannedDirectory& candidate) { return candidate.source_identity == entry.identity; }))
                         { fail(ERROR_NOT_SUPPORTED, source_path); return result; }
                         PlannedDirectory next; next.source_path = source_path; next.destination_path = destination_path;
-                        next.source_identity = entry.identity; next.depth = directory.depth + 1; next.parent = index;
+                        next.source_identity = entry.identity; next.depth = directory.depth + 1; next.parent = index; next.parent_child = child;
                         if (!budget.String(next.source_path) || !budget.String(next.destination_path)) { fail(ERROR_NOT_SUPPORTED, source_path); return result; }
                         if (const auto error = OpenSourceDirectory(next, cancelled); error != ERROR_SUCCESS) { fail(error, source_path); return result; }
                         directories.push_back(std::move(next));
@@ -503,6 +546,11 @@ namespace blink::app
             }
             // Budget temporary inventories as well as retained names/paths.
             // Reserve path copies used by progress, failure and native requests.
+            if (moving)
+            {
+                moving->source_items_remaining = entries;
+                moving->directory_relocations.reserve(directories.size());
+            }
             if (!budget.Add(8 * (maximum_path + 1) * sizeof(wchar_t))) { fail(ERROR_NOT_SUPPORTED, result.path); return result; }
             for (auto& directory : directories)
             { if (const auto error = VerifyInventory(directory, request.limits, budget, cancelled); error != ERROR_SUCCESS)
@@ -513,7 +561,7 @@ namespace blink::app
                 if (const auto error = ReadDestination(directory.destination_path, exists, target_directory); error) { return error; }
                 if (!exists)
                 {
-                    const auto error = CreateOwnedDirectory(directory, result);
+                    const auto error = CreateOwnedDirectory(directory, result, native_files);
                     if (!error || directory.destination || !NameConflict(error)) { return error; }
                     if (const auto checked = ReadDestination(directory.destination_path, exists, target_directory); checked) { return checked; }
                     if (!exists) { return error; }
@@ -554,7 +602,7 @@ namespace blink::app
                     if (name.empty()) { return ERROR_FILENAME_EXCED_RANGE; }
                     if (const auto error = RebindSubtree(directories, index, result, budget, child.destination_parent,
                         name, maximum_suffix, maximum_path); error) { return error; }
-                    const auto error = CreateOwnedDirectory(directory, result);
+                    const auto error = CreateOwnedDirectory(directory, result, native_files);
                     if (!error || directory.destination || !NameConflict(error)) { return error; }
                 }
                 return ERROR_ALREADY_EXISTS;
@@ -578,7 +626,7 @@ namespace blink::app
                 if (const auto error = CheckDirectory(directory.source.get(), &directory.source_identity, true, true); error != ERROR_SUCCESS)
                 { fail(error, directory.source_path); return result; }
                 auto error = merging ? prepare_merge_directory(index) :
-                    &directory == &directories.front() && same_source_root ? ERROR_ALREADY_EXISTS : CreateOwnedDirectory(directory, result);
+                    &directory == &directories.front() && same_source_root ? ERROR_ALREADY_EXISTS : CreateOwnedDirectory(directory, result, native_files);
                 if (&directory == &directories.front() && request.conflict_policy == FileCopyConflictPolicy::KeepBoth)
                 {
                     std::size_t maximum_suffix{};
@@ -603,7 +651,7 @@ namespace blink::app
                         if (name.empty()) { fail(ERROR_FILENAME_EXCED_RANGE, result.path); return result; }
                         if (const auto rebound = RebindRoot(directories, result, budget, destination_parent.path,
                             name, maximum_suffix, maximum_path); rebound != ERROR_SUCCESS) { fail(rebound, result.path); return result; }
-                        error = CreateOwnedDirectory(directory, result);
+                        error = CreateOwnedDirectory(directory, result, native_files);
                     }
                 }
                 if (error != ERROR_SUCCESS) { fail(error, directory.destination_path); return result; }
@@ -639,13 +687,51 @@ namespace blink::app
                 FileCopyResult copied;
                 if (moving)
                 {
-                    auto moved = detail::CopyFileAndRemoveSource(copy, cancelled, on_bytes, [&]() -> DWORD {
-                        if (observer_failed) { return ERROR_UNHANDLED_EXCEPTION; }
-                        return before_removal ? before_removal() : ERROR_SUCCESS;
-                    });
-                    if (moved.source_removed) { ++moving->files_removed; }
-                    moving->removal_error = moved.removal_error;
-                    copied = std::move(moved.copy);
+                    const auto transfer = [&]() -> FileCopyResult {
+                        FileCopyResult value;
+                        bool removed{};
+                        if (native_files)
+                        {
+                            auto moved = MoveEntrySafely(copy, cancelled, [&](const MoveProgress& child) {
+                                if (!child.destination_path.empty()) { update.current_destination_path = child.destination_path; }
+                                on_bytes(child.copy_progress);
+                            }, [&](HANDLE source, HANDLE destination, const std::wstring& name) -> DWORD {
+                                if (observer_failed) { return ERROR_UNHANDLED_EXCEPTION; }
+                                if (const auto error = before_removal ? before_removal() : ERROR_SUCCESS; error) { return error; }
+                                if (Stopping(cancelled)) { return ERROR_CANCELLED; }
+                                return detail::RenameRelativeByHandle(source, destination, name,
+                                    copy.conflict_policy == FileCopyConflictPolicy::Replace);
+                            });
+                            removed = moved.moved;
+                            moving->removal_error = moved.moved ? moved.post_commit_error : moved.error;
+                            value.error = moved.error; value.copied = moved.moved; value.skipped = moved.skipped;
+                            value.path = std::move(moved.path);
+                        }
+                        else
+                        {
+                            auto moved = detail::CopyFileAndRemoveSource(copy, cancelled, on_bytes, [&]() -> DWORD {
+                                if (observer_failed) { return ERROR_UNHANDLED_EXCEPTION; }
+                                return before_removal ? before_removal() : ERROR_SUCCESS;
+                            });
+                            removed = moved.source_removed;
+                            moving->removal_error = moved.removal_error;
+                            value = std::move(moved.copy);
+                        }
+                        if (removed)
+                        {
+                            directory.removed_children[file.child] = true;
+                            ++moving->files_removed;
+                            if (moving->source_items_remaining) { --moving->source_items_remaining; }
+                        }
+                        return value;
+                    };
+                    copied = transfer();
+                    if (merging && NameConflict(copied.error) && copy.conflict_policy == FileCopyConflictPolicy::Fail &&
+                        !copied.partial_file_left && !directory.removed_children[file.child])
+                    {
+                        if (const auto error = resolve_file_conflict(); error) { fail(error, update.current_destination_path); return result; }
+                        copied = transfer();
+                    }
                 }
                 else
                 {
@@ -676,9 +762,13 @@ namespace blink::app
             }
             // Final same-handle inventory check detects observed additions,
             // removals, case changes and identity/type replacements.
-            if (!moving) { for (auto& directory : directories)
-            { if (const auto error = VerifyInventory(directory, request.limits, budget, cancelled); error != ERROR_SUCCESS)
-                { fail(error, directory.source_path); return result; } } }
+            for (auto& directory : directories)
+            {
+                if (moving && !merging) { continue; }
+                const auto error = moving ? VerifyMoveInventory(directory, request.limits, budget, cancelled, *moving) :
+                    VerifyInventory(directory, request.limits, budget, cancelled);
+                if (error) { fail(error, directory.source_path); return result; }
+            }
             for (auto iterator = directories.rbegin(); iterator != directories.rend(); ++iterator)
             {
                 auto& directory = *iterator;
@@ -715,6 +805,11 @@ namespace blink::app
                 for (std::size_t index = directories.size(); index-- > 0;)
                 {
                     auto& directory = directories[index];
+                    // Explicitly skipped subtrees and their nonempty ancestors
+                    // remain in place. Do not demand DELETE access for objects
+                    // which this operation has decided to retain.
+                    if (directory.skipped || std::find(directory.removed_children.begin(),
+                        directory.removed_children.end(), false) != directory.removed_children.end()) { continue; }
                     update = { result.files_copied, result.directories_created, directory.source_path,
                         directory.destination_path, {}, false, moving->files_removed, moving->directories_removed, true };
                     if (!report(update)) { fail(ERROR_UNHANDLED_EXCEPTION, directory.source_path); return result; }
@@ -726,19 +821,34 @@ namespace blink::app
                     if (parent.error) { fail(parent.error, directory.source_path); return result; }
                     CREATEFILE3_EXTENDED_PARAMETERS parameters{}; parameters.dwSize = sizeof(parameters);
                     parameters.dwFileFlags = DirectoryOpenFlags;
-                    blink::core::UniqueHandle source(CreateFile3(Native(directory.source_path).c_str(),
+                    directory.source = blink::core::UniqueHandle(CreateFile3(Native(directory.source_path).c_str(),
                         DELETE | FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE, FILE_SHARE_READ, OPEN_EXISTING, &parameters));
-                    if (!source) { fail(LastError(), directory.source_path); return result; }
-                    if (const auto error = CheckDirectory(source.get(), &directory.source_identity, true, true); error)
-                    { fail(error, directory.source_path); return result; }
+                    if (!directory.source) { fail(LastError(), directory.source_path); return result; }
+                    const auto source_error = merging ? VerifyMoveInventory(directory, request.limits, budget, cancelled, *moving) :
+                        CheckDirectory(directory.source.get(), &directory.source_identity, true, true);
+                    if (source_error)
+                    { fail(source_error, directory.source_path); return result; }
+                    DirectoryMoveRelocation relocation{ directory.source_path, directory.destination_path, directory.source_identity };
                     if (const auto error = before_removal ? before_removal() : ERROR_SUCCESS; error)
                     { fail(error, directory.source_path); return result; }
                     if (Stopping(cancelled)) { fail(ERROR_CANCELLED, directory.source_path); return result; }
                     FILE_DISPOSITION_INFO_EX disposition{ FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS |
                         FILE_DISPOSITION_FLAG_FORCE_IMAGE_SECTION_CHECK | FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE };
-                    if (!SetFileInformationByHandle(source.get(), FileDispositionInfoEx, &disposition, sizeof(disposition)))
-                    { fail(LastError(), directory.source_path); return result; }
-                    source.reset(); ++moving->directories_removed;
+                    if (!SetFileInformationByHandle(directory.source.get(), FileDispositionInfoEx, &disposition, sizeof(disposition)))
+                    {
+                        const auto error = LastError();
+                        // The planned source was empty immediately above. A new
+                        // child observed by the native empty-delete is retained.
+                        if (error == ERROR_DIR_NOT_EMPTY) { ++moving->source_items_remaining; }
+                        fail(error, directory.source_path); return result;
+                    }
+                    directory.source.reset(); ++moving->directories_removed;
+                    moving->directory_relocations.push_back(std::move(relocation)); // Capacity reserved before native changes.
+                    if (index)
+                    {
+                        directories[directory.parent].removed_children[directory.parent_child] = true;
+                        if (moving->source_items_remaining) { --moving->source_items_remaining; }
+                    }
                     if (!index) { moving->source_removed = true; }
                 }
                 moving->removal_error = ERROR_SUCCESS;

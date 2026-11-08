@@ -616,3 +616,10 @@ SearchState / SearchCoordinator 实现独立 query/generation、只读后台请�
 ## Phase1C Slice3 — Search presentation and result actions
 
 按[计划](docs/PHASE1C_SLICE3_DEVELOPMENT_PLAN.md)实现每标签搜索、窗口请求队列、独立虚拟化/分批presentation、CurrentFolder真实scope身份、Open/Locate重验与精确行选择；最终Debug/Release各526项普通检查通过。人工UI/真实服务清单仍待执行，不能据此升级Phase1C验收。
+
+
+## Phase1D Slice21 — Directory move merge (2026-11-08)
+
+同盘和跨盘目录Move Merge已复用目录计划、原文件操作与唯一队列接入生产冲突菜单。内部文件支持Replace/Skip/KeepBoth/Cancel；跳过项保留来源，只移除实际移空目录，取消/失败保留前缀，已有变更的树只Skip/Cancel续尾。目录标签只按实际移除目录及真实目标跟随。此前各slice的未开始/待做描述保留为历史，不代表当前状态。
+
+Debug/Release完整构建及各1516 PASS / 0 FAIL / 4权限SKIP，新增59项，235输入/368资源一致；8项自有生产窗口检查通过并发布默认Release。标签跟随本轮无GUI组合验收，人工体验暂缓，UI外观等用户提供提示词。见[Slice21记录](docs/PHASE1D_SLICE21_HANDOFF.md)。clipboard外部反馈/剪切外观、搜索Busy/首屏和组合场景仍待续，再推进SFTP/远端；整项目与Phase1不标完成。

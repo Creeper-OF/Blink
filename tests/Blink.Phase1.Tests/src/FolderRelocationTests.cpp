@@ -247,6 +247,43 @@ bool RunFolderRelocationTests()
         else { passed &= Check(false, "relocation_publication_tracker_applies_each_item_once_and_rejects_old_operations"); }
     }
     {
+        MoveRequest request; request.source_parent = L"D:\\old"; request.source.name = L"资料";
+        request.source.is_directory = true; request.source.identity = Identity(3);
+        MoveResult result; result.merged = true; result.skipped = true; result.error = ERROR_SUCCESS;
+        result.source_path = source.FolderPath(); result.path = destination.FolderPath();
+        const auto original_child = Folder(L"D:\\old\\资料\\child");
+        const auto actual_child = Folder(L"D:\\target\\资料\\child (2)");
+        result.directory_relocations.push_back({ original_child.FolderPath(), actual_child.FolderPath(), Identity(4) });
+        auto snapshot = Moved(request, result); snapshot.move_batch.emplace(); snapshot.move_batch->current_index = 3;
+        const auto partial = CompletedFolderRelocations(snapshot);
+        passed &= Check(!CompletedFolderRelocation(snapshot) && partial.size() == 1 && partial[0].source == original_child &&
+            partial[0].destination == actual_child && partial[0].source_identity == Identity(4),
+            "relocation_merge_skip_follows_removed_child_actual_name_without_rebasing_retained_root");
+        TabWindowState tabs; const auto root = tabs.ActiveTabId(), nested = tabs.CreateTab(), kept = tabs.CreateTab();
+        (void)Visit(*tabs.Find(root)->state, source, Identity(3));
+        (void)Visit(*tabs.Find(nested)->state, original_child, Identity(4));
+        const auto skipped = Folder(L"D:\\old\\资料\\skipped"); (void)Visit(*tabs.Find(kept)->state, skipped, Identity(5));
+        const auto changed = partial.empty() ? std::vector<RelocatedTabNavigation>{} :
+            tabs.RelocateFolder(partial[0].source, partial[0].destination, partial[0].source_identity);
+        passed &= Check(changed.size() == 1 && changed[0].tab_id == nested && changed[0].request.target == actual_child &&
+            tabs.Find(root)->state->PresentationSnapshot().committed_location == source &&
+            tabs.Find(kept)->state->PresentationSnapshot().committed_location == skipped,
+            "relocation_partial_merge_keeps_source_root_and_skipped_directory_tabs_in_place");
+        snapshot.move_result->moved = true; snapshot.move_result->skipped = false;
+        snapshot.move_result->directory_relocations.insert(snapshot.move_result->directory_relocations.begin(),
+            { source.FolderPath(), destination.FolderPath(), Identity(3) });
+        const auto complete = CompletedFolderRelocations(snapshot);
+        passed &= Check(complete.size() == 2 && complete[0].source == original_child && complete[1].source == source &&
+            complete[0].subitem_index != complete[1].subitem_index,
+            "relocation_merge_orders_renamed_children_before_parent_prefix_and_assigns_distinct_facts");
+        FolderRelocationTracker tracker;
+        passed &= Check(complete.size() == 2 && tracker.Accept(complete[0]) && tracker.Accept(complete[1]) &&
+            !tracker.Accept(complete[0]) && !tracker.Accept(complete[1]),
+            "relocation_merge_deduplicates_each_removed_directory_within_one_batch_item");
+        snapshot.closed = true;
+        passed &= Check(CompletedFolderRelocations(snapshot).empty(), "relocation_closed_merge_does_not_retarget_tabs");
+    }
+    {
         TabWindowState tabs; const auto root = tabs.ActiveTabId(), nested = tabs.CreateTab(), unrelated = tabs.CreateTab(), replacement = tabs.CreateTab();
         (void)Visit(*tabs.Find(root)->state, source, Identity(3)); (void)Visit(*tabs.Find(nested)->state, child, Identity(4));
         (void)Visit(*tabs.Find(unrelated)->state, elsewhere, Identity(5)); (void)Visit(*tabs.Find(replacement)->state, source, Identity(99));

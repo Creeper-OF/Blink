@@ -64,20 +64,22 @@ namespace blink::app
     {
         return value.kind == FileOperationKind::Move && value.stage == FileOperationStage::Failed && value.move_request &&
             value.move_batch && value.move_batch->resumable && value.move_result && !value.move_result->moved &&
-            !MoveHasPartialDestination(*value.move_result) &&
+            !MoveHasPartialDestination(*value.move_result) && !MoveHasSourceChanges(*value.move_result) &&
             (value.result.error == ERROR_FILE_EXISTS || value.result.error == ERROR_ALREADY_EXISTS);
     }
     [[nodiscard]] inline std::vector<blink::core::FileIdentity> MoveRefreshParents(const FileOperationSnapshot& value)
     {
         if (value.kind != FileOperationKind::Move || !value.move_request || !value.move_result) { return {}; }
         const auto& moved = *value.move_result;
-        if (!moved.moved && !MoveHasPartialDestination(moved)) { return {}; }
+        const bool source_changed = MoveHasSourceChanges(moved);
+        const bool destination_changed = moved.moved || MoveHasPartialDestination(moved);
+        if (!source_changed && !destination_changed) { return {}; }
         const auto& source = value.move_request->source_parent_identity;
         const auto& destination = value.move_request->destination_parent_identity;
         std::vector<blink::core::FileIdentity> result;
-        const bool source_changed = MoveHasSourceChanges(moved);
         if (source_changed && source.valid) { result.push_back(source); }
-        if (destination.valid && (!source_changed || destination != source)) { result.push_back(destination); }
+        if (destination_changed && destination.valid && (!source_changed || !source.valid || destination != source))
+        { result.push_back(destination); }
         return result;
     }
 }

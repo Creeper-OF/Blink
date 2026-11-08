@@ -1,5 +1,13 @@
 # Blink Progress
 
+## 目录移动合并 — 2026-11-08
+
+- **BOTH BUILDS / 1516 REGRESSIONS PER CONFIG / 8 OWNED GUI CHECKS VERIFIED / DEFAULT PUBLISHED AND OPENED**。同/跨盘目录移动合并复用原目录计划、文件操作及唯一coordinator；目标目录与独有项保留，内部冲突逐项Replace/Skip/KeepBoth/Cancel。正常Skip留源，取消/失败保留前缀，已变更项只Skip/Cancel续尾；同卷叶保留身份，实际移空目录按真实目标更新标签。
+- 235冻结输入/368中英fallback资源；新增54项真实FS/队列与5项跟随回归，两配置各1516 PASS/0 FAIL/4权限1314 SKIP。8项自有窗口检查全部通过：根Merge、子项Replace/Skip、真实字节和目标独有项、未完整移走的状态，以及完整Move后的根/空目录移除。标签跟随由native回归覆盖，本轮未冒称其GUI验收。
+- 首轮同盘KeepBoth目标目录出现32共享冲突；直接改CreateDirectory2W共享参数的87失败尝试保留。最终沿用原创建参数，在旧LIST持有时打开并验证同一目录的RW-sharing只读LIST后再交换；未改变copy/跨盘创建方式。首次GUI脚本误用无效启动环境参数，改地址栏显式提交后通过，产品输入不变。
+- 5个变化文件发布并核对程序/PRI/helper/service哈希，新默认窗口PID38136可见；未强杀，未变更索引服务、协议和C/D数据库。3模块子代理分工、主模型统一集成及compiler1，WSL稳定。分类清理和最近两成功恢复点见本轮integration记录；UI外观等用户web端提示词，人工体验与其余功能待续。
+- [Slice21记录](docs/PHASE1D_SLICE21_HANDOFF.md)，证据`.build/phase1d-slice21/integration`。下一步clipboard外部完成反馈与剪切外观、搜索Busy/首屏及组合场景，再按原计划推进远端；不标记整项目完成。
+
 ## 普通目录菜单同步 — 2026-11-08
 
 - **BOTH BUILDS / 1457 REGRESSIONS PER CONFIG / 39 OWNED GUI CHECKS VERIFIED / DEFAULT PUBLISHED AND OPENED**。普通目录与搜索主菜单共用ContextMenuAppearance（8px圆角、16px Fluent图标、32px行、主题和快捷键提示），补路径复制与当前目录粘贴，保留多选/新建/刷新/视图/排序和Blink只读属性；系统扩展支持同父目录多选，基本动作沿用原队列。

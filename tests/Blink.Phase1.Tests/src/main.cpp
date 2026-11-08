@@ -8,6 +8,7 @@
 #include "FileDragDropTests.h"
 #include "FileReplaceTests.h"
 #include "DirectoryMergeTests.h"
+#include "DirectoryMoveMergeTests.h"
 #include "FolderRelocationTests.h"
 #include "CrossVolumeMoveTests.h"
 #include "FolderNavigationTests.h"
@@ -3369,6 +3370,7 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunFileDragDropTests();
     passed &= RunFileReplaceTests();
     passed &= RunDirectoryMergeTests();
+    passed &= RunDirectoryMoveMergeTests();
     passed &= RunDirectoryCopyOperationTests();
     passed &= RunDirectoryCopyConflictTests();
     passed &= RunDirectoryCopyCoordinatorTests();

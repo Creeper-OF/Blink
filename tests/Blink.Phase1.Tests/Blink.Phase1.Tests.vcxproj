@@ -78,6 +78,8 @@
     <ClInclude Include="src\FileReplaceTests.h" />
     <ClCompile Include="src\DirectoryMergeTests.cpp" />
     <ClInclude Include="src\DirectoryMergeTests.h" />
+    <ClCompile Include="src\DirectoryMoveMergeTests.cpp" />
+    <ClInclude Include="src\DirectoryMoveMergeTests.h" />
     <ClInclude Include="src\FileDragDropTests.h" />
     <ClInclude Include="src\ItemPropertiesTests.h" />
     <ClCompile Include="..\..\src\Blink\src\ItemProperties.cpp" />

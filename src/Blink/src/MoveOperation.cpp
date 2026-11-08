@@ -93,6 +93,8 @@ namespace blink::app
             { result.error = ERROR_INVALID_PARAMETER; return result; }
             DirectoryCopyRequest directory{ request.source_parent, request.source_parent_identity, request.source,
                 request.destination_parent, request.destination_parent_identity, request.destination_name, {}, request.conflict_policy };
+            if (request.conflict_policy == FileCopyConflictPolicy::Merge)
+            { return MoveDirectoryMergeSafely(directory, cancelled, progress, before_removal); }
             auto copy = detail::CopyDirectoryAndRemoveSource(directory, cancelled, [&](const DirectoryCopyProgress& value) {
                 MoveProgress update{ value.completed ? MovePhase::Completed : value.removing_source_directories ?
                     MovePhase::Committing : MovePhase::Copying, value.current_source_path, value.current_destination_path,
@@ -104,6 +106,8 @@ namespace blink::app
             result.source_removed = copy.source_removed;
             result.source_files_removed = copy.files_removed;
             result.source_directories_removed = copy.directories_removed;
+            result.source_items_remaining = copy.source_items_remaining;
+            result.directory_relocations = std::move(copy.directory_relocations);
             result.moved = copy.source_removed && copy.copy.copied;
             result.skipped = copy.copy.skipped;
             result.error = result.moved || result.skipped ? ERROR_SUCCESS :
@@ -116,12 +120,66 @@ namespace blink::app
         return result;
     }
 
+    MoveResult MoveDirectoryMergeSafely(const DirectoryCopyRequest& request, const FileOperationCancellation& cancelled,
+        const MoveProgressCallback& progress, const BeforeMoveSourceRemoval& before_removal) noexcept
+    {
+        MoveResult result;
+        try
+        {
+            result.source_path = blink::core::JoinPath(request.source_parent, request.source.name);
+            if (!request.source.is_directory) { result.error = ERROR_NOT_SUPPORTED; return result; }
+            if (request.conflict_policy != FileCopyConflictPolicy::Merge) { result.error = ERROR_INVALID_PARAMETER; return result; }
+            result.merged = true;
+            const bool same_volume = request.source.identity.valid && request.destination_parent_identity.valid &&
+                request.source.identity.volume_serial == request.destination_parent_identity.volume_serial;
+            auto phase = MovePhase::Preparing;
+            auto copy = detail::CopyDirectoryAndRemoveSource(request, cancelled, [&](const DirectoryCopyProgress& value) {
+                const auto next = value.completed ? MovePhase::Completed :
+                    same_volume || value.removing_source_directories ? MovePhase::Committing : MovePhase::Copying;
+                if (next > phase) { phase = next; }
+                MoveProgress update{ phase, value.current_source_path, value.current_destination_path,
+                    value.current_file, value.files_copied, value.directories_created, value.source_files_removed,
+                    value.source_directories_removed, true };
+                if (!Report(progress, update)) { throw 1; }
+            }, before_removal);
+            // Preserve native effects and completed directory mappings before
+            // any allocation needed solely for presentation strings.
+            result.source_removed = copy.source_removed;
+            result.source_files_removed = copy.files_removed;
+            result.source_directories_removed = copy.directories_removed;
+            result.source_items_remaining = copy.source_items_remaining;
+            result.files_skipped = copy.copy.files_skipped;
+            result.directories_skipped = copy.copy.directories_skipped;
+            result.directory_relocations = std::move(copy.directory_relocations);
+            const bool completed = copy.copy.copied && !copy.copy.error && !copy.removal_error;
+            result.skipped = completed && !copy.source_removed && (result.files_skipped || result.directories_skipped);
+            result.moved = completed && copy.source_removed && !result.source_items_remaining &&
+                !result.files_skipped && !result.directories_skipped;
+            result.error = result.moved || result.skipped ? ERROR_SUCCESS :
+                copy.copy.copied ? copy.removal_error : copy.copy.error;
+            if (!result.moved && !result.skipped && !result.error) { result.error = ERROR_GEN_FAILURE; }
+            result.directory_copy_result = std::move(copy.copy);
+            result.path = result.directory_copy_result->path;
+        }
+        catch (const std::bad_alloc&)
+        { if (result.moved) { result.post_commit_error = ERROR_NOT_ENOUGH_MEMORY; } else { result.error = ERROR_NOT_ENOUGH_MEMORY; } }
+        catch (...)
+        { if (result.moved) { result.post_commit_error = ERROR_GEN_FAILURE; } else { result.error = ERROR_GEN_FAILURE; } }
+        return result;
+    }
+
     MoveResult MoveEntrySafely(const MoveRequest& request, const FileOperationCancellation& cancelled,
         const MoveProgressCallback& progress, const NativeMoveFunction& native) noexcept
     {
         MoveResult result;
         try
         {
+            if (request.source.is_directory && request.conflict_policy == FileCopyConflictPolicy::Merge)
+            {
+                DirectoryCopyRequest directory{ request.source_parent, request.source_parent_identity, request.source,
+                    request.destination_parent, request.destination_parent_identity, request.destination_name, {}, request.conflict_policy };
+                return MoveDirectoryMergeSafely(directory, cancelled, progress);
+            }
             if (request.conflict_policy == FileCopyConflictPolicy::Skip)
             { result.error = ERROR_SUCCESS; result.skipped = true; return result; }
             if (request.conflict_policy == FileCopyConflictPolicy::Cancel) { result.error = ERROR_CANCELLED; return result; }

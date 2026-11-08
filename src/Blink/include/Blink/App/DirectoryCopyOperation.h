@@ -2,6 +2,7 @@
 
 #include "Blink/App/FileCopyOperation.h"
 #include <cstddef>
+#include <vector>
 
 namespace blink::app
 {
@@ -60,6 +61,11 @@ namespace blink::app
         std::uint64_t files_skipped{}, directories_skipped{};
     };
     using DirectoryCopyProgressCallback = std::function<void(const DirectoryCopyProgress&)>;
+    struct DirectoryMoveRelocation
+    {
+        std::wstring source_path, destination_path;
+        blink::core::FileIdentity source_identity;
+    };
 
     // Worker-only bounded ordinary directory copy into a new, atomically
     // claimed root. Skip/Cancel make no filesystem calls; KeepBoth tries up to
@@ -67,7 +73,8 @@ namespace blink::app
     // after any creation. Merge retains existing directories and their metadata;
     // each conflicting child file/type is resolved synchronously on the worker.
     // Without a resolver, a child conflict fails without overwriting it. Merge
-    // does not replace whole directories and is not available for directory Move.
+    // does not replace whole directories. Directory Move reuses this plan through
+    // MoveDirectoryMergeSafely; skipped objects stay in the source tree.
     // No recursive rollback or UI work.
     // This is not an atomic filesystem snapshot. A final same-handle source
     // inventory check rejects observed name/identity/type changes. Source
@@ -87,6 +94,8 @@ namespace blink::app
             std::uint64_t files_removed{}, directories_removed{};
             bool source_removed{};
             DWORD removal_error{ ERROR_GEN_FAILURE };
+            std::uint64_t source_items_remaining{};
+            std::vector<DirectoryMoveRelocation> directory_relocations;
         };
         // Reuses the directory plan and file copy implementation. Each copied
         // file is removed through its original handle; empty source directories

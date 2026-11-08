@@ -364,12 +364,12 @@
   <data name="Move.TargetChanged" xml:space="preserve"><value>来源项目或目标文件夹已变化，请刷新后重试。</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="Move.AlreadySubmitted" xml:space="preserve"><value>此批剪切项目已提交，请完成或取消现有移动队列；再次移动时请重新剪切。</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="MoveConflict.Title" xml:space="preserve"><value>移动目标名称已存在</value><comment>Move queue and clipboard intent.</comment></data>
-  <data name="MoveConflict.Description" xml:space="preserve"><value>目标位置已有同名项目。可跳过当前项、保留两者，或取消剩余队列。</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="MoveConflict.Description" xml:space="preserve"><value>目标位置已有同名项目。可按可用选项替换文件、合并文件夹、跳过、保留两者，或取消。</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="MoveConflict.KeepBothDescription" xml:space="preserve"><value>保留已有项目，将来源移动为带编号的新名称。</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="Clipboard.CutItems" xml:space="preserve"><value>已剪切 {0} 项。粘贴到目标文件夹后才会移动。</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="Move.Partial" xml:space="preserve"><value>有 {0} 项未完全移动，目标副本和剩余来源均已保留。</value><comment>Cross-volume move partial completion.</comment></data>
   <data name="Move.SkipRemaining" xml:space="preserve"><value>跳过当前项并继续</value><comment>Cross-volume move partial completion.</comment></data>
-  <data name="Move.DirectoryProgress" xml:space="preserve"><value>已复制 {0} 个文件、{1} 个文件夹；已移除来源 {2} 个文件、{3} 个文件夹。</value><comment>Cross-volume directory move progress.</comment></data>
+  <data name="Move.DirectoryProgress" xml:space="preserve"><value>已转移 {0} 个文件、新建 {1} 个文件夹；已从来源移出 {2} 个文件、{3} 个文件夹。</value><comment>Cross-volume directory move progress.</comment></data>
   <data name="Delete.ConfirmTitle" xml:space="preserve"><value>永久删除这些项目？</value><comment>System recycle and confirmed permanent deletion.</comment></data>
   <data name="Delete.ConfirmPermanent" xml:space="preserve"><value>永久删除</value><comment>System recycle and confirmed permanent deletion.</comment></data>
   <data name="Delete.ConfirmDescription" xml:space="preserve"><value>确定永久删除所选的 {0} 个项目（包括文件夹内容）？这些项目不会进入回收站。</value><comment>System recycle and confirmed permanent deletion.</comment></data>
@@ -447,4 +447,5 @@
   <data name="Search.MenuCopyPath" xml:space="preserve"><value>复制完整路径</value></data>
   <data name="Search.MenuCopyParentPath" xml:space="preserve"><value>复制所在目录路径</value></data>
   <data name="Search.MenuSystemOptions" xml:space="preserve"><value>压缩与更多系统选项…</value></data>
+  <data name="Move.MergeSkipped" xml:space="preserve"><value>跳过 {0} 个文件、{1} 个文件夹；未移动的项目保留在来源。</value><comment>Directory move merge skipped source items.</comment></data>
 </root>

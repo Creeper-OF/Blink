@@ -140,17 +140,25 @@ namespace blink::app
         }
         void NormalizeMoveResult(const MoveRequest* request, MoveResult& result) noexcept
         {
+            const bool merged_skip = request && request->source.is_directory &&
+                request->conflict_policy == FileCopyConflictPolicy::Merge && result.merged && !result.error &&
+                result.skipped && !result.unchanged && !result.source_removed && result.directory_copy_result &&
+                result.directory_copy_result->copied &&
+                (result.files_skipped || result.directories_skipped || result.source_items_remaining);
             if ((result.copy_result && (!result.copy_result->copied || !result.source_removed)) ||
-                (result.directory_copy_result && (!result.directory_copy_result->copied || !result.source_removed)))
+                (result.directory_copy_result && (!result.directory_copy_result->copied || !result.source_removed)) ||
+                (result.merged && (!result.source_removed || result.source_items_remaining ||
+                    result.files_skipped || result.directories_skipped)))
             {
                 result.moved = false;
-                if (MoveHasPartialDestination(result)) { result.skipped = result.unchanged = false; }
+                if (!merged_skip && MoveHasPartialDestination(result)) { result.skipped = result.unchanged = false; }
                 if (!result.error && !result.skipped) { result.error = ERROR_PARTIAL_COPY; }
             }
             if (result.moved) { result.error = ERROR_SUCCESS; result.skipped = result.unchanged = false; }
             else if (result.skipped)
             {
-                const bool valid = request && request->conflict_policy == FileCopyConflictPolicy::Skip && !result.error && !result.unchanged;
+                const bool valid = merged_skip || (request && request->conflict_policy == FileCopyConflictPolicy::Skip &&
+                    !result.error && !result.unchanged);
                 if (!valid) { result.skipped = result.unchanged = false; if (!result.error) { result.error = ERROR_GEN_FAILURE; } }
             }
             else if (result.unchanged)
@@ -171,6 +179,13 @@ namespace blink::app
             target->source_removed = actual.source_removed;
             target->source_files_removed = actual.source_files_removed;
             target->source_directories_removed = actual.source_directories_removed;
+            target->merged = actual.merged;
+            target->files_skipped = actual.files_skipped;
+            target->directories_skipped = actual.directories_skipped;
+            target->source_items_remaining = actual.source_items_remaining;
+            target->conflict_destination_is_directory = actual.conflict_destination_is_directory;
+            try { target->directory_relocations = actual.directory_relocations; }
+            catch (...) { if (!target->post_commit_error) { target->post_commit_error = ERROR_NOT_ENOUGH_MEMORY; } }
             if (actual.directory_copy_result) { DirectorySummary(target->directory_copy_result, *actual.directory_copy_result); }
             if (actual.copy_result)
             {
@@ -184,6 +199,8 @@ namespace blink::app
         }
         bool MoveResolved(const MoveBatchItemStage stage) noexcept
         { return stage == MoveBatchItemStage::Moved || stage == MoveBatchItemStage::Unchanged || stage == MoveBatchItemStage::Skipped; }
+        bool IncompleteMoveEffects(const MoveResult& result) noexcept
+        { return !result.moved && (MoveHasPartialDestination(result) || MoveHasSourceChanges(result)); }
         DWORD ValidateMoveBatch(const MoveBatchSnapshot& batch, std::size_t& invalid)
         {
             invalid = 0;
@@ -209,7 +226,7 @@ namespace blink::app
                 if (const auto error = ValidateNewFolderName(request.destination_name); error) { return error; }
                 if (!KnownPolicy(request.conflict_policy)) { return ERROR_INVALID_PARAMETER; }
                 if (request.source.is_directory && request.conflict_policy == FileCopyConflictPolicy::Replace) { return ERROR_NOT_SUPPORTED; }
-                if (request.conflict_policy == FileCopyConflictPolicy::Merge) { return ERROR_NOT_SUPPORTED; }
+                if (!request.source.is_directory && request.conflict_policy == FileCopyConflictPolicy::Merge) { return ERROR_NOT_SUPPORTED; }
                 const auto size = request.source_parent.size() + request.source.name.size() + request.destination_parent.size() + request.destination_name.size() + 4;
                 constexpr std::size_t maximum_characters = 4 * 1024 * 1024 / sizeof(wchar_t);
                 if (size > maximum_characters - characters) { return ERROR_NOT_SUPPORTED; }
@@ -581,7 +598,7 @@ namespace blink::app
             catch (...) {}
         }
         FileCopyConflictPolicy AwaitDirectoryConflict(const std::uint64_t id, const DirectoryCopyConflict& conflict,
-            const PublishCallback& publish)
+            const PublishCallback& publish, const std::optional<std::size_t> move_index = {})
         {
             if (!publish) { return FileCopyConflictPolicy::Fail; }
             std::optional<FileOperationSnapshot> publication;
@@ -589,7 +606,10 @@ namespace blink::app
             {
                 std::scoped_lock lock(mutex);
                 if (snapshot.operation_id != id || snapshot.closed || snapshot.cancel_requested ||
-                    !cancellation || cancellation->load() || snapshot.stage != FileOperationStage::Running)
+                    !cancellation || cancellation->load() || snapshot.stage != FileOperationStage::Running ||
+                    (move_index && (!snapshot.move_batch || snapshot.move_batch->current_index != *move_index ||
+                        *move_index >= snapshot.move_batch->items.size() ||
+                        snapshot.move_batch->items[*move_index].stage != MoveBatchItemStage::Running)))
                 { return FileCopyConflictPolicy::Cancel; }
                 snapshot.directory_conflict = conflict;
                 conflict_id = ++snapshot.directory_conflict_id;
@@ -716,7 +736,8 @@ namespace blink::app
                 default: ++batch.remaining_count; break;
                 }
                 if (item.result.moved && item.result.post_commit_error) { ++batch.warning_count; }
-                if (MoveHasPartialDestination(item.result) || (item.retained_result && MoveHasPartialDestination(*item.retained_result)))
+                if ((!item.result.skipped && IncompleteMoveEffects(item.result)) ||
+                    (item.retained_result && IncompleteMoveEffects(*item.retained_result)))
                 { ++batch.partial_count; }
             }
         }
@@ -745,6 +766,25 @@ namespace blink::app
             snapshot.result = { ERROR_CANCELLED }; snapshot.move_result.reset(); snapshot.move_progress = {};
             RecountMoves(batch);
         }
+        MoveResult MoveFailureUnlocked(const DWORD error, const bool preserve_observed) const noexcept
+        {
+            MoveResult result{ error };
+            if (!preserve_observed || !snapshot.move_request || !snapshot.move_request->source.is_directory ||
+                snapshot.move_request->conflict_policy != FileCopyConflictPolicy::Merge || !snapshot.move_progress.directory)
+            { return result; }
+            const auto& request = *snapshot.move_request;
+            const auto& observed = snapshot.move_progress;
+            result.merged = true;
+            result.source_files_removed = observed.source_files_removed;
+            result.source_directories_removed = observed.source_directories_removed;
+            auto& tree = result.directory_copy_result.emplace(); tree.error = error;
+            tree.files_copied = observed.files_copied; tree.directories_created = observed.directories_created;
+            tree.partial_tree_left = observed.files_copied != 0 || observed.directories_created != 0;
+            try { result.source_path = blink::core::JoinPath(request.source_parent, request.source.name); } catch (...) {}
+            try { result.path = blink::core::JoinPath(request.destination_parent, request.destination_name); tree.path = result.path; } catch (...) {}
+            try { tree.failure_path = observed.destination_path.empty() ? observed.source_path : observed.destination_path; } catch (...) {}
+            return result;
+        }
         void MoveBatchException(const std::uint64_t id, const std::size_t index, const DWORD error,
             const PublishCallback& publish, const bool resumable = true) noexcept
         {
@@ -757,7 +797,9 @@ namespace blink::app
                     auto& batch = *snapshot.move_batch;
                     if (index < batch.items.size() && !MoveResolved(batch.items[index].stage))
                     {
-                        auto& item = batch.items[index]; item.result = { error }; item.stage = MoveBatchItemStage::Failed;
+                        auto& item = batch.items[index];
+                        item.result = MoveFailureUnlocked(error, batch.current_index == index && item.stage == MoveBatchItemStage::Running);
+                        item.stage = MoveBatchItemStage::Failed;
                         try { SelectMoveRequest(index); } catch (...) { batch.current_index = index; }
                         MoveTopResult(item.result);
                     }
@@ -781,8 +823,39 @@ namespace blink::app
             }
             Publish(publication, publish);
         }
+        MoveResult ExecuteMoveRequest(const std::uint64_t id, const MoveRequest& request,
+            const FileOperationCancellation& cancelled, const MoveProgressCallback& progress,
+            const MoveExecuteFunction& execute, const DirectoryMoveExecuteFunction& directory_execute,
+            const PublishCallback& publish, const std::optional<std::size_t> index = {})
+        {
+            if (cancelled->load()) { return { ERROR_CANCELLED }; }
+            if (!request.source.is_directory || request.conflict_policy != FileCopyConflictPolicy::Merge)
+            {
+                auto result = execute(request, cancelled, progress);
+                if (result.error == ERROR_FILE_EXISTS || result.error == ERROR_ALREADY_EXISTS)
+                {
+                    result.conflict_destination_is_directory.reset();
+                    try
+                    {
+                        blink::core::FileEntry destination;
+                        if (blink::core::ReadEntryMetadata(blink::core::JoinPath(request.destination_parent,
+                            request.destination_name), destination))
+                        { result.conflict_destination_is_directory = destination.is_directory; }
+                    }
+                    catch (...) {}
+                }
+                return result;
+            }
+            auto directory = DirectoryCopyProjection(request);
+            const auto state = shared_from_this();
+            directory.resolve_conflict = [state, id, index, publish](const DirectoryCopyConflict& conflict) {
+                return state->AwaitDirectoryConflict(id, conflict, publish, index);
+            };
+            return directory_execute(directory, cancelled, progress);
+        }
         void RunMoveBatch(const std::uint64_t id, const FileOperationCancellation& cancelled,
-            const MoveExecuteFunction& execute, const PublishCallback& publish) noexcept
+            const MoveExecuteFunction& execute, const DirectoryMoveExecuteFunction& directory_execute,
+            const PublishCallback& publish) noexcept
         {
             std::size_t index{};
             try
@@ -818,7 +891,7 @@ namespace blink::app
                     const MoveProgressCallback progress = [state, id, index, publish](const MoveProgress& value) noexcept {
                         try { state->Publish(state->MoveProgressUpdate(id, value, index), publish); } catch (...) {}
                     };
-                    auto result = cancelled->load() ? MoveResult{ ERROR_CANCELLED } : execute(request, cancelled, progress);
+                    auto result = ExecuteMoveRequest(id, request, cancelled, progress, execute, directory_execute, publish, index);
                     NormalizeMoveResult(&request, result);
                     bool more{};
                     {
@@ -858,13 +931,20 @@ namespace blink::app
         {
             try
             {
-                MoveResult result; result.error = error;
+                MoveResult result;
+                {
+                    std::scoped_lock lock(mutex);
+                    if (id != snapshot.operation_id) { return; }
+                    result = MoveFailureUnlocked(error, snapshot.stage == FileOperationStage::Running ||
+                        snapshot.stage == FileOperationStage::Cancelling);
+                }
                 Publish(CompleteMove(id, std::move(result)), publish);
             }
             catch (...) {}
         }
         void RunMove(const std::uint64_t id, const FileOperationCancellation& cancelled,
-            const MoveExecuteFunction& execute, const PublishCallback& publish) noexcept
+            const MoveExecuteFunction& execute, const DirectoryMoveExecuteFunction& directory_execute,
+            const PublishCallback& publish) noexcept
         {
             try
             {
@@ -883,7 +963,7 @@ namespace blink::app
                 const MoveProgressCallback progress = [state, id, publish](const MoveProgress& value) noexcept {
                     try { state->Publish(state->MoveProgressUpdate(id, value), publish); } catch (...) {}
                 };
-                auto result = cancelled->load() ? MoveResult{ ERROR_CANCELLED } : execute(request, cancelled, progress);
+                auto result = ExecuteMoveRequest(id, request, cancelled, progress, execute, directory_execute, publish);
                 Publish(CompleteMove(id, std::move(result)), publish);
             }
             catch (const std::bad_alloc&) { MoveException(id, ERROR_NOT_ENOUGH_MEMORY, publish); }
@@ -1124,7 +1204,8 @@ namespace blink::app
     };
 
     FileOperationCoordinator::FileOperationCoordinator(ExecuteFunction execute, CopyExecuteFunction copy_execute,
-        DirectoryCopyExecuteFunction directory_copy_execute, MoveExecuteFunction move_execute, DeleteExecuteFunction delete_execute)
+        DirectoryCopyExecuteFunction directory_copy_execute, MoveExecuteFunction move_execute, DeleteExecuteFunction delete_execute,
+        DirectoryMoveExecuteFunction directory_move_execute)
         : state_(std::make_shared<State>()), execute_(execute ? std::move(execute) : ExecuteFunction{
             [](const NewFolderRequest& request, const FileOperationCancellation& cancelled) { return CreateFolderSafely(request, cancelled); } }),
         copy_execute_(copy_execute ? std::move(copy_execute) : CopyExecuteFunction{
@@ -1141,6 +1222,9 @@ namespace blink::app
             } }), delete_execute_(delete_execute ? std::move(delete_execute) : DeleteExecuteFunction{
             [](const DeleteRequest& request, const FileOperationCancellation& cancelled, const DeleteProgressCallback& progress) {
                 return DeleteEntrySafely(request, cancelled, progress);
+            } }), directory_move_execute_(directory_move_execute ? std::move(directory_move_execute) : DirectoryMoveExecuteFunction{
+            [](const DirectoryCopyRequest& request, const FileOperationCancellation& cancelled, const MoveProgressCallback& progress) {
+                return MoveDirectoryMergeSafely(request, cancelled, progress);
             } }) {}
     FileOperationCoordinator::~FileOperationCoordinator() noexcept { Shutdown(); }
 
@@ -1163,7 +1247,7 @@ namespace blink::app
         std::optional<std::wstring> new_name, PublishCallback publish, std::optional<std::wstring> destination_parent,
         FileOperationPrerequisites prerequisites)
     {
-        if (!KnownPolicy(policy) || policy == FileCopyConflictPolicy::Merge ||
+        if (!KnownPolicy(policy) ||
             (new_name && ValidateNewFolderName(*new_name) != ERROR_SUCCESS) ||
             (destination_parent && LocalParent(*destination_parent).empty())) { return 0; }
         MoveBatchSnapshot batch;
@@ -1177,7 +1261,8 @@ namespace blink::app
         if (batch.current_index >= batch.items.size()) { return 0; }
         auto& current = batch.items[batch.current_index];
         if (policy == FileCopyConflictPolicy::Replace && current.request.source.is_directory) { return 0; }
-        if (MoveHasPartialDestination(current.result))
+        if (policy == FileCopyConflictPolicy::Merge && !current.request.source.is_directory) { return 0; }
+        if (IncompleteMoveEffects(current.result))
         {
             if ((policy != FileCopyConflictPolicy::Skip && policy != FileCopyConflictPolicy::Cancel) || new_name) { return 0; }
             if (policy == FileCopyConflictPolicy::Skip) { current.retained_result = current.result; }
@@ -1454,7 +1539,8 @@ namespace blink::app
             work_ = winrt::Windows::System::Threading::ThreadPool::RunAsync(
                 [state, cancellation, id, batch, directory, moving, move_queue, deleting, execute = std::move(execute), copy_execute = copy_execute_,
                     directory_copy_execute = directory_copy_execute_, move_execute = move_execute_, publish,
-                    delete_execute = delete_execute_, prerequisites = std::move(prerequisites)](auto&&) {
+                    delete_execute = delete_execute_, directory_move_execute = directory_move_execute_,
+                    prerequisites = std::move(prerequisites)](auto&&) {
                     // This is the existing operation worker, never the UI.
                     // Watcher Stop completion proves its native read/handle
                     // has actually drained before a directory rename begins.
@@ -1477,8 +1563,8 @@ namespace blink::app
                     if (deleting) { state->RunDeleteBatch(id, cancellation, delete_execute, publish); return; }
                     if (batch) { state->RunCopyBatch(id, cancellation, copy_execute, directory_copy_execute, publish); return; }
                     if (directory) { state->RunDirectoryCopy(id, cancellation, directory_copy_execute, publish); return; }
-                    if (move_queue) { state->RunMoveBatch(id, cancellation, move_execute, publish); return; }
-                    if (moving) { state->RunMove(id, cancellation, move_execute, publish); return; }
+                    if (move_queue) { state->RunMoveBatch(id, cancellation, move_execute, directory_move_execute, publish); return; }
+                    if (moving) { state->RunMove(id, cancellation, move_execute, directory_move_execute, publish); return; }
                     NewFolderResult result;
                     try
                     {

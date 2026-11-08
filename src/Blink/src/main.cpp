@@ -1235,7 +1235,8 @@ struct App : AppT<App>
                 { app->ResumeDelete(origin, last.operation_id, blink::app::DeleteRetryAction::Retry); return; }
                 if (last.kind == blink::app::FileOperationKind::Move)
                 {
-                    if (last.move_result && blink::app::MoveHasPartialDestination(*last.move_result))
+                    if (last.move_result && (blink::app::MoveHasPartialDestination(*last.move_result) ||
+                        blink::app::MoveHasSourceChanges(*last.move_result)))
                     { app->ResumeMove(origin, last.operation_id, blink::app::FileCopyConflictPolicy::Skip); return; }
                     if (last.move_request) { app->ShowMoveNameDialog(origin, *last.move_request, last.operation_id); }
                     return;
@@ -2244,7 +2245,7 @@ struct App : AppT<App>
                         (void)app->file_operations_.ResolveDirectoryConflict(operation_id, conflict_id, blink::app::FileCopyConflictPolicy::Cancel);
                         app->status_.Text(hstring(app->localization_.GetString(L"NewFolder.DialogFailed")));
                     }
-                }, directory, false, can_merge);
+                }, directory, current.kind == blink::app::FileOperationKind::Move, can_merge);
             if (!shown)
             {
                 directory_merge_dialog_operation_id_ = directory_merge_dialog_conflict_id_ = 0;
@@ -2484,12 +2485,18 @@ struct App : AppT<App>
             const auto& result = *value.move_result;
             text += L" " + directory_counts(result.directory_copy_result->files_copied, result.directory_copy_result->directories_created,
                 result.source_files_removed, result.source_directories_removed);
+            if (result.merged && (result.files_skipped || result.directories_skipped))
+            { text += L" " + localization_.Format(L"Move.MergeSkipped", std::vector<std::wstring>{
+                std::to_wstring(result.files_skipped), std::to_wstring(result.directories_skipped) }); }
         }
         else if (value.move_progress.directory)
         {
             const auto& p = value.move_progress;
             text += L" " + directory_counts(p.files_copied, p.directories_created, p.source_files_removed, p.source_directories_removed);
         }
+        if (value.directory_conflict)
+        { text += L" " + localization_.Format(L"DirectoryCopy.WaitingForConflict",
+            blink::core::JoinPath(value.directory_conflict->request.destination_parent, value.directory_conflict->request.destination_name)); }
         if (value.stage == Stage::Failed) { text += L" " + MoveErrorText(value.result.error); }
         auto detail = text;
         if (batch)
@@ -2514,6 +2521,12 @@ struct App : AppT<App>
                     detail += L"\n" + item.result.source_path + L" → " + item.result.path;
                     if (item.result.post_commit_error) { detail += L" (" + std::to_wstring(item.result.post_commit_error) + L")"; }
                 }
+                const auto* merge = item.retained_result && item.retained_result->merged ? &*item.retained_result :
+                    item.result.merged ? &item.result : nullptr;
+                if (merge && (merge->files_skipped || merge->directories_skipped) &&
+                    detail.size() + merge->source_path.size() + 256 < 65536)
+                { detail += L"\n" + merge->source_path + L" " + localization_.Format(L"Move.MergeSkipped",
+                    std::vector<std::wstring>{ std::to_wstring(merge->files_skipped), std::to_wstring(merge->directories_skipped) }); }
             }
         }
         operation_text_.Text(hstring(text)); ToolTipService::SetToolTip(operation_text_, winrt::box_value(hstring(detail)));
@@ -2525,7 +2538,8 @@ struct App : AppT<App>
             OperationTargetVisible(value.request.parent_identity);
         operation_retry_.Visibility(can_retry ? Visibility::Visible : Visibility::Collapsed);
         operation_retry_.Content(winrt::box_value(hstring(localization_.GetString(value.move_result &&
-            blink::app::MoveHasPartialDestination(*value.move_result) ? L"Move.SkipRemaining" : L"NewFolder.RetryName"))));
+            (blink::app::MoveHasPartialDestination(*value.move_result) || blink::app::MoveHasSourceChanges(*value.move_result)) ?
+                L"Move.SkipRemaining" : L"NewFolder.RetryName"))));
         operation_retry_.IsEnabled(!file_operations_.IsBusy() && copy_conflict_wait_operation_id_ == 0);
     }
 
@@ -2559,21 +2573,25 @@ struct App : AppT<App>
         const auto weak = get_weak(); const auto dispatcher = dispatcher_;
         return file_drag_drop_.Publication([weak, dispatcher, origin](const blink::app::FileOperationSnapshot& snapshot) {
             const auto refresh = blink::app::MoveRefreshParents(snapshot);
-            const auto relocation = blink::app::CompletedFolderRelocation(snapshot);
+            const auto relocations = blink::app::CompletedFolderRelocations(snapshot);
             const auto operation_id = snapshot.operation_id;
             const bool failed = snapshot.stage == blink::app::FileOperationStage::Failed;
             const bool terminal = blink::app::FileOperationIsTerminal(snapshot.stage);
-            (void)dispatcher.TryEnqueue([weak, origin, operation_id, failed, terminal, refresh, relocation] {
+            const bool awaiting_conflict = snapshot.directory_conflict.has_value();
+            const bool queued = dispatcher.TryEnqueue([weak, origin, operation_id, failed, terminal, refresh, relocations, awaiting_conflict] {
                 if (auto app = weak.get(); app && !app->window_style_closed_)
                 {
                     if (terminal) { app->RestoreOperationWatches(operation_id); }
-                    if (relocation) { app->FollowFolderRelocation(*relocation); }
+                    for (const auto& relocation : relocations) { app->FollowFolderRelocation(relocation); }
                     for (const auto& parent : refresh) { app->RefreshAfterFileOperation(parent); }
                     if (app->file_operations_.Snapshot().operation_id != operation_id) { return; }
                     app->RenderFileOperationStatus();
+                    if (awaiting_conflict || app->directory_merge_dialog_operation_id_ == operation_id)
+                    { app->ShowDirectoryMergeConflictDialog(origin, operation_id); }
                     if (failed) { app->MoveActionEnded(origin, operation_id); }
                 }
             });
+            if (!queued && awaiting_conflict) { throw winrt::hresult_error(E_ABORT); }
         });
     }
 
@@ -2632,16 +2650,19 @@ struct App : AppT<App>
         if (value.operation_id != operation_id || !blink::app::MoveQueueHasRootConflict(value)) { return; }
         const auto source = blink::core::JoinPath(request.source_parent, request.source.name);
         const auto target = blink::core::JoinPath(origin.location.FolderPath(), request.destination_name);
+        const auto target_directory = value.move_result ? value.move_result->conflict_destination_is_directory : std::optional<bool>{};
+        const bool can_replace = !request.source.is_directory && target_directory && !*target_directory;
+        const bool can_merge = request.source.is_directory && target_directory.value_or(false);
         const auto weak = get_weak();
         try
         {
-            (void)copy_conflict_dialog_.Show(root_.XamlRoot(), localization_, source, target, !request.source.is_directory,
+            (void)copy_conflict_dialog_.Show(root_.XamlRoot(), localization_, source, target, can_replace,
                 [weak, origin, operation_id](const blink::app::FileCopyConflictPolicy policy) {
                     if (auto app = weak.get(); app && !app->window_style_closed_) { app->ResumeMove(origin, operation_id, policy); }
                 }, [weak](HRESULT) {
                     if (auto app = weak.get(); app && !app->window_style_closed_)
                     { app->status_.Text(hstring(app->localization_.GetString(L"NewFolder.DialogFailed"))); }
-                }, request.source.is_directory, true);
+                }, request.source.is_directory, true, can_merge);
         }
         catch (...) { status_.Text(hstring(localization_.GetString(L"NewFolder.DialogFailed"))); }
     }
@@ -2652,7 +2673,8 @@ struct App : AppT<App>
             copy_conflict_wait_operation_id_ != 0 || request.destination_parent_identity != origin.identity) { return; }
         const auto value = file_operations_.Snapshot();
         if (value.operation_id != operation_id || !value.move_batch || !value.move_batch->resumable ||
-            (value.move_result && blink::app::MoveHasPartialDestination(*value.move_result))) { return; }
+            (value.move_result && (blink::app::MoveHasPartialDestination(*value.move_result) ||
+                blink::app::MoveHasSourceChanges(*value.move_result)))) { return; }
         const auto weak = get_weak();
         try
         {

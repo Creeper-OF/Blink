@@ -57,9 +57,12 @@ namespace blink::app
         using DirectoryCopyExecuteFunction = std::function<DirectoryCopyResult(const DirectoryCopyRequest&,
             const FileOperationCancellation&, const DirectoryCopyProgressCallback&)>;
         using MoveExecuteFunction = std::function<MoveResult(const MoveRequest&, const FileOperationCancellation&, const MoveProgressCallback&)>;
+        using DirectoryMoveExecuteFunction = std::function<MoveResult(const DirectoryCopyRequest&,
+            const FileOperationCancellation&, const MoveProgressCallback&)>;
         using DeleteExecuteFunction = std::function<DeleteResult(const DeleteRequest&, const FileOperationCancellation&, const DeleteProgressCallback&)>;
         explicit FileOperationCoordinator(ExecuteFunction execute = {}, CopyExecuteFunction copy_execute = {},
-            DirectoryCopyExecuteFunction directory_copy_execute = {}, MoveExecuteFunction move_execute = {}, DeleteExecuteFunction delete_execute = {});
+            DirectoryCopyExecuteFunction directory_copy_execute = {}, MoveExecuteFunction move_execute = {}, DeleteExecuteFunction delete_execute = {},
+            DirectoryMoveExecuteFunction directory_move_execute = {});
         ~FileOperationCoordinator() noexcept;
         FileOperationCoordinator(const FileOperationCoordinator&) = delete;
         FileOperationCoordinator& operator=(const FileOperationCoordinator&) = delete;
@@ -117,6 +120,7 @@ namespace blink::app
         DirectoryCopyExecuteFunction directory_copy_execute_;
         MoveExecuteFunction move_execute_;
         DeleteExecuteFunction delete_execute_;
+        DirectoryMoveExecuteFunction directory_move_execute_;
         mutable std::mutex work_mutex_;
         winrt::Windows::Foundation::IAsyncAction work_{ nullptr };
     };

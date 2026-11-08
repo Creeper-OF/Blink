@@ -364,12 +364,12 @@
   <data name="Move.TargetChanged" xml:space="preserve"><value>The source item or destination folder changed. Refresh and try again.</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="Move.AlreadySubmitted" xml:space="preserve"><value>This cut selection has already been submitted. Finish or cancel its move queue, then cut again for another move.</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="MoveConflict.Title" xml:space="preserve"><value>Move destination already exists</value><comment>Move queue and clipboard intent.</comment></data>
-  <data name="MoveConflict.Description" xml:space="preserve"><value>An item with this name already exists. Skip this item, move it under another name, or cancel the remaining queue.</value><comment>Move queue and clipboard intent.</comment></data>
+  <data name="MoveConflict.Description" xml:space="preserve"><value>An item with this name already exists. Choose an available option: replace a file, merge folders, skip, keep both, or cancel.</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="MoveConflict.KeepBothDescription" xml:space="preserve"><value>Keep the existing item and move the source under a numbered name.</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="Clipboard.CutItems" xml:space="preserve"><value>{0} items ready to move. Paste into a destination folder to move them.</value><comment>Move queue and clipboard intent.</comment></data>
   <data name="Move.Partial" xml:space="preserve"><value>{0} items were not fully moved. Destination copies and remaining sources are kept.</value><comment>Cross-volume move partial completion.</comment></data>
   <data name="Move.SkipRemaining" xml:space="preserve"><value>Skip this item and continue</value><comment>Cross-volume move partial completion.</comment></data>
-  <data name="Move.DirectoryProgress" xml:space="preserve"><value>Copied {0} files and {1} folders; removed {2} source files and {3} source folders.</value><comment>Cross-volume directory move progress.</comment></data>
+  <data name="Move.DirectoryProgress" xml:space="preserve"><value>Transferred {0} files and created {1} folders; removed {2} source files and {3} source folders.</value><comment>Cross-volume directory move progress.</comment></data>
   <data name="Delete.ConfirmTitle" xml:space="preserve"><value>Permanently delete these items?</value><comment>System recycle and confirmed permanent deletion.</comment></data>
   <data name="Delete.ConfirmPermanent" xml:space="preserve"><value>Permanently delete</value><comment>System recycle and confirmed permanent deletion.</comment></data>
   <data name="Delete.ConfirmDescription" xml:space="preserve"><value>Permanently delete {0} selected items, including folder contents? They will not go to the Recycle Bin.</value><comment>System recycle and confirmed permanent deletion.</comment></data>
@@ -447,4 +447,5 @@
   <data name="Search.MenuCopyPath" xml:space="preserve"><value>Copy full path</value></data>
   <data name="Search.MenuCopyParentPath" xml:space="preserve"><value>Copy containing folder path</value></data>
   <data name="Search.MenuSystemOptions" xml:space="preserve"><value>Compression and more system options…</value></data>
+  <data name="Move.MergeSkipped" xml:space="preserve"><value>Skipped {0} files and {1} folders; items not moved remain at the source.</value><comment>Directory move merge skipped source items.</comment></data>
 </root>

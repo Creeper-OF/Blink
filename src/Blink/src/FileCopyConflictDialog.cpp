@@ -32,7 +32,7 @@ namespace blink::app
     {
         if (IsOpen()) { return false; }
         const bool allow_replace = enable_replace && !directory_copy;
-        const bool allow_merge = enable_merge && directory_copy && !moving;
+        const bool allow_merge = enable_merge && directory_copy;
         auto ui = std::make_shared<Ui>(allow_replace, allow_merge);
         ui->submit = std::move(submit); ui->failed = std::move(failed);
         ui->dialog = ContentDialog(); ui->dialog.XamlRoot(root);
@@ -71,7 +71,7 @@ namespace blink::app
             });
             content.Children().Append(button);
         };
-        const bool directory_merge = directory_copy && !moving;
+        const bool directory_merge = directory_copy;
         add_choice(directory_merge ? FileCopyConflictPolicy::Merge : FileCopyConflictPolicy::Replace,
             directory_merge ? L"DirectoryCopyConflict.Merge" : L"CopyConflict.Replace",
             directory_merge ? L"CopyConflictMerge" : L"CopyConflictReplace", directory_merge ? allow_merge : allow_replace);
