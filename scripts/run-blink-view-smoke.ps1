@@ -85,11 +85,49 @@ function Navigate([string]$path){
  SendKey (0x0D)
  WaitFor ('navigate '+$path) { (AddressValue) -eq $path -and (StatusContains ('(?:Ready|就绪).*\b'+$expectedCount+'\b')) }
 }
+# View is now a DropDownButton; flyout peers may be sibling popup roots.
+function TopViewElement([string]$automationId){
+ $element=ById $automationId
+ if($element -and $element.Current.ProcessId -eq $process.Id -and -not $element.Current.IsOffscreen){return $element}
+ $roots=@([Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,
+  [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty,$process.Id)))
+ foreach($ownedRoot in $roots){
+  if($ownedRoot.Current.ProcessId -ne $process.Id){continue}
+  if($ownedRoot.Current.AutomationId -eq $automationId -and -not $ownedRoot.Current.IsOffscreen){return $ownedRoot}
+  foreach($candidate in @($ownedRoot.FindAll([Windows.Automation.TreeScope]::Descendants,
+   [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty,$automationId)))){
+   if($candidate.Current.ProcessId -eq $process.Id -and -not $candidate.Current.IsOffscreen){return $candidate}
+  }
+ }
+ return $null
+}
+function InvokeTopViewElement($element){
+ if(-not $element -or $element.Current.ProcessId -ne $process.Id -or -not $element.Current.IsEnabled){throw 'Enabled owned View control required'}
+ $uiaPattern=$null
+ if($element.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$uiaPattern)){$uiaPattern.Invoke()}
+ elseif($element.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern,[ref]$uiaPattern)){$uiaPattern.Toggle()}
+ elseif($element.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$uiaPattern)){$uiaPattern.Expand()}
+ else{throw 'Owned View control has no Invoke/Toggle/Expand pattern'}
+}
+function OpenTopViewMenu{
+ if(-not(TopViewElement 'TopViewMenu')){InvokeTopViewElement (ById 'FolderViewMode')}
+ WaitFor 'top View menu realized' {$null -ne (TopViewElement 'TopViewMenu')}
+}
+function SetTopViewMode([int]$modeIndex){
+ if($modeIndex -lt 0 -or $modeIndex -gt 2){throw 'Unknown View mode index'}
+ OpenTopViewMenu
+ $modeId=@('TopViewDetails','TopViewList','TopViewGrid')[$modeIndex]
+ WaitFor ('top View choice '+$modeId) {$null -ne (TopViewElement $modeId)}
+ InvokeTopViewElement (TopViewElement $modeId)
+ WaitFor 'top View menu closes after mode choice' {$null -eq (TopViewElement 'TopViewMenu')}
+}
 function ComboValue([string]$id){
+ if($id -eq 'FolderViewMode'){return (ById $id).Current.HelpText}
  $selection=(ById $id).GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
  return $(if($selection.Count){$selection[0].Current.Name}else{''})
 }
 function SetCombo([string]$id,[int]$index,[string]$pattern){
+ if($id -eq 'FolderViewMode'){SetTopViewMode $index;WaitFor ($id+'='+$index) {(ComboValue $id) -match $pattern};return}
  (ById $id).SetFocus()
  SendKey (0x24)
  for($n=0;$n -lt $index;$n++){SendKey (0x28)}

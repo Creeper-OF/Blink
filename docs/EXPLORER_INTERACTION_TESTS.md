@@ -1,0 +1,278 @@
+# Explorer 交互能力与验证矩阵
+
+审计与更新日期：2026-11-08。阶段 A 基线：`7135a14`，235 个构建输入、368 个中英/fallback 资源键；只读审计已提交 `e497600`。阶段 B 仅实施顶部 View/Show，最终候选仍为 235 个输入、资源增至 369 键。依据完整读取的 `BLINK_EXPLORER_UI_MASTER_PROMPT.md`（316 行），对照实际源码、测试与归档结果持续更新；不把框架默认行为当作已执行的 UI 验收。
+
+阶段 A 只读。**阶段 B 主模型已完成两配置构建/普通回归及最终 Release 自有窗口 15 项检查，本文更新代理只读报告，没有另行构建或运行 GUI。** Explorer 参考观察限自有目录的“查看/显示”。H-* 是历史证据，B-* 是本轮新证据；混合场景仅对实际检查的子项记 PASS。`NOT RUN` 表示未执行，不代表已失败。
+
+## 1. 状态、环境与证据
+
+实现状态沿用任务书：`IMPLEMENTED_VERIFIED`、`IMPLEMENTED_NEEDS_MANUAL`、`PARTIAL`、`DEFERRED`、`UNSUPPORTED_BY_DESIGN`、`OS_DEPENDENT`。它们描述指定能力，不代表整个场景通过。执行状态另列 `PASS`、`HISTORICAL PASS`、`OBSERVED`、`NOT RUN`、`SKIP`；没有执行结果时不得填 PASS。
+
+| 环境项 | 核实结果与限制 |
+| --- | --- |
+| 任务书目标 | Windows 11 24H2 x64；本轮没有 24H2 实机结果，`NOT RUN` |
+| 本轮参考主机 | Windows 11 家庭版 **25H2，10.0.26200.9711**，zh-CN；所观察 Explorer 窗口 DPI 120（125%） |
+| 本轮 Blink GUI | 最终 Release 报告：25H2 / build 26200 / UBR 9711，zh-CN，x64、非管理员；**window_dpi=96**，主题未采集。Explorer 参考的 DPI 120 不能带入 Blink 结果，不推断差异原因，不声称跨 DPI 对照完成 |
+| 参考观察 | 主模型新建并核对自有 GUID 目录/新 HWND，UIA 读取 View/Show，未改变系统选项；正常关闭窗口，清理 83 字节 fixture |
+| 参考证据 | [explorer-reference.json](../.build/explorer-ui-p0-view-menu/integration/explorer-reference.json)，`OBSERVED_VIEW_SHOW_ONLY`；不是 12 类上下文、其他主题或其他 DPI 的验收 |
+| 参考图像边界 | PrintWindow 只捕获主窗口，未包含弹出菜单；不作为菜单视觉、像素一致或可读性凭据。View 的 UIA 记录 11 项；Show 记录含父层，新增子项实际为 5 项，不能把全部 16 项当成 Show 子项 |
+| 构建配置 | README：x64、MSVC v143、SDK `10.0.26100.0`、Windows App SDK `2.3.1`、C++/WinRT `2.0.250303.1`；工具位于 D:\DEV。本轮主模型已重建 Debug/Release 并串行完成普通回归，见 B-NATIVE |
+| 权限与数据 | 历史普通回归非管理员，文件变更限自建 fixture；真实跨卷测试使用独立卷。服务权限不等于 Blink UI 提权 |
+| 交互桌面 | 历史 smoke 检查同会话交互桌面和窗口 PID/HWND；锁屏时跳过需要真实输入的步骤。LockApp 进程存在本身不能证明仍锁屏 |
+| 第三方扩展 | 历史记录实际安装 Bandizip 7.46，已验证代表性真实 ZIP；7-Zip、Git、VS Code 和其他扩展不因规范列举即视为已安装/验收 |
+| 自动化限制 | 本机 .NET Win32 UIA proxy 注册曾失败；WinUI UIA 可用，经典菜单/属性采用 Win32 HMENU/页签证据。没有把代理失败归因于产品无控件 |
+
+证据索引（H-* 为历史；B-* 为本轮主模型执行）：
+
+| 证据号 | 产物与结果 | 能证明的范围 |
+| --- | --- | --- |
+| H-NATIVE | [Slice21 native-validation](../.build/phase1d-slice21/integration/native-validation.json)、[handoff](PHASE1D_SLICE21_HANDOFF.md)：2026-11-08 Debug/Release 各 **1516 PASS / 0 FAIL / 4 SKIP**，构建单并发 | 该摘要对应的源码与二进制；包括真实 FS、纯模型和注入 executor/RPC 测试，不能全算 GUI 检查 |
+| H-SKIP | [Debug 日志](../.build/phase1d-slice21/integration/tests-debug.log)、[Release 日志](../.build/phase1d-slice21/integration/tests-release.log) | 四项真实符号链接 fixture 因 `1314` 未创建：`file_copy_destination_existing_symlink_fixture_unavailable`、`file_copy_destination_dangling_symlink_fixture_unavailable`、`directory_copy_source_symlink_fixture_unavailable`、`typed_capture_source_symlink_fixture_unavailable`；不得改写为通过 |
+| H-MERGE-UI | [ui-move-merge-report](../.build/phase1d-slice21/integration/ui-move-merge-report.json)：8 PASS / 0 FAIL / 0 SKIP | 自有窗口 Cut/Paste、Merge、子项 Replace/Skip、留源/移空及字节；正常关闭与清理。组合 GUI 的标签跟随没有覆盖 |
+| H-FOLDER-UI | [ui-folder-menu-report](../.build/folder-menu-sync/integration/ui-folder-menu-report.json)：21 PASS / 0 FAIL / 0 SKIP | 普通目录的选择、路径复制、Copy/Paste、改名/新建、刷新、View/Sort 子菜单、Blink 属性、原生扩展及实际 ZIP、旧菜单失效 |
+| H-SEARCH-UI | [ui-themed-menu-report](../.build/folder-menu-sync/integration/ui-themed-menu-report.json)：18 PASS / 0 FAIL / 0 SKIP | 搜索主菜单、原生扩展 ZIP、路径/文件复制、定位、属性、Ctrl+Enter/F2/Shift+F10/Shift+Delete、父目录粘贴与旧 peer 失效 |
+| H-SHELL | [native-menu-smoke-report](../.build/search-context-menu/integration/native-menu-smoke-report.json)：23 PASS / 0 FAIL / 1 UIA proxy SKIP | Unicode 文件/目录经典菜单、取消、系统属性页保活/关闭、Bandizip ZIP 名称和内容；原生回复“选择成功”与 ZIP 真实完成分别核对 |
+| B-NATIVE | [本轮 native-validation](../.build/explorer-ui-p0-view-menu/integration/native-validation.json)：最终 Debug/Release 构建 exit0，普通回归各 **1516 PASS / 0 FAIL / 4 SKIP**；235 输入、369 资源，构建并发 1 | 本轮候选输入与输出摘要；四项仍为符号链接权限 1314 SKIP，没有删测试/放宽断言。原有 native helper、索引协议/库未变；不能由总数推导所有 GUI/设备场景已验 |
+| B-VIEW | [最终 ui-view-menu-report](../.build/explorer-ui-p0-view-menu/integration/ui-view-menu-report.json)：**15 PASS / 0 FAIL / 0 SKIP**，2026-11-08 14:42:32–15:02:11 UTC | 13 项功能检查 + 正常关闭 + 逐路径/字节清理；不是 15 个全面兼容类别。候选 SHA256 `940dad8bea687bdcc5fb6cac71a2d19665845f048d90c3bceec98b4a35b342b2`，自有 PID 39376 正常 exit0、无强杀；清理 1015 字节 fixture、无归属失败，独占 compiler-temp 已清理 |
+
+H-FOLDER-UI/H-SEARCH-UI 使用上一菜单切片候选的 SHA，不等于对本轮 View 候选重新跑了 39 项。native 中源码文字扫描断言、fake executor/RPC、真实文件操作的证明力不同；按下文具体测试入口使用，不把总计数作为 Windows Explorer 对比结果。
+
+B-VIEW 的输入仅自有 PID/HWND InputSite 键盘消息及 WinUI UIA，未使用全局 SendInput 或剪贴板。弹出菜单查找优先自有主窗口，再由 EnumWindows 按 PID/可见性筛选自有 HWND，不为负查找遍历其他进程的桌面 UIA provider。菜单/布局结论来自实际控件与 checked 状态，未提供菜单视觉截图。
+
+## 2. 快捷键矩阵
+
+代码入口：`main.cpp::BuildUi/AddAccelerator/CreateFolderViewControl`，`SearchPresentation::Build`，`FolderNameDialog::Show`。普通目录列表的 accelerator 设置 `ScopeOwner(control)`；通用 accelerator 和 Ctrl+T/W 检查 `IsOperationDialogOpen()`。搜索动作绑定 `SearchResults` 列表，地址/搜索编辑框不是文件操作快捷键的 owner。
+
+**优先级规则**：文本控件内部编辑 → 当前模态对话框 → 所在列表/菜单 → 窗口导航命令。当前代码对列表作用域与对话框已有门控，但跨焦点的完整实际键盘序列尚未逐项跑过，不凭源码宣称所有输入法和焦点状态均正确。
+
+| 测试编号 | 按键/操作 | 当前实现、适用焦点 | 文本/对话框优先级与待验项 | 状态/本轮 |
+| --- | --- | --- | --- | --- |
+| EXP-KEY-01 | Alt+← / Alt+→ / Alt+↑ | 窗口 accelerator 调用 Back/Forward/Up；使用导航状态机 | 操作对话框打开时门控；地址输入中的 Alt 组合/IME 待实机 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-02 | Ctrl+L | 聚焦地址 TextBox 并全选 | B-VIEW #13 验证普通目录中聚焦当前路径；当前没有面包屑/显示与编辑双模式，模态场景未验 | IMPLEMENTED_VERIFIED（限定普通地址焦点）/ PASS；模态 NOT RUN |
+| EXP-KEY-03 | Alt+D、F4 | 未接地址栏专用 handler/历史下拉 | 不用 Ctrl+L 的存在冒充这两项已实现 | DEFERRED / NOT RUN |
+| EXP-KEY-04 | F5 | 窗口刷新当前位置 | 刷新不是新历史记录；模态时不提交 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-05 | F6、Shift+F6 | 未接区域焦点轮转 | 需另定地址/命令/树/列表/状态的循环顺序 | DEFERRED / NOT RUN |
+| EXP-KEY-06 | F3 | 未接搜索聚焦键 | 已有 Ctrl+F/E 不等于 F3 | DEFERRED / NOT RUN |
+| EXP-KEY-07 | Ctrl+F、Ctrl+E | 窗口聚焦搜索 TextBox 并全选 | 模态时门控；文本框焦点下的行为待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-08 | Tab、Shift+Tab | WinUI 标准焦点导航；列表明确 IsTabStop(true) | 没有显式跨区域焦点恢复模型；菜单关闭/导航重投影后的落点待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-09 | Enter：地址 | `path_box_.KeyDown` 提交 BrowseAsync | B-VIEW #01/#07/#11 提交真实自有目录；非法/不存在/无权限仍需分别验证 | IMPLEMENTED_NEEDS_MANUAL / 自有合法路径 PASS；错误分支 NOT RUN |
+| EXP-KEY-10 | Enter：搜索/高级范围输入 | 搜索框及指定盘/目录输入提交查询 | 搜索草稿/范围属于当前 Tab；不可当文件 Open | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-11 | Enter：普通列表 | scoped accelerator 打开焦点/所选行；目录导航、文件关联 helper | 不作用于地址、搜索、重命名框 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-12 | Enter、Ctrl+Enter：搜索列表 | Enter 打开；Ctrl+Enter 打开父目录并选中原命中项 | 只作用于结果列表；历史 H-SEARCH-UI #11 覆盖 Ctrl+Enter | IMPLEMENTED_VERIFIED（限定历史）/ NOT RUN |
+| EXP-KEY-13 | Esc：地址 | 未接取消草稿并恢复已提交路径的专用逻辑 | 保留原生 TextBox 行为，不能说已满足 Explorer 地址 Esc | DEFERRED / NOT RUN |
+| EXP-KEY-14 | Esc：搜索 | 搜索框/结果列表离开搜索 | 菜单、模态内 Esc 应先关闭当前界面；IME 候选取消优先级待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-15 | Esc、Enter：菜单/名称对话框 | MenuFlyout/ContentDialog 标准取消/默认按钮；名称 Primary 启用取决于合法性 | B-VIEW #10 验证顶部菜单 Space、Home/Down/Right、Enter、两级 Esc 并返回 FolderViewMode；名称对话框/IME 未验 | IMPLEMENTED_NEEDS_MANUAL / 顶部菜单 PASS；名称/IME NOT RUN |
+| EXP-KEY-16 | Ctrl+T、Ctrl+W | 窗口新建/关闭活动标签；关闭最后标签请求关窗口 | B-VIEW #07/#08/#12 验证新增及关闭临时 Tab；最后标签/模态防误关未验 | IMPLEMENTED_NEEDS_MANUAL / 自有多 Tab PASS；其余 NOT RUN |
+| EXP-KEY-17 | Ctrl+Tab、Ctrl+Shift+Tab | TabView **默认**相邻标签选择；SelectionChanged 已接业务状态 | 不能凭 main 无手写绑定认定未实现；从地址/列表等 TabView 内容树之外焦点调用的范围未核验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-18 | Ctrl+F4 | TabView 默认 TabCloseRequested，Blink 已接 | TabView 焦点与内容区域范围、模态时框架默认事件是否与 Ctrl+W 一致待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-19 | Ctrl+A：普通列表 | `SelectAllFolderRows` → 权威 TabState 可见行；不按虚拟可见容器截断 | 地址/搜索/重命名框保留文本全选；搜索结果目前单选，不承诺多选结果 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-20 | Ctrl+单击、Shift+单击、Shift+方向键 | 普通列表 `SelectionMode::Extended`；SelectionChanged 同步权威选择 | 由 WinUI 控件提供，含硬链接别名的模型测试不代替实际手势 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-21 | Home/End、PageUp/PageDown、方向键 | ListView/GridView/TreeView 标准键盘行为 | 焦点在 TextBox 时编辑文本；快速滚动/虚拟化后的选择需实机 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-22 | F2 | 普通列表/搜索结果共用名称对话框；历史 H-SEARCH-UI #12、H-FOLDER-UI #10 | **当前 Opened 调用 SelectAll，文件扩展名也选中**；与任务书“主名初选”存在明确差距，不是 inline rename | PARTIAL / NOT RUN |
+| EXP-KEY-23 | Ctrl+C、Ctrl+X | 普通选择/已验证搜索命中发布 CF_HDROP+Preferred DropEffect | TextBox 中必须文本复制/剪切；对话框不得把背后列表当源 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-24 | Ctrl+V | 普通列表粘贴当前目录；搜索列表粘贴命中项的**所在目录**（目录命中也取父目录） | TextBox 中为文本粘贴；不能因存在文件剪贴板而提交文件队列 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-25 | Ctrl+Shift+N | 普通列表新建文件夹对话框；搜索结果未接此创建命令 | 不在地址/重命名文本框中触发背后创建 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-26 | Delete | 普通/搜索列表走回收站删除；Ctrl/Alt 修饰不转普通删除 | TextBox Delete 应只删字符；对话框优先，回收失败不转永久删除 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-27 | Shift+Delete | 普通/搜索列表走确认后的永久删除；与 Delete 共用 command 路由 | 文本框保持文本编辑语义；H-SEARCH-UI #15 仅证明自有搜索项确认删除 | IMPLEMENTED_VERIFIED（限定历史）/ NOT RUN |
+| EXP-KEY-28 | Alt+Enter | 普通列表 Blink 只读属性；搜索列表 Windows 原生属性 | 两处存在产品差异；文本焦点不应启动背后属性 | PARTIAL / NOT RUN |
+| EXP-KEY-29 | Shift+F10、菜单键 Apps | 列表打开 Blink 主菜单，搜索在 PreviewKeyDown 先处理 | TextBox 使用其文本菜单；H-SEARCH-UI #14 覆盖搜索 Shift+F10，普通空列表可聚焦 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-30 | Ctrl+Z、Ctrl+Y | 没有文件操作撤销/重做日志或绑定 | TextBox 的编辑撤销/重做由控件管理；不能扩展成文件撤销成功 | DEFERRED（文件操作）/ NOT RUN |
+| EXP-KEY-31 | Ctrl+Shift+数字 | 未接 Explorer 视图数字快捷键 | 已有 Details/List/Grid 菜单/工具栏不等于所有 8 视图键 | DEFERRED / NOT RUN |
+| EXP-KEY-32 | F11、Ctrl+滚轮缩放 | 未接全屏和列表图标缩放 | 普通滚轮、系统窗口最大化是其他能力 | DEFERRED / NOT RUN |
+| EXP-KEY-33 | 空格即时预览 | 未实现预览入口 | TabView 焦点下 Space 属控件选择标签行为，不是文件预览 | DEFERRED / NOT RUN |
+| EXP-KEY-34 | Alt+F4 | 系统窗口关闭入口；Blink 关闭时取消并失效异步发布 | 模态、正在冲突/传输/原生属性时生命周期组合仍须实机 | OS_DEPENDENT / NOT RUN |
+
+TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/tab-view#keyboard-navigation)。它证明框架能力，不证明 Blink 所有焦点区域的实际效果。
+
+### 2.1 文本焦点专项（必须独立于文件快捷键验证）
+
+| 测试编号 | 自有 fixture 上的操作与判据 | 已有依据 | 本轮 |
+| --- | --- | --- | --- |
+| EXP-FOCUS-01 | 地址 TextBox 输入文本，Ctrl+A/C/X/V、Delete、Ctrl+Z/Y 只编辑文本；背后文件/选择/队列不变化 | B-VIEW #13：Ctrl+L 聚焦、Ctrl+A/Delete 清空文本，选中文件仍在、行序和 View 不变；未接触 Clipboard | 部分 PASS：仅地址 Ctrl+L/A/Delete；C/X/V/Z/Y NOT RUN |
+| EXP-FOCUS-02 | 搜索框及高级盘/路径输入执行同样组合，Enter 只提交当前查询，IME 候选 Enter/Esc 不误提交/退出 | SearchPresentation 文本 handler；IME 未实测 | NOT RUN |
+| EXP-FOCUS-03 | F2 对话框只改主名、扩展名选择边界、Ctrl+A、粘贴、Delete、Enter/Esc、失焦；背后文件不受快捷键影响 | FolderNameDialog 当前全选为已知差距 | NOT RUN |
+| EXP-FOCUS-04 | 新建/冲突/永久删除确认/属性窗口中 Tab 顺序、默认按钮、Esc、Ctrl+T/W、Alt+F4；退出回到合理列表焦点 | IsOperationDialogOpen/ContentDialog；属性和冲突实际打开仅历史部分覆盖 | NOT RUN |
+| EXP-FOCUS-05 | 换 Tab/快速导航/视图重投影/菜单关闭后，焦点与权威选择一致，Enter/Ctrl+C 作用于当前行 | B-VIEW #03 选择/行序保留、#09 旧 top peer 换 Tab 不修改任一 Tab、#10 菜单 Esc 返回按钮；H-FOLDER/SEARCH 仍为历史 | 部分 PASS：所列子项；快速导航、列表 Enter/Ctrl+C 组合 NOT RUN |
+
+## 3. 鼠标、选择、剪贴板与拖放
+
+| 测试编号 | 能力与当前语义 | 源码/历史证据 | 状态/本轮 |
+| --- | --- | --- | --- |
+| EXP-MOUSE-01 | 单击选中、双击目录导航/文件关联打开；普通目录按事件命中的行，不以另一所选首行替代 | main `OnFolderDoubleTapped/ActivatePresentedRow`；`clicked_item_resolution_maps_selected_a_b_double_click_b_to_b` | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-MOUSE-02 | Ctrl/Shift 多选；右击已选项保持集合，右击未选项调整选择；背景不复用旧 item ticket | main `ShowFolderContextMenu`；H-FOLDER-UI #05/#09/#19 | IMPLEMENTED_VERIFIED（限定历史）/ NOT RUN |
+| EXP-MOUSE-03 | 空白点击取消选择、框选、修饰双击/中键打开、鼠标侧键前进后退 | 未见自有框选/侧键/修饰打开策略；标准控件空白行为须实测 | PARTIAL / NOT RUN |
+| EXP-MOUSE-04 | 标签重排/溢出、滚轮、窗口拖动/缩放/Snap | TabView/TitleBar 系统控件；历史窗口拖动和导航树滚轮单独存证 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN；本轮不扩成触控板/多屏已验 |
+| EXP-CLIP-01 | Unicode CF_HDROP，最多 1024 项、4 MiB，顺序/重复名保留；COPY/MOVE Preferred DropEffect | ClipboardFileTransfer；T-CLIP；H-FOLDER-UI #08、H-MERGE-UI #02 | IMPLEMENTED_VERIFIED（限定历史）/ NOT RUN |
+| EXP-CLIP-02 | 内部剪贴板缓存绑定 sequence、原始有序 payload、复制/移动意图与源/父身份；续尾不重放已完成项 | main Publish/Paste、ClipboardCopyCache、MoveTransferTests | IMPLEMENTED_VERIFIED（原生历史）/ NOT RUN |
+| EXP-CLIP-03 | 外部 Explorer → Blink 及 Blink → Explorer，分别 Copy/Cut 后 Paste，记录真实源/目标、完成效果、取消与剪贴板是否还属于本次操作 | 内部真实 CF_HDROP smoke 不等于 Explorer 对端；外部 Performed 反馈/剪切淡化仍 README 待做 | PARTIAL / NOT RUN |
+| EXP-CLIP-04 | OLE 虚拟文件 FileDescriptor/FileContents、邮件附件/压缩包内拖出等无路径对象 | 读取入口只接受 CF_HDROP/TYMED_HGLOBAL；未实现流/描述符物化 | DEFERRED；当前 UNSUPPORTED 输入 / NOT RUN |
+| EXP-DROP-01 | 真实 IDataObject 与 IDataObjectProvider、跨 apartment 引用、异步 capability；完整本地路径集合不截成 WinRT StorageItems 前缀 | FileDragData/FileDragDropController；T-DROP | IMPLEMENTED_VERIFIED（原生历史）/ NOT RUN |
+| EXP-DROP-02 | 同卷默认 Move、跨卷默认 Copy；Ctrl 强制 Copy、Shift 强制 Move；allowed effect 不符拒绝；自身/子树目标拒绝 | ChooseFileDropEffect、同一串行 coordinator；T-DROP | IMPLEMENTED_VERIFIED（原生历史）/ NOT RUN |
+| EXP-DROP-03 | Alt 或 Ctrl+Shift 创建快捷方式；右键拖放动作菜单 | link 修饰返回 NONE；未接右键拖放选单，不能静默当 Copy/Move | DEFERRED / NOT RUN |
+| EXP-DROP-04 | 本地列表/子目录/侧栏目录/驱动器落点，悬停标签切换；ThisPC/搜索虚拟页自身不充当文件目录 | main `FileAreaDropTarget/NavigationDropTarget/FileDragTabOver`；T-DROP origin 测试 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-DROP-05 | 完成反馈：Blink 自己移动全流程，Performed 不再指示源端额外删除，Logical 表示实际结果；失败/取消/全 Skip 不报完整成功 | IncomingFileDrag::Finish/CompletedFileDrop；T-DROP | IMPLEMENTED_VERIFIED（原生历史）/ NOT RUN |
+| EXP-DROP-06 | Explorer ↔ Blink 真正指针拖放：同/跨卷、Ctrl/Shift、取消、混合多选，提示与终态一致 | 当前原生 IDataObject fixture 不是 Explorer 实际手势证明 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+
+搜索列表当前**单选**；不把普通目录 Extended 选择或 Shell 同父多选能力延伸成搜索多选。路径复制：普通多选按 committed 顺序 CRLF 拼接完整路径，所在目录只复制一次；搜索复制已验证命中项的路径/父目录，不读取背后的浏览页选择。Paste 在普通目录取当前目录，在搜索取命中项父目录，这是当前可观察行为，不能混用。
+
+## 4. Shell、属性与特殊对象的边界
+
+### 4.1 原生菜单实际机制
+
+`ShellContextMenuController` 在 worker 启动普通用户 `Blink.ShellMenuHost.exe`。helper 通过 SHParseDisplayName/SHBindToParent、IShellFolder::GetUIObjectOf 获取 **IContextMenu**；QueryContextMenu 后用 TrackPopupMenuEx 展示经典菜单。可选查询 IContextMenu2/3，并在 owner WndProc 转发 INIT/UNINITMENUPOPUP、DRAW/DELETE/MEASUREITEM、MENUCHAR；典型下级菜单和 owner-draw 接口有真实接线。
+
+基本 Open/Copy/Cut/Paste/Rename/Delete 返回 Blink command，经原有导航或唯一文件操作队列处理；其他动词通过 GetCommandString/InvokeCommand 由系统扩展执行。支持实际同父目录多选，保留不同硬链接名称。选中项/父目录身份和路径关系重新核对，旧 Tab/query/selection ticket 失效。
+
+**没有 IExplorerCommand 枚举/调用实现**，不能把经典 IContextMenu（含 2/3）描述成完整 Windows 11 现代扩展菜单。动态项由真实注册/对象/系统版本决定，不硬编码 Bandizip 等名称。H-FOLDER-UI/H-SEARCH-UI 的实际 ZIP 是代表性扩展完成证据，既不是任意扩展兼容证书，也不是多选压缩对话框已验收。
+
+控制器读回复/取消/子进程的 WaitForMultipleObjects 使用 **INFINITE**。正常取消与进程退出有处理、DLL 在 helper 中隔离，但当前没有第三方 handler 卡住的墙钟 deadline；不宣称所有 Shell hang 都有超时终止。`native` 回复在 InvokeCommand 前发送，表示选择已交给系统，不表示扩展操作完成；后续 Invoke 失败由 helper 呈现，实际压缩必须另看目标归档与内容。
+
+### 4.2 属性能力
+
+| 测试编号 | 对象/入口 | 当前事实 | 状态/本轮 |
+| --- | --- | --- | --- |
+| EXP-PROP-01 | 普通单选/多选、Alt+Enter | Blink `ItemPropertiesDialog` 只读；worker 读名称/路径/类型/大小/分配/时间/属性与目录统计、取消/部分失败 | IMPLEMENTED_VERIFIED（H-FOLDER-UI #15、T-PROP）/ NOT RUN |
+| EXP-PROP-02 | 搜索文件/目录、Alt+Enter | ShellMenuHost `--verb properties`，Windows 属性页/扩展页由系统决定，helper 保活并正常关闭 | IMPLEMENTED_VERIFIED（H-SEARCH-UI #09/#10、H-SHELL）/ NOT RUN |
+| EXP-PROP-03 | 普通 SystemOptions > 属性 | 原生经典菜单 properties 由 InvokeCommand 执行，不等于普通 primary Properties 已改原生 | OS_DEPENDENT；该路径组合 NOT RUN |
+| EXP-PROP-04 | ACL/只读隐藏编辑、共享、自定义/以前版本、驱动器/快捷方式/混选页签 | Blink 自有窗口没有编辑这些属性；系统页签条件依赖对象/注册 | PARTIAL / NOT RUN；不得固定承诺所有页签 |
+
+### 4.3 文件系统与 Namespace 矩阵
+
+| 测试编号 | 对象 | 当前可支持的范围与未覆盖项 | 状态/本轮 |
+| --- | --- | --- | --- |
+| EXP-OBJ-01 | 本地固定/可移动卷普通文件/目录 | 浏览/目录监听/基本操作；ThisPC 只枚举 DRIVE_FIXED/DRIVE_REMOVABLE；可移动设备真实拔插恢复未验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-OBJ-02 | 硬链接 | 身份加 RowIdentity 的名称/路径区分别名；选择、Copy/Move/Delete/Shell 多选保留具体链接名 | IMPLEMENTED_VERIFIED（T-ROW/T-CLIP/T-SHELL/T-DELETE）/ NOT RUN |
+| EXP-OBJ-03 | 符号链接/junction/reparse | 属性可读链接对象并不统计目标树；Delete 有删除链接不删目标测试；Copy/Move、目录链捕获明确拒绝重解析输入，不能统称全功能支持；四项 symlink 仍权限 SKIP | PARTIAL / NOT RUN |
+| EXP-OBJ-04 | .lnk、exe、图片、zip、脚本、无关联文件 | 普通文件 open 使用当前用户关联，独立 FileActivationHost；扩展缺失/无关联返回错误而非伪成功；未实现 lnk 目标位置、zip 内浏览或每类自有专用菜单 | PARTIAL；各类型实际打开/完整菜单 NOT RUN |
+| EXP-OBJ-05 | 隐藏/系统/只读/稀疏/压缩/加密/ADS | B-VIEW #05/#06 验证真实 Hidden 文件/目录、SYSTEM 与 SYSTEM+Hidden 排除，以及隐藏选中项移除后不复活；其余特殊属性仍按引擎实际能力与历史测试判断 | PARTIAL / Hidden/SYSTEM 显示规则 PASS；其余 GUI NOT RUN |
+| EXP-OBJ-06 | Unicode/emoji、长路径、大小写、尾点/空格 | Unicode/extended long path 有真实原生 fixture；GUI IME/emoji、尾点/空格、大小写敏感目录及系统关联组合未验 | PARTIAL / NOT RUN |
+| EXP-OBJ-07 | UNC/SMB、映射网络驱动器 | Location 可规范化 UNC 不代表支持全部文件操作；DirectoryLease 限本地字母盘且 DRIVE_FIXED/REMOVABLE，拒绝 UNC/DRIVE_REMOTE；浏览/凭据/重连独立待核 | PARTIAL（路径浏览待核）；当前本地变更入口 UNSUPPORTED / NOT RUN |
+| EXP-OBJ-08 | ThisPC/搜索 | 应用私有虚拟位置/结果模型；不伪造 C:\。基本打开真实目标；ThisPC 背景不接受普通文件写操作，搜索需解析真实来源 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-OBJ-09 | 回收站虚拟页/库/图库/MTP/控制面板/网络发现/搜索 Shell 虚拟容器 | 没有 Namespace 浏览器；Delete 可使用系统回收站不等于 Blink 有回收站浏览/恢复界面 | DEFERRED / NOT RUN；不提供假目录 |
+| EXP-OBJ-10 | OneDrive/cloud placeholder | 真实本地普通项与占位/reparse 不同；没有占位符物化/同步状态/云盘 Namespace 集成 | DEFERRED / NOT RUN |
+| EXP-OBJ-11 | SFTP/WebDAV/远端 Provider | contracts/fake/隔离原型不等于生产连接/认证/浏览/传输；按后续 Provider 路线推进 | DEFERRED / NOT RUN |
+| EXP-OBJ-12 | 光驱、弹出/格式化/设备管理 | 不是当前 ThisPC 枚举与 Blink-owned 基本菜单能力；系统返回项也须按设备与条件核验 | DEFERRED / NOT RUN；不以普通目录测试替代 |
+
+## 5. 对应任务书第 11 节的验收矩阵
+
+以下编号是**本轮建立的验收编号**，仅明确引用 B-* 的实际子项有本轮结果；其余保留 NOT RUN。T-* 引用仓库现存测试的真实 ID，H-* 引用历史产物，不能互换成新执行结果。
+
+### 5.1 基础与菜单上下文（11.1）
+
+| 验收编号 | 场景、操作与判据 | 现有来源/覆盖限度 | 本轮 |
+| --- | --- | --- | --- |
+| EXP-NAV-01 | 本地目录/盘符/ThisPC 来回，快速 A→B→C，失败导航保留真实页；Back/Forward/Up/F5 可用性与历史一致 | B-VIEW #01/#07/#11/#12 自有目录、空目录/ThisPC；T-NAV/T-TAB native 重跑 | 部分 PASS：所列合法导航；快速/失败/返回前进/Up/F5 GUI NOT RUN |
+| EXP-NAV-02 | 新建/切换/关闭活动和非活动 Tab、关闭最后 Tab；各自路径/历史/排序/视图/选择/草稿隔离；关闭后旧回调不复活 | B-VIEW #07–09/#12 两现有 Tab、第三新 Tab、临时 Tab 关闭及旧 top peer；T-TAB/T-SEARCH native 重跑 | 部分 PASS：路径/视图独立、Hidden 同步及旧 top peer；最后/非活动关闭、全部草稿与键盘范围 GUI NOT RUN |
+| EXP-NAV-03 | 外部新增/改名/删除/属性改变、监听失败/目录删除/卷失效，恢复后无二次虚假刷新/陈旧页 | T-WATCH/T-NAV；真实设备移除待验 | NOT RUN |
+| EXP-MENU-01 | 普通文件单选：txt/exe/图片/媒体/脚本/lnk/无关联；正确对象、禁用、实际打开和扩展项 | H-FOLDER-UI 只覆盖自有代表性文件；完整类型表未跑 | NOT RUN |
+| EXP-MENU-02 | 普通目录单选：Open/Rename/Copy/Cut/Paste/Properties，动作目标准确 | H-FOLDER-UI #08/#10/#15/#18；普通属性仅只读 | NOT RUN |
+| EXP-MENU-03 | 多文件、多目录、混合，右键保持权威集合；共同命令正确、完整路径 CRLF、父目录去重 | T-ROW/T-CLIP/T-SHELL；H-FOLDER-UI #05–07/#16。原生同父多选菜单已测，混选全部手势未测 | NOT RUN |
+| EXP-MENU-04 | 真空白背景菜单：Paste/NewFolder/Refresh/View/Sort，不读旧 item ticket，不显示不适用文件动作 | H-FOLDER-UI #09/#11–14 | NOT RUN |
+| EXP-MENU-05 | 搜索文件/目录：路径/身份重验、Open/Locate/Copy/Cut、父目录 Paste、Properties/F2/Delete，旧 query/Tab peer 失效 | T-SEARCH/T-SHELL；H-SEARCH-UI；当前单选 | NOT RUN |
+| EXP-MENU-06 | 左树已固定/快速访问：固定/取消固定及对应菜单 | 当前 known-folder 快速入口不等于可编辑 pin 模型；尚无完整菜单 | NOT RUN（DEFERRED） |
+| EXP-MENU-07 | 左树普通可展开目录：选择/展开、Lazy Load、焦点/菜单作用目标、单一滚动 | 树展开/滚轮有既有能力；专属完整右键未接，不能套普通文件菜单 | NOT RUN（PARTIAL） |
+| EXP-MENU-08 | ThisPC 本地盘/可移动盘/光驱/网络映射盘：打开、属性、适用设备命令 | 当前 fixed/removable 有限入口；无完整设备菜单，设备操作不得由目录案例泛化 | NOT RUN（PARTIAL） |
+| EXP-MENU-09 | ThisPC 背景/其他虚拟页：不出现普通路径写入动作，按真实能力显示 | B-VIEW #12 仅验证 ThisPC 顶部三视图/Show，地址仍为虚拟 ThisPC；完整背景写入能力仍由 FolderCommandPolicy 独立约束 | 部分 PASS：ThisPC View/Show；完整背景菜单/其他虚拟页 NOT RUN |
+| EXP-MENU-10 | 回收站根/内容菜单与恢复/清空 | 浏览页未实现；现存 recycle/restore fixture 只证明后端删除 | NOT RUN（DEFERRED） |
+| EXP-MENU-11 | UNC/SMB/远端：权限、断线、菜单/凭据/传输语义 | 本地变更限制见 EXP-OBJ-07；Provider 原型不能作为生产证据 | NOT RUN（PARTIAL/DEFERRED） |
+| EXP-MENU-12 | Tab/地址面包屑/编辑框/搜索框/列头特殊菜单；文本焦点不误操作文件 | 当前路径为 TextBox；Tab/列头/面包屑完整菜单未实现，原生 TextBox 菜单需实测 | NOT RUN（PARTIAL） |
+| EXP-OP-01 | 同/跨卷文件、目录和混合 Copy/Move；核对字节、ADS、时间/属性、同卷文件 ID、目标独有项与源留存 | T-COPY/T-MERGE；真实本地 FS fixture，不等于 Explorer 手势 | NOT RUN |
+| EXP-OP-02 | 根及嵌套 Replace/Skip/KeepBoth/Cancel、类型冲突、目录 Merge；不能先删目标根 | T-MERGE；H-MERGE-UI #03–06 | NOT RUN |
+| EXP-OP-03 | 中途取消/失败/观察回调异常，保留已完成前缀、真实残留和未启动尾项；只按允许方式继续，不整树重放 | T-COPY/T-MERGE/T-DELETE；冲突关闭/窗口退出实际键盘组合待验 | NOT RUN |
+| EXP-OP-04 | Delete 入回收站、Shift+Delete 确认，回收失败不静默降为永久删除；删除后的选择/标签退回与刷新 | DeleteOperation 的 IFileOperation/recycle callback 分支、T-DELETE；真实回收失败介质场景未补跑 | NOT RUN |
+| EXP-OP-05 | 磁盘不足/配额、ACL 拒绝、共享占用、源消失、路径过长/非法名称 | 共享占用/源身份/长路径已有 fixture；当前未找到真实磁盘耗尽专项结果，不填 PASS | NOT RUN |
+| EXP-OP-06 | 移动/改名/Merge 后已打开根/子目录标签和历史按**实际**目标跟随；Skip 留源，KeepBoth 新名正确 | T-RELOCATION；H-MERGE-UI 未含标签组合 | NOT RUN |
+| EXP-INTEROP-01 | Explorer → Blink、Blink → Explorer 真正剪贴板 Copy/Cut/Paste，包含多项/取消/冲突/外部完成反馈 | EXP-CLIP-03；内部 CF_HDROP PASS 不替代这两个方向 | NOT RUN |
+| EXP-INTEROP-02 | Explorer 双向真实拖放，同/跨卷、Ctrl/Shift、目录/混选、取消/失败反馈 | EXP-DROP-06；实际 FileDescriptor/FileContents 当前不支持 | NOT RUN |
+| EXP-PERF-01 | 自有大目录中菜单、换 Tab、F2、右键、滚动、退出分别记录响应耗时、样本数量/分位、UI 线程占用 | `large_folder_sort_and_projection_share_owned_background_pipeline` 是工程/模型约束；搜索 IPC benchmark 不等于菜单/首屏时延 | NOT RUN；无量化值不宣称无卡顿 |
+
+### 5.2 人工 UI 与辅助功能（11.2）
+
+| 验收编号 | 环境/场景 | 要记录的判据 | 本轮 |
+| --- | --- | --- | --- |
+| EXP-ENV-01 | 25H2 / zh-CN / 125% 的 Explorer 自有目录 View/Show | 版本、窗口归属、UIA 菜单项/层级；没有改系统开关，没有菜单可视截图 | OBSERVED（仅参考，不是 Blink 通过） |
+| EXP-ENV-02 | **24H2 x64** 浅色/深色/高对比度 × 100/125/150/200% | 逐组合记录字体/截断/禁用/焦点/缩放与归属截图；不能用 25H2 一次观察覆盖 | NOT RUN（全部组合） |
+| EXP-ENV-03 | 25H2 其余主题/DPI、文字放大/减少动画/触摸/触控板/多显示器 | 主/子菜单边界翻转、位置、可点区域、拖动/Snap/焦点，按真实硬件记录 | NOT RUN |
+| EXP-ENV-04 | zh-CN/en-US 与中文 IME、emoji/长名 | 资源可读，输入候选优先，快捷键不重复触发；没有运行时语言切换就按实际启动语言测试 | NOT RUN |
+| EXP-ENV-05 | UNC、可移动盘插拔、隐藏/只读、实际安装扩展 | B-VIEW 只补真实 Hidden/SYSTEM 规则；拒绝访问/断开/设备/扩展实际动作仍单列 | 部分 PASS：Hidden/SYSTEM；其余 NOT RUN；Bandizip 仅 H-* 历史 |
+| EXP-A11Y-01 | 每一级菜单/子菜单，鼠标与键盘，UIA/读屏 | B-VIEW #02 控件角色/模式与 #10 顶部菜单键盘、Esc 焦点返回；未覆盖所有菜单、边界展开、Alt 或读屏 | 部分 PASS：所列 top View/Show；Narrator/其他菜单人工 NOT RUN |
+| EXP-DIALOG-01 | 属性/冲突/权限/确认/提示，默认按钮、危险确认、Esc/Alt+F4/关闭/最小化最大化 | 无误动作/重复提交、错误后可继续；系统页签按对象条件显示，不固定复制文字 | NOT RUN；历史仅特定对话框/流程 |
+| EXP-VISUAL-01 | 同一受控目录/对象/尺寸下 Explorer 与 Blink 实际可视图 | 自有窗口截图必须包含待比内容；不足条件记未捕获，不合成第三方窗口或声称像素一致 | NOT RUN；参考 PrintWindow 未含 popup |
+
+### 5.3 工程与生命周期（11.3）
+
+| 验收编号 | 要验证的事实 | 现有证据/方法 | 本轮 |
+| --- | --- | --- | --- |
+| EXP-ENG-01 | Debug/Release 真实构建与普通回归，单并发、记录输入/二进制摘要 | B-NATIVE 两配置各 1516/0/4；本轮 View 候选摘要已记录 | PASS（构建/普通回归）；4 SKIP 保持，不扩成全部 GUI 通过 |
+| EXP-ENG-02 | zh/en/fallback 键覆盖、command/Automation ID 唯一、每个新可见项有实际动作 | B-NATIVE 369 键；B-VIEW #02 与实际动作；资源计数不证明全应用 ID 唯一或中英 UI 都实测 | 部分 PASS：本轮资源/新菜单；en-US UI 和全局唯一性专验 NOT RUN |
+| EXP-ENG-03 | 无重复 accelerator；文本/模态优先；窗口/Tab/query 关闭后旧回调不能执行 | B-VIEW #09 旧 top peer、#10 键盘、#13 地址文本；T-TAB/T-SEARCH native 重跑，原 H-* 不冒充新 GUI | 部分 PASS：所列 View/地址子项；模态、查询、全部 accelerator 组合 NOT RUN |
+| EXP-ENG-04 | 第三方菜单代码在 ShellMenuHost，Blink 主进程不加载相应扩展 DLL | host 源码架构与历史 helper PID；此轮未重新采模块快照，其他 property handler 不能据此泛化 | NOT RUN |
+| EXP-ENG-05 | 没有回收失败→永久删除、索引离线→全盘 DFS 等静默 fallback；错误不冒充成功 | DeleteOperation/SearchCoordinator 真实分支与 T-DELETE/T-SEARCH；有 fake 用例也须注明 | NOT RUN |
+| EXP-ENG-06 | 正常关闭、取消待机 Shell/文件任务、清理自有 fixture；回调不访问已关闭 UI，用户剪贴板不被测试误用 | B-VIEW #14/#15：exit0、无强杀、1015 字节 fixture/独占编译临时目录已清，无 Clipboard API；本轮无待机 Shell/文件任务 | 部分 PASS：正常退出/归属清理；传输/Shell 待机取消组合 NOT RUN |
+
+## 6. 现存代码与真实测试 ID 对照
+
+以下为可定位样例，不是把测试函数数量推算为已覆盖全部 UI；历史执行见 H-NATIVE，本轮普通回归见 B-NATIVE 的日志与摘要。新验收使用 EXP-*，避免与现有 ID 混淆。
+
+| 索引 | 业务入口 | 现存测试源码与真实 ID（节选） |
+| --- | --- | --- |
+| T-NAV | [NavigationModel](../src/Blink/src/NavigationModel.cpp)、BrowseController、FolderWatcher、FolderChangeState | [main.cpp](../tests/Blink.Phase1.Tests/src/main.cpp)：`navigation_older_intent_rejected`、`navigation_failed_back_preserves_history`、`navigation_refresh_preserves_history`、`navigation_up_root_reaches_this_pc`；[FolderNavigationTests](../tests/Blink.Phase1.Tests/src/FolderNavigationTests.cpp)：`folder_navigation_watch_start_failure_releases_browse_to_report_real_error` |
+| T-TAB | [TabState](../src/Blink/src/TabState.cpp)、[TabWindowState](../src/Blink/src/TabWindowState.cpp)、main TabView callbacks | main 测试：`tab_locations_are_isolated`、`tab_histories_are_isolated`、`tab_selections_are_isolated`、`tab_async_execution_state_is_isolated`、`closing_last_tab_requests_window_close`、`closed_tab_invalidates_async_state` |
+| T-ROW | RowIdentity、TabState 的 SelectedCommittedRows、main selection sync | main 测试：`row_identity_distinct_hardlink_names`、`copy_selection_capture_preserves_distinct_hardlink_names_in_committed_order`、`select_all_cannot_reuse_previous_folder_rows_in_this_pc`；这些不证明实际 Ctrl/Shift 手势 |
+| T-VIEW | FolderViewPresentation、ItemVisibilityPolicy、TabState 投影 | main 测试：`view_modes_are_isolated_when_switching_tabs`、`view_switch_preserves_committed_rows_hardlink_selection_focus_sort_history_and_pending`、`visibility_show_hidden_does_not_expose_system_rows`、`visibility_window_policy_applies_to_inactive_and_new_tabs`、`visibility_real_hidden_file_can_be_shown_and_selected` |
+| T-WATCH | FolderWatcher/FolderChangeState、main watcher reconciliation | main 测试：`watch_native_external_create_invalidates_snapshot`、`watch_native_external_rename_received`、`watch_native_external_delete_received`、`watch_reconcile_prunes_deleted_or_renamed_row_selection`、`watch_window_shutdown_invalidates_all_tab_tokens` |
+| T-CLIP | [ClipboardFileTransfer](../src/Blink/src/ClipboardFileTransfer.cpp)、ClipboardCopyCache、main Publish/Paste | [ClipboardFileTransferTests](../tests/Blink.Phase1.Tests/src/ClipboardFileTransferTests.cpp)：`clipboard_batch_unicode_order_and_duplicate_paths_roundtrip_without_normalization`、`clipboard_batch_payload_is_exact_unicode_dropfiles_double_null_list`；[ClipboardCopySourceTests](../tests/Blink.Phase1.Tests/src/ClipboardCopySourceTests.cpp)：`typed_capture_files_keep_order_duplicates_hardlink_names_actual_parent_ids_and_default_destination_fields`、`typed_capture_actual_extended_long_directory_keeps_type_and_both_ids_without_scanning_children`；[MoveTransferTests](../tests/Blink.Phase1.Tests/src/MoveTransferTests.cpp) 补意图/缓存/续尾；纯 codec 测试不访问系统剪贴板 |
+| T-DROP | [FileDragData](../src/Blink/src/FileDragData.cpp)、[FileDragDropModel](../src/Blink/src/FileDragDropModel.cpp)、FileDragDropController | [FileDragDropTests](../tests/Blink.Phase1.Tests/src/FileDragDropTests.cpp)：`drag_real_data_object_transfers_forty_paths_without_storageitems_truncation`、`drag_same_volume_defaults_to_move`、`drag_different_volume_policy_defaults_to_copy`、`drag_unsupported_link_modifiers_never_silently_copy_or_move`、`drag_optimized_move_reports_no_source_delete_and_exactly_once_completion`、`drag_search_results_remain_unavailable_as_drop_targets` |
+| T-SHELL | [ShellContextMenuController](../src/Blink/src/ShellContextMenuController.cpp)、[ShellContextMenu](../src/Blink/src/ShellContextMenu.cpp)、[ShellMenuHost](../src/Blink.ShellMenuHost/src/main.cpp) | [SearchContextMenuTests](../tests/Blink.Phase1.Tests/src/SearchContextMenuTests.cpp)：`shell_menu_command_line_preserves_full_width_handles_coordinates_and_options`、`shell_menu_reply_accepts_native_selection_with_lf_without_claiming_completion`、`folder_shell_menu_accepts_file_and_directory_siblings_together`、`folder_shell_menu_keeps_distinct_hardlink_names_in_multi_selection`；协议/请求测试不是实际 Bandizip 验证 |
+| T-SEARCH | SearchResultValidation/SearchContextCommands/SearchCoordinator、TabRecord SearchIntent、main ExecuteSearchContextCommand | SearchContextMenuTests：`search_context_clipboard_uses_validated_result_instead_of_hidden_browse_selection`、`search_context_unsubmitted_draft_and_options_do_not_change_menu_target`、`search_context_new_query_generation_invalidates_old_menu`；[SearchIntegrationTests](../tests/Blink.Phase1.Tests/src/SearchIntegrationTests.cpp)：`search_follow_c_directory_defaults_to_whole_c_drive`、`search_selected_volumes_query_only_deduplicated_user_roots_without_discovery`、`search_retry_reuses_submitted_scope_depth_and_mode_while_retaining_new_draft`；fake RPC 与 [IndexServiceLiveProbe](../tests/Blink.Phase1.Tests/src/IndexServiceLiveProbe.cpp) 的 LIVE 行必须分开引用 |
+| T-PROP | [ItemProperties](../src/Blink/src/ItemProperties.cpp)、[PropertiesDialog](../src/Blink/src/PropertiesDialog.cpp)；系统页签是 ShellMenuHost | [ItemPropertiesTests](../tests/Blink.Phase1.Tests/src/ItemPropertiesTests.cpp)：`properties_real_file_reads_current_handle_metadata_instead_of_cached_row_size`、`properties_multi_selection_aggregates_files_and_directory_contents`、`properties_selected_junction_reads_link_object_without_counting_target`、`properties_same_path_replacement_is_reported_instead_of_disclosing_new_file_as_old_selection` |
+| T-OPEN | [FileActivation](../src/Blink/src/FileActivation.cpp)、[FileActivationHost](../src/Blink.FileActivationHost/src/main.cpp)、main ActivatePresentedRow | main 测试：`file_activation_helper_crash_and_nonzero_exit_are_never_success`、`file_activation_helper_arguments_roundtrip_path_and_full_identity`；后者是参数 roundtrip，不能证明所有文件关联应用均打开 |
+| T-COPY | FileCopyOperation/FileCopyBatch、DirectoryCopyOperation、MoveOperation/MoveBatch、FileOperationCoordinator | [FileCopyOperationTests](../tests/Blink.Phase1.Tests/src/FileCopyOperationTests.cpp)：`file_copy_cancel_after_real_progress_removes_owned_partial_and_preserves_source`、`file_copy_extended_long_source_and_destination_paths_preserve_exact_contents`；[CrossVolumeMoveTests](../tests/Blink.Phase1.Tests/src/CrossVolumeMoveTests.cpp)：`cross_directory_default_mixed_cross_volume_queue_moves_files_and_directories`、`cross_directory_partial_tree_cannot_be_replayed_as_root_conflict_or_recopied` |
+| T-MERGE | DirectoryCopyOperation::CopyDirectoryAndRemoveSource、MoveDirectoryMergeSafely、FileOperationCoordinator conflict resolver | [DirectoryMoveMergeTests](../tests/Blink.Phase1.Tests/src/DirectoryMoveMergeTests.cpp)：`directory_move_merge_same_leaf_native_move_keeps_file_identity`、`directory_move_merge_same_directory_file_keep_both_rebinds_nested_paths`、`directory_move_merge_cross_skip_retains_source_root_and_only_skipped_items`；[DirectoryMergeTests](../tests/Blink.Phase1.Tests/src/DirectoryMergeTests.cpp) 覆盖 Copy Merge |
+| T-DELETE | [DeleteOperation](../src/Blink/src/DeleteOperation.cpp)、DeleteConfirmationDialog、FileOperationCoordinator | [DeleteOperationTests](../tests/Blink.Phase1.Tests/src/DeleteOperationTests.cpp)：`delete_recycle_real_file_and_ads_restore_from_system_bin`、`delete_confirmed_permanent_nonempty_directory_has_no_recycle_item`、`delete_open_file_without_delete_sharing_reports_failure_and_retains_source`、`delete_recycle_junction_object_does_not_delete_target_contents`、`delete_skip_current_failure_continues_tail_without_replaying_completed_prefix` |
+| T-RELOCATION | FileOperationRelocation、main 已完成目录跟随 | [FolderRelocationTests](../tests/Blink.Phase1.Tests/src/FolderRelocationTests.cpp)：`relocation_real_same_volume_move_reenumerates_root_and_descendant_tabs_with_same_ids`、`relocation_real_cross_volume_rearms_root_and_descendant_watchers`；主模型新增 Merge 实际目录映射相关 5 项见 Slice21 日志，不用 UI8 代替 |
+
+## 7. 唯一 P0 最小切片与后续验证门槛
+
+已实施并由主模型验证：**顶部“查看”菜单，复用现有 Details/List/Grid 三个真实视图，再提供“显示 > 隐藏的项目”**。本切片没有顺带加八视图、预览面板、分组、排序改造、Shell/剪贴板平台或快捷键重构。
+
+改动将零散顶部视图/Hidden 控件放入可理解菜单。复用 SetFolderViewMode、SetShowHiddenItems/ItemVisibilityPolicy 与每 Tab 视图/窗口级 Hidden 状态，不从 checked 值另建真相。`FolderViewMode` 现在为 `Microsoft.UI.Xaml.Controls.DropDownButton`，UIA Button role，Invoke/ExpandCollapse 可用；Name 使用 `Command.View`（中文“查看”），HelpText 为实际 Details/List/Grid 文案。`TopViewMenu` 提供三项互斥 Toggle，`TopViewShow > TopViewShowHidden` 使用真实 Hidden 策略，SYSTEM 继续排除。
+
+下表把原 7 个验收编号映射到 B-VIEW 的 **13 个功能 check + 2 个退出/清理 check**。15 PASS 是报告中的实际检查数，不把包含未执行组合的验收行整体改为 PASS。
+
+| 新验收编号 | 操作与通过判据 | 测试层次 | 当前结果 |
+| --- | --- | --- | --- |
+| EXP-P0-VIEW-01 | 顶部 View 的三真实视图、Show 层级、实际入口/Automation ID 与唯一勾选 | B-VIEW #01 自有生产窗口/路径；#02 qualified DropDownButton、Button role、Invoke/Expand、三项 Toggle/Show/Hidden；#03 再查唯一勾选 | **PASS（所列结构与 zh-CN 行为）**；en-US 实机 NOT RUN |
+| EXP-P0-VIEW-02 | 三实际布局，唯一勾选，路径、选择/行序与排序保留；右键变化同步顶部 | B-VIEW #03 用 FolderEntries ClassName（GridView/ListView）与四个可见详情列头区别实际布局，逐次保留路径/选择/行序/sort；#04 ContextViewList→顶部 List，再切 Grid；T-VIEW 在 B-NATIVE 重跑 | **PASS（所列布局/状态）**；GUI 历史栈与列表焦点跨视图组合未单独观测，NOT RUN |
+| EXP-P0-VIEW-03 | Hidden 文件/目录真实显隐、SYSTEM/SYSTEM+Hidden 始终不显示，隐藏选择不复活 | B-VIEW #05 核对真实属性/可见行，#06 隐藏选中项被移除，再显示不恢复旧选择；顶部 checked 重新读取。旧独立 checkbox 已替换，不设假同步项 | **PASS（本地目录规则）** |
+| EXP-P0-VIEW-04 | Tab 各自视图，窗口级 Hidden 同步既有/新 Tab；树/搜索的组合另验 | B-VIEW #07 两 Tab 分别 Grid/List 与不同路径；#08 已有非活动 Tab/新第三 Tab 采用同一 Hidden，原视图仍独立；B-NATIVE 既有状态测试保持 | **部分 PASS：现有/新 Tab**；树展开、Search Hidden integration **NOT RUN**。helper/索引协议不变是输入/摘要事实，不作未采集的运行跟踪结论 |
+| EXP-P0-VIEW-05 | 纯键盘打开/进入 Show/切换/取消及焦点返回；文本焦点优先级 | B-VIEW #10 实际 PID 绑定 `Space Home Down Down Down Right Enter`，再以两级 Esc 关闭并返回 `FolderViewMode`；#13 `Ctrl+L/Ctrl+A/Delete` 只改地址文本，原文件/行序/View 保留 | **部分 PASS：所列菜单与地址键**；搜索框、名称/其他模态对话框、IME、文本剪贴板与撤销 **NOT RUN** |
+| EXP-P0-VIEW-06 | 空目录/ThisPC/搜索/枚举中能力与旧菜单生命周期 | B-VIEW #09 保存旧 top peer，切另一 Tab 后 Invoke 返回但两 Tab 布局/路径均未变；#11 空目录三布局/Hidden 无旧行；#12 ThisPC 三布局/Show 保持虚拟位置；#14 自有窗口正常 exit0 | **部分 PASS：上述边界与切 Tab 旧 peer**；搜索页、枚举中 disabled 快照、导航/关闭后旧 top peer 的专项 GUI **NOT RUN** |
+| EXP-P0-VIEW-07 | 两配置构建/回归、资源/输入摘要，选择实际菜单回归与清理 | B-NATIVE 两配置各 1516 PASS/0 FAIL/4 权限 SKIP、235 输入/369 资源；B-VIEW #04 右键/顶部视图同步，#15 逐路径/字节确认后清理 fixture，compiler-temp 已清 | **PASS（本轮构建、普通回归、15 项有限 GUI）**；未把 H-FOLDER/H-SEARCH 的 39 项当作本轮重跑，完整原生/搜索菜单 GUI 仍仅历史证据 |
+
+后续快捷键、F2 主名初选、地址 Esc、文本/IME 焦点、外部剪贴板完成反馈、真实双向拖放、普通/搜索属性一致性分别列独立切片，不能通过这一次 View 菜单通过就关闭其验收项。完整 P0 日常行为门槛目前尚未达成。
+
+## 8. 可复现执行约定与工作台归属
+
+以下为 README 的真实构建/普通回归入口。本轮主模型的执行时间、退出码和二进制摘要已记入 B-NATIVE；本文更新代理没有另跑：
+
+```powershell
+.\build.ps1 -Configuration Debug
+& .\x64\Debug\Blink.Phase1.Tests.exe
+.\build.ps1 -Configuration Release
+& .\x64\Release\Blink.Phase1.Tests.exe
+```
+
+本轮新的公开可重复入口是 [run-blink-explorer-view-menu-smoke.ps1](../scripts/run-blink-explorer-view-menu-smoke.ps1)。默认 `-Configuration Release` 使用项目标准 runtime；以候选重现最终 UI 检查可执行：
+
+```powershell
+.\scripts\run-blink-explorer-view-menu-smoke.ps1 -Binary .\.build\explorer-ui-p0-view-menu\runtime\Release\Blink.exe
+```
+
+报告固定归入 `.build/explorer-ui-p0-view-menu/integration/ui-view-menu-report.json`。`scripts/run-blink-view-smoke.ps1`、`scripts/run-blink-visibility-smoke.ps1` 已适配新入口并通过本轮 Parser，但未执行的旧 smoke 不能因语法通过改写成 GUI PASS。历史普通/搜索菜单脚本结果仍保留各自候选 SHA/范围。
+
+新切片测试只用 `.build/explorer-ui-p0-view-menu` 中预先分类的 integration/runtime/reference/ui-fixtures 目录，实际日志/报告写明 PID/HWND、版本/DPI/语言、输入方式、数据归属、PASS/FAIL/SKIP、候选 SHA。编译保持单并发；未知耗时任务按 async-task-watcher 管理。不启动/结束用户已有窗口，不切换或绕过锁屏，不为环境缺项安装第三方程序。
+
+本轮 View 脚本不使用剪贴板，也不提交文件变更命令；只生成并准确核对自有 fixture 路径/UTF-8 字节/属性，未知数据保留并报告，正常关闭后清理。其他含剪贴板的历史/后续检查仍应核对自有 Copy/Cut sequence/完整路径/intent；用户覆盖时不触发依赖动作，只在仍属测试时恢复可恢复内容，不把纯文本恢复称为富格式无损恢复。失败 attempt 只留简明根因/必要证据，不无限复制二进制/源码包。
+
+本文归属 `D:\Work\project\Blink_文件管理器\docs`（WIN）；纯文档，无启动命令。该交互更新只修改本文，不另建产物/重跑；工作区已有 Blink 索引由主模型统一同步本轮阶段 B 状态。

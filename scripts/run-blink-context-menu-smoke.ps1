@@ -47,7 +47,7 @@ function Submenu([string]$id){
 function Dismiss { [BlinkMenuProbeInput]::Key($process.Id,27) }
 function EmptyMenu { (ById 'FolderEntries').SetFocus();[BlinkMenuProbeInput]::Key($process.Id,0x5D);WaitFor 'Application key opens empty-folder menu' {$null -ne (ById 'ContextNewFolder')} }
 function SelectedCount {return (ById 'FolderEntries').GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection().Count}
-function ComboValue([string]$id){$selected=(ById $id).GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection();return $selected[0].Current.Name}
+function ComboValue([string]$id){if($id -eq 'FolderViewMode'){return (ById $id).Current.HelpText};$selected=(ById $id).GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection();return $selected[0].Current.Name}
 
 try {
  $psi=[Diagnostics.ProcessStartInfo]::new();$psi.FileName=Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe');$psi.WorkingDirectory=Split-Path -Parent $psi.FileName;$psi.UseShellExecute=$false;$psi.EnvironmentVariables['BLINK_STARTUP_TELEMETRY']=Join-Path $runRoot 'startup.log'

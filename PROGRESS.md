@@ -1,5 +1,13 @@
 # Blink Progress
 
+## Explorer UI 审计与查看/显示菜单 — 2026-11-08
+
+- **STAGE A COMMITTED / ONE P0 SLICE IMPLEMENTED / BOTH BUILDS AND 1516 REGRESSIONS PER CONFIG / 15 OWNED GUI CHECKS VERIFIED / DEFAULT PUBLISHED AND OPENED**。用户任务书原样归docs，先纯文档提交e497600，审计UI树、初始210条菜单记录和106项交互验收；再只实施顶部查看/显示。现菜单台账去掉旧控件重复行，共206条：54已验证、21待人工、40部分、68暂缓、4设计边界、19系统依赖，不将行数当功能完成率。
+- 原三视图及窗口级Hidden收拢为WinUI DropDownButton/MenuFlyout，勾选/HelpText来自模型，动作复用FolderCommand/SetShowHiddenItems；排序仍原入口，右键与顶部状态一致。235冻结输入/369资源；最终Debug/Release完整构建及各1516 PASS/0 FAIL/4权限1314 SKIP，四脚本静态解析通过。
+- 最终15项GUI全过：3真实布局/唯一勾选、路径/选择/排序保留、右键同步、Hidden/SYSTEM、双标签/新标签策略、旧peer、纯键盘及焦点、空目录/ThisPC、地址Ctrl+A/Delete不误操作文件、正常退出0与按字节清理。实际Blink报告DPI96、theme未捕获；Explorer25H2/26200.9711/zh-CN参考为DPI120，只有View11+Show新增5的限定UIA事实和主窗口图；popup无截图，24H2/人工DPI主题/树搜索等仍NOT RUN。
+- 首跑因harness误用短UIA类名1PASS/1FAIL；自有只读probe后修成精确限定类名并加Button/Invoke/Expand断言。旧文案候选10PASS后正常关闭供最终字节更新，partial及主动关闭原因保留；最终当前字节完整重跑15PASS，无强杀。查找改为本窗口及同PID顶层HWND，断言不放宽。
+- 原默认预览经空闲检查正常关闭；发布5文件并校验EXE/PRI/helper/service，新默认窗口PID3344可见。索引/文件操作引擎/服务/协议和真实库不改；3子代理分工、主模型集成、compiler1。清理和最近两恢复点见本轮integration记录，[交接](docs/EXPLORER_VIEW_MENU_HANDOFF.md)。下一切片完整命令栏，再逐项地址焦点/F2等；全UI/P0/项目未完成。
+
 ## 目录移动合并 — 2026-11-08
 
 - **BOTH BUILDS / 1516 REGRESSIONS PER CONFIG / 8 OWNED GUI CHECKS VERIFIED / DEFAULT PUBLISHED AND OPENED**。同/跨盘目录移动合并复用原目录计划、文件操作及唯一coordinator；目标目录与独有项保留，内部冲突逐项Replace/Skip/KeepBoth/Cancel。正常Skip留源，取消/失败保留前缀，已变更项只Skip/Cancel续尾；同卷叶保留身份，实际移空目录按真实目标更新标签。

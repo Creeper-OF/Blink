@@ -19,7 +19,8 @@
   <data name="View.Details" xml:space="preserve"><value>详细信息</value><comment>文件夹详细信息视图。</comment></data>
   <data name="View.List" xml:space="preserve"><value>列表</value><comment>文件夹紧凑列表视图。</comment></data>
   <data name="View.Grid" xml:space="preserve"><value>网格</value><comment>文件夹图标网格视图。</comment></data>
-  <data name="View.ShowHiddenItems" xml:space="preserve"><value>显示隐藏项目</value><comment>窗口级隐藏项目开关。</comment></data>
+  <data name="View.Show" xml:space="preserve"><value>显示</value><comment>查看菜单的显示子菜单。</comment></data>
+  <data name="View.ShowHiddenItems" xml:space="preserve"><value>隐藏的项目</value><comment>窗口级隐藏项目开关。</comment></data>
   <data name="View.ShowHiddenItemsHint" xml:space="preserve"><value>作用于所有标签和导航树。系统项目仍保持隐藏。</value><comment>隐藏项目范围与系统项目策略。</comment></data>
   <data name="Sort.Ascending" xml:space="preserve"><value>升序</value><comment>当前文件夹排序方向。</comment></data>
   <data name="Sort.Descending" xml:space="preserve"><value>降序</value><comment>当前文件夹排序方向。</comment></data>

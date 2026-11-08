@@ -1,0 +1,249 @@
+# Explorer UI 事实基线与交互规范
+
+审计日期：2026-11-08。阶段A源码基线：`7135a14`；只读规范提交：`e497600`。其后只实施本文件第8节的首个P0“查看/显示”切片，当前已完成实现与限定验证。
+
+本规范依据用户提供的《Blink × Windows 11 文件资源管理器：完整 UI、菜单与交互兼容任务书》完整 316 行，以及实际窗口、导航、列表、搜索、菜单、状态和对话框源码编制。任务书要求的目标环境是 Windows 11 24H2 x64；这不等于本文件已在该版本完成整套界面验收。
+
+本文编制者仅核对源码、原始验证记录和官方资料。主模型在只读提交`e497600`之后统一构建并运行首个P0受控GUI，结果为15 PASS/0 FAIL/0 SKIP；另行完成限定的Explorer查看/显示参考观察。两者环境采样和验证边界分开记录于第7节，不能外推为整套界面验收。本文没有用官方文档代替实机结果。
+
+## 1. 基线、证据与状态口径
+
+最新事实按 `PROGRESS.md` 和源码判断，不沿用历史计划中的旧 TODO。当前基线已有目录 Copy/Move Merge、普通目录与搜索的共同菜单外观、路径复制和独立系统扩展承载；这些不再列为缺失。
+
+| 证据 | 可支持的结论 | 不能外推的结论 |
+| --- | --- | --- |
+| [首个P0交接](EXPLORER_VIEW_MENU_HANDOFF.md)；`.build/explorer-ui-p0-view-menu/integration/native-validation.json`及`ui-view-menu-report.json` | 首个P0最终235输入/369资源；Debug、Release各1516 PASS/0 FAIL/4权限SKIP；受控GUI 15 PASS/0 FAIL/0 SKIP | 限View/Show及其与现有状态的集成，不等于全P0或全任务书完成；默认Release已发布并打开，实际证据见本轮published-runtime/default-runtime-opened记录 |
+| 阶段A历史：`PROGRESS.md`的目录移动合并段；[Slice21交接](PHASE1D_SLICE21_HANDOFF.md)；`.build/phase1d-slice21/integration/native-validation.json` | 235 冻结输入、368 中英/fallback 资源；Debug/Release 各 1516 PASS、0 FAIL、4 权限 SKIP；构建并发 1 | 不是整个 Explorer UI、全部设备或全部主题认证 |
+| `.build/phase1d-slice21/integration/ui-move-merge-report.json` | 自有生产窗口 8 PASS；真实根 Merge、子项 Replace/Skip、字节与来源保留、完整合并根/空目录移除、正常退出和清理 | 本轮没有 behind-source-child Tab 跟随的 GUI 验收 |
+| [普通目录菜单交接](FOLDER_MENU_SYNC_HANDOFF.md)；`.build/folder-menu-sync/integration/ui-folder-menu-report.json` | 历史普通目录 21 项；三视图与排序实际顺序、路径、粘贴、属性、过期选择；另有搜索 18 项记录 | 不是所有 12 类右键上下文齐全，也不是像素对照 |
+| [搜索范围交接](SEARCH_SCOPE_HANDOFF.md)；`.build/search-scope/integration/ui-scope-report.json` | 历史范围 UIA 19 PASS，按标签草稿、实际范围与提交行为已有证据 | 不是所有搜索体验、首屏性能或全键盘矩阵通过 |
+| [搜索性能交接](SEARCH_PERFORMANCE_HANDOFF.md) | IPC 性能与真实 C/D 索引、USN、Open/Locate 已验证；同卷更新/保存 Busy 和实际 UI 首屏仍待优化 | 不宣称与 Everything 等速 |
+
+状态使用任务书规定的六种值：`IMPLEMENTED_VERIFIED`、`IMPLEMENTED_NEEDS_MANUAL`、`PARTIAL`、`DEFERRED`、`UNSUPPORTED_BY_DESIGN`、`OS_DEPENDENT`。状态必须限定到具体能力；同一控件可以功能已验、缩放与读屏未验。后文 `NOT RUN` 是验证状态，不是新增的产品能力状态。
+
+## 2. 实际窗口控件树
+
+以下为实际交付控件树：窗口主体沿用`7135a14`阶段A结构，顶部View/Show分支按首个P0更新。阶段A当时是`FolderViewMode` ComboBox加独立`ShowHiddenItems` CheckBox；两者已被下面的DropDownButton/菜单替换。尺寸单位为WinUI逻辑像素，不是截图中的物理像素。`#`后为AutomationId；未列ID的节点不代表没有标准automation peer。
+
+```text
+Window / AppWindow / 系统 caption buttons
+  ExtendsContentIntoTitleBar=true；SystemBackdrop=MicaBackdrop
+  window_frame_: Grid [Auto, *]
+  ├─ TitleBar #BlinkTitleBar [高48；系统管理拖动区和caption保留区]
+  │  ├─ FontIconSource + Blink标题
+  │  └─ Content: TabView #WindowTabs [高48；Add按钮可见]
+  │     └─ TabViewItem [Tag=TabId；Header=TabTitle；Close；文件拖放到Tab]
+  └─ root_: Grid [Padding=12,10,12,8；行48,*,30,Auto]
+     ├─ 行0 navigation_bar: Grid [40,40,40,40,*,220]
+     │  ├─ Back / Forward / Up / Refresh Button
+     │  ├─ path_box_: TextBox [常驻文本地址；Enter提交]
+     │  └─ search_box_: TextBox #SearchQuery [Enter搜索；Esc离开搜索]
+     ├─ 行1 body: Grid [220,*]
+     │  ├─ navigation_pane_: ScrollViewer #NavigationPane [唯一纵向滚动owner]
+     │  │  └─ StackPanel
+     │  │     ├─ “位置”标题 + navigation_quick_list_: ListView [单选]
+     │  │     ├─ Border分隔线 + “驱动器”标题
+     │  │     └─ navigation_tree_: TreeView [单选；按需异步展开]
+     │  └─ 右侧同一单元格按browse/search切换
+     │     ├─ content_grid_: Grid [Auto,Auto,*]
+     │     │  ├─ 横向StackPanel [MinHeight=40]
+     │     │  │  ├─ DropDownButton #FolderViewMode [MinWidth=96]
+     │     │  │  │  Name=Command.View（查看/View）；HelpText=当前View模式文案
+     │     │  │  │  └─ MenuFlyout presenter #TopViewMenu [Opening重建]
+     │     │  │  │     ├─ Toggle #TopViewGrid / #TopViewList / #TopViewDetails
+     │     │  │  │     │  [网格/列表/详细信息；按模型互斥勾选]
+     │     │  │  │     └─ 分隔线 + SubItem #TopViewShow [显示/Show]
+     │     │  │  │        └─ Toggle #TopViewShowHidden [隐藏项目]
+     │     │  │  ├─ 排序ComboBox #FolderSortField [Width=150]
+     │     │  │  └─ 方向Button #FolderSortDirection
+     │     │  ├─ details_header_: Grid [高32；名称*/类型140/大小110/修改180]
+     │     │  │  └─ 4个Button列头，点击排序
+     │     │  └─ entries_: ListView或GridView #FolderEntries [Extended选择]
+     │     └─ search_surface_: SearchPresentation Grid [Auto,Auto,Auto,Auto,*]
+     │        ├─ command_area: StackPanel
+     │        │  ├─ #SearchEffectiveScope + 横向可滚动动作行
+     │        │  │  [#SearchSubmit/#SearchRetry/#SearchOpen/#SearchLocate/#SearchLeave]
+     │        │  └─ Expander #SearchAdvanced [默认收起]
+     │        │     ├─ ComboBox #SearchScope/#SearchMode
+     │        │     ├─ TextBox #SearchSelectedVolumes/#SearchSelectedFolder
+     │        │     ├─ #SearchUseCurrentFolder
+     │        │     └─ #SearchIncludeSubfolders/#SearchShowHiddenItems
+     │        ├─ summary TextBlock
+     │        ├─ messages: StackPanel [action、limit TextBlock]
+     │        ├─ 逐卷状态Expander [内部ScrollViewer MaxHeight=140]
+     │        └─ ListView #SearchResults [Single选择；名称/全路径/卷]
+     ├─ 行2 status_bar: Grid [*,140,180]
+     │  ├─ status_: TextBlock [浏览/打开/错误/监听状态]
+     │  ├─ selection_status_: TextBlock [选中数量]
+     │  └─ Button #IndexServiceStatus → Flyout
+     │     └─ ScrollViewer [MaxHeight=420] → StackPanel [Width=360]
+     │        [概要、操作、#IndexVolumeRoot、逐卷状态、
+     │         #IndexServiceEnable/#IndexVolumeBuild/#IndexServiceRetry]
+     └─ 行3 operation_panel_: Grid [*,Auto,Auto,Auto；按状态显示]
+        [#FileOperationStatus、#FileOperationCancel、#NewFolderRetry、#DeleteSkip]
+```
+
+临时可见面：普通目录 `MenuFlyout` presenter `#FolderContextMenu`，搜索 `#SearchContextMenu`，各自的子菜单；WinUI `ContentDialog` 名称编辑、冲突、永久删除确认、只读属性；搜索/普通目录“压缩与更多系统选项…”和搜索系统属性由进程外 `Blink.ShellMenuHost` 展示。菜单完整树及 12 类场景见[菜单矩阵](EXPLORER_MENU_MATRIX.md)。
+
+入口：`main.cpp:493 OnLaunched`、`:745 BuildWindowFrame`、`:804 BuildUi`；P0当前源码`:2882 BuildFolderViewCommands`、`:3270 PopulateFolderViewMenu`、`:3686 SyncFolderViewCommands`、`:3725 SetShowHiddenItems`。其它基线引用行号依据阶段A`7135a14`，当前源码以同名函数定位；`SearchPresentation.cpp:218 Build`、`IndexServicePresentation.cpp:70 Build`未因本切片改写。DropDownButton的实际UIA ClassName为`Microsoft.UI.Xaml.Controls.DropDownButton`，不是旧ComboBox，也不能只按短名断言。
+
+## 3. 权威状态、命令和异步发布
+
+```mermaid
+flowchart TD
+  User[按钮、菜单、键盘、拖放] --> Owner[当前Tab与请求上下文]
+  Owner --> Tabs[TabWindowState / TabRecord]
+  Tabs --> Nav[TabState / NavigationModel]
+  Nav --> Browse[BrowseController / BrowseState]
+  Browse --> Commit[匹配TabId、token和generation后提交]
+  Commit --> View[TabUiState与WinUI投影]
+  Owner --> Query[SearchCoordinator / SearchState]
+  Query --> ReadOnly[IndexClient / 只读IndexService]
+  Query --> SearchView[SearchPresentation]
+  Owner --> Policy[FolderCommand / 能力判断]
+  Policy --> Ops[唯一FileOperationCoordinator]
+  Policy --> Clipboard[ClipboardFileTransfer worker]
+  Policy --> Activation[FileActivationController / 独立Host]
+  Owner --> Shell[ShellContextMenuController / 独立ShellMenuHost]
+```
+
+| 状态/对象 | 真相来源 | 窗口绑定和已有约束 |
+| --- | --- | --- |
+| Tab顺序、活动Tab、生命周期 | `TabWindowState.h:35 TabRecord`、`TabWindowState.cpp:109 CreateTab/:121 CloseTab/:164 ActivateTab` | `TabViewItem.Tag=TabId`；切Tab发布当前模型；关闭清理该Tab的browse/search/watcher，不从控件标题识别Tab |
+| 当前位置与历史 | `Location.h:10`、`NavigationModel.h`、`NavigationModel.cpp:195 Snapshot` | 只有 ThisPC/Folder 两类 Location；ThisPC不编码成磁盘路径；path_box_只是显示/编辑输入 |
+| 在途浏览与已提交页面 | `BrowseState.h:14`；`TabState.h:19`；`TabState.cpp:58 CommitBrowse` | BrowseState为Idle/Loading/Completed/Failed；FolderState是Idle/Ready/Empty，不能混写成同一枚举。新请求失败不改原committed path/history；状态文案说明失败 |
+| 页面结果与选择 | `TabState`、`RowIdentity`；`main.cpp:640 TabUiState` | `FileIdentity`标对象，RowIdentity区分硬链接名称；虚拟容器/行号只作展示索引；列表选择回写模型 |
+| 视图与排序 | `TabState.view_mode_/sort_`；`main.cpp:3560 ApplyFolderViewMode/:3589 SetFolderViewMode/:3650附近 SetFolderSort` | Details/List/Grid共用同一行对象；改视图不导航、不重读目录；按Tab保存。重新创建控件后的焦点恢复带TabId和view generation |
+| 隐藏项目 | `ItemVisibilityPolicy`、`TabWindowState::SetVisibilityPolicy` | 当前是窗口级统一策略，传播各Tab和树；默认隐藏Hidden，System始终不显示；搜索隐藏开关复用该策略。不是跨重启持久化设置 |
+| 搜索 | `TabRecord`、`SearchState.h:8`、`SearchPresentation.cpp:445 Update` | 每Tab独立query草稿、范围、模式、selection与动作代次；FollowLocation从committed Location解析；输入不逐字符RPC，Enter/搜索提交；retry复用已提交query |
+| 搜索动作/菜单 | `SearchContextSelection{tab_id,query_generation,result}` | 传真实结果副本并重新校验目标；空白右键不复用旧selection；隐藏、切Tab、结果更新使旧菜单失效 |
+| 普通目录菜单 | `main.cpp:2962 FolderMenuContext/:2996 IsFolderMenuContextCurrent` | 绑定Tab、呈现、view、operation、selection generation及Location；多选不是只取右击的一行 |
+| 文件操作与剪贴板 | `FileOperationCoordinator`、`FileOperationOrigin`、`ClipboardCopyCache` | Copy/Move/Delete/新建/重命名走既有所有权；CF_HDROP和MOVE序列复用原身份；已提交前缀不因续行或再次粘贴重放 |
+| 系统菜单和属性 | `ShellContextMenuController`、`Blink.ShellMenuHost/src/main.cpp:257/518/525/572` | `IContextMenu/2/3`查询、消息转发和InvokeCommand；Shell DLL不在Blink.exe加载。完整现代IExplorerCommand覆盖未实现，不以经典菜单冒称 |
+| Provider | 现有Provider IPC/Host原型；`PRODUCT_SCOPE.md:18` | 当前UI没有SFTP/WebDAV连接视图；未来远端遵守协议语义，不伪装成本地盘路径 |
+
+保留：普通用户窗口、本地文件系统权威模型、只读索引协议和现有进程隔离。不为本次外观调整重写main、导航/索引模型或文件操作管线。
+
+## 4. 区域能力与实际差距
+
+| 区域 | 阶段A事实及首个P0更新 | 与目标任务书的差距 |
+| --- | --- | --- |
+| 标题栏 | WinUI TitleBar、Tab同排、系统caption和Mica已接入；空白拖动有历史证据；`IMPLEMENTED_NEEDS_MANUAL`用于完整窗口矩阵 | Snap、多显示器移入移出、双击/resize、激活态、高对比度、全部DPI未完成本次统一验证 |
+| 标签 | 新建、切换、关闭、当前标题与后台取消有模型/回归；`PARTIAL` | 未见模型级重排API或相应同步、标签右键命令、拖出新窗口；Tab默认行为不能直接当完整功能交付。未实现持久滚动位置/完整会话恢复 |
+| 地址/导航 | Back/Forward/Up/Refresh与已提交历史绑定；文本路径Enter；Ctrl+L；`PARTIAL` | 无面包屑、段级菜单、编辑/显示切换、候选历史；path KeyDown只有Enter，无显式Esc恢复与Alt+D；无每Tab地址草稿字段。UNC必须单独实测，不能凭NormalizePath宣称网络功能完整 |
+| 搜索 | 当前整盘/全盘默认范围、指定多盘/目录/递归、四名称模式、明确有效范围；已有19项历史GUI；`IMPLEMENTED_VERIFIED`限这些流程 | 顶部placeholder是固定资源，不随当前目录格式化；无预览、内容全文或拼音承诺；同卷Busy/首屏量化仍待做 |
+| 顶部命令组织 | 首个P0已交付“查看”DropDownButton：Grid/List/Details三Toggle，显示>隐藏项目；保留排序Combo，移除旧独立隐藏CheckBox。该局部`IMPLEMENTED_VERIFIED`；整条命令栏仍`PARTIAL` | 尚无完整New/Cut/Copy/Paste/Rename/Delete/Share/More CommandBar；没有命令溢出。新菜单只展示已有能力，不补装饰入口 |
+| 左侧位置与树 | 已有用户目录/桌面/下载/文档/ThisPC/可访问固定与可移动卷；异步Lazy Load、单一纵向滚动；`PARTIAL` | “主文件夹”是实际用户目录，不是Explorer Home聚合页；无固定/取消固定、图片/音乐/视频、网络发现或导航节点专属右键。光驱/网络映射盘未由当前ThisPC枚举纳入 |
+| 文件区 | Details/List/Grid；Extended选择，双击/Enter、排序、隐藏策略、异步增量投影；`IMPLEMENTED_VERIFIED`限已记录功能 | 当前图标只分文件/目录glyph；无系统类型图标、缩略图、快捷方式箭头、覆盖状态；List为纵向列表，不冒称Explorer全部视图 |
+| 详细信息列 | 名称/类型/大小/修改四列Button排序；`PARTIAL` | 没有列宽拖拽、重排、显隐、动态属性列或列头专属菜单；分组未实现 |
+| 选择/重命名 | 模型选择和原队列重命名已实现；`PARTIAL` | 标准控件提供部分键鼠操作，但框选、复选框、全部键鼠组合仍待验证；F2当前ContentDialog统一SelectAll，包含扩展名，不是主文件名选区 |
+| 详情/预览 | 无详情侧栏或预览面板；`DEFERRED` | 不提供无效“预览/详情”开关；格式解码及第三方预览隔离应独立切片 |
+| 状态栏 | 浏览加载/空/错误、选中数量、索引状态与操作状态已接；`PARTIAL` | 不显示选中总大小或完整传输速度/剩余量；未实现暂停，不增加装饰按钮 |
+| 属性 | 普通目录为Blink只读统计ContentDialog；搜索可调用完整系统属性；`PARTIAL` | 两入口已有实测但并非属性编辑器；驱动器、所有特殊对象/原生页签矩阵仍需独立验证 |
+| 外部剪贴板/拖放 | CF_HDROP、Copy/Move、修饰键、异步准备及实际队列已有回归；`PARTIAL` | 外部clipboard完成反馈和剪切淡化外观仍待补；Alt/链接拖放、右键拖放、FileDescriptor/FileContents虚拟文件未提供 |
+
+源码定位：ThisPC入口 `Location.cpp:54/91/114`；地址 `main.cpp:902`；工具条 `:2881`；模板 `FolderViewPresentation.cpp:9/29/43`；类型图标 `FolderViewFormatting.cpp:237`；状态 `:264 FormatBrowseActivity`；F2选区 `FolderNameDialog.cpp:61`；拖放能力 `FileDragDropModel.cpp:62`。更多对象/菜单差异以菜单矩阵为准。
+
+## 5. 焦点与快捷键规范
+
+现有焦点路径按XAML层次和标准控件行为运行；没有一套已验收的自定义F6全窗格环。下表区分显式Blink实现与WinUI默认，不能因为main没有手写快捷键就判断标准控件完全缺失。
+
+| 输入区域/按键 | 当前绑定或行为 | 状态/验证边界 |
+| --- | --- | --- |
+| 窗口Ctrl+T / Ctrl+W | `main.cpp:831`，新Tab/关当前Tab；最后一Tab关闭窗口；操作对话框打开时不执行 | 模型与入口已有；全部焦点/IME组合 `IMPLEMENTED_NEEDS_MANUAL` |
+| TabView的Ctrl+Tab / Ctrl+Shift+Tab / Ctrl+F4 | WinUI默认相邻切换/触发TabCloseRequested；Blink已处理SelectionChanged和关闭事件 | 框架文档有据，不列“无实现”；Blink中列表/编辑/菜单/对话框焦点的全窗口表现 `IMPLEMENTED_NEEDS_MANUAL` |
+| Ctrl+L；Alt+Left/Right/Up；F5 | `main.cpp:849`、`:862`，分别地址全选、历史/上级、刷新 | 已有导航入口；Alt+D/F4/F6/Shift+F6/F3未见额外Blink绑定，分别登记后续需求，不猜Explorer版本细节 |
+| 地址TextBox Enter | `main.cpp:908` → BrowseAsync；提交前文本不代表committed Location | 已实现；Esc恢复、错误后焦点返回、每Tab草稿 `DEFERRED`后续切片 |
+| 搜索Ctrl+F / Ctrl+E；Enter/Esc | `main.cpp:856/927`；焦点搜索全选，提交/离开；高级路径/卷输入支持Enter提交 | 已有范围GUI；IME与全部文本编辑组合待验 |
+| 顶部查看Space/方向键/Enter/Esc | 本轮受控InputSite消息走实际WinUI菜单；Space打开，Home/Down/Right进入Show，Enter切Hidden；Esc/Esc取消，焦点回`FolderViewMode` | `IMPLEMENTED_VERIFIED`限本轮GUI第10项；全部实物键盘、主题/DPI和IME组合仍NOT RUN |
+| 文件区Ctrl+A / Enter | `main.cpp:3445`；ScopeOwner为列表，选择权威模型全部项/打开焦点项 | 已实现，地址/对话框不借用该列表动作 |
+| 文件区Ctrl+C/X/V、F2、Alt+Enter、Ctrl+Shift+N | `main.cpp:3451/3468/3499` → 唯一ExecuteFolderCommand | 已实现；当前名称对话框SelectAll含扩展名，列明确P0缺口 |
+| 文件区Delete / Shift+Delete | `main.cpp:3472` PreviewKeyDown保留Shift，Ctrl/Alt修饰不落删除；永久删除走确认 | 功能已验；不会给文本编辑框新绑同名全局删除 |
+| 文件区App键 / Shift+F10 | `main.cpp:3509`附近 → ShowKeyboardFolderContextMenu；鼠标ContextRequested识别命中行/背景 | 已接；菜单边缘方向、回焦与多DPI待验 |
+| 搜索结果Enter / Ctrl+Enter / Alt+Enter | `SearchPresentation.cpp:390`；打开/定位/属性，各自有当前selection与query gate | 已有历史GUI；单选，不冒称搜索多选 |
+| 搜索结果C/X/V、F2、Delete、Shift+Delete、App键/Shift+F10 | 同文件区语义，但携带SearchContextSelection，Paste明确到结果父目录 | 已验基本动作；不得落入背后browse selection |
+| TextBox Ctrl+A/C/X/V、Delete、Undo/Redo | 保留标准文本编辑；文件区accelerator设置ScopeOwner，不覆盖文本 | 本轮GUI第13项已验地址Ctrl+A/Delete仅改文本且保留文件/选择/视图；其余编辑快捷键、Narrator、IME和系统输入法完整组合NOT RUN |
+| 列表Ctrl/Shift选择、方向/Home/End/PageUp/PageDown；Tab/Shift+Tab | 标准ListView/GridView/TreeView行为，选择变化写回TabState | 没有全套实物键盘、框选、触摸证据；`IMPLEMENTED_NEEDS_MANUAL` |
+| 文件操作Ctrl+Z/Y、空格预览、F11、Ctrl+Shift+数字视图 | 没有当前Blink文件操作/预览命令 | `DEFERRED`；文本框自己的编辑Undo不属于文件操作Undo |
+
+焦点约束：菜单、视图切换和后台发布不得夺取地址/搜索/对话框的编辑焦点；只有原焦点确在文件列表时，才按原TabId和呈现代次恢复文件行。既有实现见 `main.cpp:3589 SetFolderViewMode`、`:6697 BindFolderViewToActiveTab`；新界面须复用这些入口。标准菜单方向键、Enter和Esc交由WinUI，不额外注册与现有动作重复的accelerator；快捷键提示文本不等于执行绑定。
+
+对话框：名称编辑主按钮由合法性实时启用，默认Primary；冲突和永久删除确认默认Close，Enter不能默认覆盖/永久删除；Properties为只读且后台统计可取消。入口为 `FolderNameDialog.cpp:35/50/61`、`FileCopyConflictDialog.cpp:42`、`DeleteConfirmationDialog.cpp:27`、`PropertiesDialog.cpp:49`。对话框关闭后所有焦点还原、Alt+F4和IME体验仍须真机检查。
+
+## 6. 主题、密度、尺寸与UI Automation
+
+- `App.xaml`只引入标准`XamlControlsResources`。窗口没有私有强制Light/Dark开关，使用实际主题；`main.cpp:779/787`把`ActualThemeChanged`同步到caption配色。Mica与系统caption属于系统能力，后台、减少透明度等情况下的最终材料效果未在本次验证。
+- 共同菜单继续使用WinUI模板和主题画刷：`ContextMenuAppearance.h:11`设置8圆角、4外padding、260–420宽，32最小行高、10/6项padding、16px Segoe Fluent Icons；继承anchor.ActualTheme。阴影、焦点、子菜单展开方向由WinUI处理，不能据此声称所有高对比度组合已通过。
+- 普通文字未自绘字形，使用WinUI默认字体和控件；列表Details 32高、List 28高、Grid 136×112，文本使用裁剪/换行。当前没有全部系统图标/缩略图管线。
+- 固定几何风险有代码证据：导航4×40加搜索220、左栏220、详细列固定430加名称星列、30高状态栏。P0把两150宽Combo中的视图项改为MinWidth=96按钮，排序Combo仍150，内容命令行改Auto/MinHeight=40；横向StackPanel仍无宽度断点/CommandBar溢出。窄窗口和200%文本缩放应单独测，不先断言已发生裁剪。
+- 高对比度静态检查需关注：`main.cpp:1007`分隔线硬编码`#707070`，搜索行模板含0.8/0.7 opacity；这些是需要验证/整改的点，不是实机失败报告。TitleBar只按Light/Dark选PreferredTheme；未见显式高对比度策略，标准控件资源仍可能由框架处理。
+- 已有自动化ID覆盖Tabs、NavigationPane、FolderEntries、视图/排序、隐藏、Search、菜单、操作面板和重要对话框；本轮顶部查看明确Name=`Command.View`，HelpText/Tooltip为当前模式，真实菜单项采用`TopView*`独立ID，已验可读状态和调用；旧`ShowHiddenItems`控件已移除，SearchAdvanced的`SearchShowHiddenItems`不受此项替换影响；容器回收时重设Name，避免旧行读屏名称。`MakeIconButton(main.cpp:452)`仅显式设Tooltip而未SetName，地址框也无独立AutomationId；实际UIA名称/角色和Narrator输出须核查，不能凭Tooltip推定全部读屏完成。
+- 本轮不得通过自绘替换标准按钮/菜单破坏UIA，也不为了测试添加未实现的产品入口。图标或菜单文字不是command ID；中英文切换不得改变动作目标。
+
+## 7. DPI、主题及输入验证状态
+
+主模型本轮 Explorer 参考证据为 `.build/explorer-ui-p0-view-menu/integration/explorer-reference.json`：实际系统为 **Windows 11 25H2，build 26200.9711，zh-CN，DPI 120（125%）**，不是任务书目标24H2。只在新建HWND、精确GUID自有fixture观察了View/Show，未改系统开关，正常关闭，83字节fixture已清理。View主层UIA 11项；Show观测集合16项包含前一层11项，实际新增5项，不能记成16个Show子项。
+
+保留的 `.build/explorer-ui-p0-view-menu/reference/explorer-owned-window.png` 是实际暗色主窗口布局参考；PrintWindow未捕获popup，**没有菜单截图验证或像素一致结论**。目标24H2、其它主题/倍率及其它右键场景均未实机核验。这份Explorer限定观察独立于下述Blink受控GUI，不作为Blink功能或主题验收的替代。
+
+本轮Blink原始`ui-view-menu-report.json`记录：Windows 11 25H2/build 26200.9711、zh-CN、非管理员，`window_dpi=96`，`environment.theme="not captured"`。这是本轮窗口采样值；Explorer参考的120不能套用到Blink，也不猜测二者差异的原因。15项局部GUI和键盘动作已通过，不升级为100%或125%的完整矩阵验收。
+
+以下是 **Blink完整应用级验证矩阵**。阶段A未运行，首个P0也未覆盖这些整格场景，因此各格仍为`NOT RUN`；上述局部动作PASS另有独立记录。
+
+| 场景 | 100% | 125% | 150% | 200% | 验证要点 |
+| --- | --- | --- | --- | --- | --- |
+| 浅色，普通窗口/最大化 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | caption、标题Tab、地址/搜索、菜单勾选/禁用/焦点 |
+| 深色，激活/非激活 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 标题栏与内容主题一致、材料fallback、错误文案 |
+| Windows对比主题 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 主题色、分隔线、选中/焦点框、子菜单和禁用项可辨 |
+| 窄窗口/小分辨率 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 导航地址空间、命令溢出、固定列、状态与对话框 |
+| 多显示器移动/倍率切换 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 标题栏命中/drag、menu屏幕坐标、缩放后焦点 |
+| 独立200%文字缩放 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | 不等同显示DPI；长文案、行高、对话框滚动 |
+
+另外：zh-CN/en-US逐页面视觉核验、中文/emoji/长名、IME候选、Narrator、触摸/触控板、减少动画、长目录响应、UNC与设备插拔，完整矩阵均未在本轮执行。新菜单局部键盘检查已有PASS，但不能外推为这些人机体验通过。正式用例与运行结果归[交互验证矩阵](EXPLORER_INTERACTION_TESTS.md)。
+
+## 8. 本轮唯一P0最小切片：顶部“查看 → 显示”
+
+交付状态：**IMPLEMENTED_VERIFIED（限定本切片）**。`e497600`先提交阶段A只读规范，之后才实施本切片；没有把多个P0或底层重构合并推进。地址焦点闭环和F2选区仍留后续独立切片。
+
+| 项目 | 实际交付与证据 |
+| --- | --- |
+| 改动 | 原视图Combo和独立隐藏CheckBox替换为WinUI DropDownButton/MenuFlyout；Grid/List/Details三个实际模式及Show > Hidden；排序Combo和方向按钮保留，工具条行改Auto/MinHeight=40 |
+| 文案/自动化 | 标题使用`Command.View`（查看/View），ID保留`FolderViewMode`；实际UIA类为`Microsoft.UI.Xaml.Controls.DropDownButton`、Button角色，支持实际UIA动作；HelpText为`View.Details/List/Grid`当前本地化模式 |
+| 菜单 | 可见presenter `TopViewMenu`；顺序Grid/List/Details三个Toggle，分隔线后`TopViewShow`，内含`TopViewShowHidden`；没有假预览、详情、其它图标尺寸或内容视图 |
+| 状态复用 | 视图项沿`MakeFolderMenuItem`→`ExecuteFolderCommand`→`SetFolderViewMode`；Hidden沿`SetShowHiddenItems`；菜单打开时读取权威模型。每Tab视图/排序/选择与窗口级隐藏策略保持原语义 |
+| 上下文/旧peer | 复用FolderMenuContext及原代次判定；GUI第9项实际旧peer Invoke返回后，新Tab和原Tab均未被改变；没有第二套导航、索引或文件操作状态 |
+| 原生验证 | 最终235输入、369中英/fallback资源；Debug/Release均1516 PASS、0 FAIL、4权限SKIP；单并发。见`native-validation.json` |
+| GUI验证 | 最终`ui-view-menu-report.json`：15 PASS/0 FAIL/0 SKIP；操作限自有窗口/fixture，正常退出0，按路径和字节核对后清理。没有剪贴板或文件操作命令 |
+| 旧脚本 | view/visibility/context三份脚本按DropDownButton和TopView菜单适配；保留LF+BOM、原业务断言，静态解析通过。旧context“Copy未开放”等历史断言未修改，也不冒称本轮当前菜单回归通过 |
+| 发布 | 最终`native-validation.json`为`explorer_view_menu_verified_published`，`default_runtime_published=true`；5个变化文件已发布、EXE/PRI/helper/service哈希核对，默认窗口PID3344可见。全UI/人工矩阵仍不据此升级 |
+| 限制 | 24H2、完整主题/DPI/语言、IME、Narrator、搜索Hidden集成和树展开、popup视觉对照仍NOT RUN；没有完成整个P0或整个项目 |
+
+15项GUI的能力分界：01自有目录提交；02真实按钮/互斥菜单/Show；03三视图实际布局、路径/选择/顺序/排序保留；04普通目录ContextView与顶部状态同步；05显示Hidden而排除两种SYSTEM形式；06隐藏后修剪selection且不复活；07双Tab独立布局和路径；08隐藏策略跨现有Tab同步并由新Tab继承；09旧peer失效；10定向Space/方向键/Enter/Esc和焦点返回；11空目录；12ThisPC虚拟Location；13地址文本编辑不触文件动作；14正常关闭；15自有fixture归属和清理。
+
+当前代码入口为`main.cpp:2882 BuildFolderViewCommands`、`:3270 PopulateFolderViewMenu`、`:3686 SyncFolderViewCommands`，资源/fallback沿既有中英文机制。完整文件清单、失败尝试、最终字节与发布/清理结果归[本切片交接](EXPLORER_VIEW_MENU_HANDOFF.md)和`.build/explorer-ui-p0-view-menu/integration`。本文件保留阶段A历史，不能把当时的Combo树或待实施状态继续当作当前界面。
+
+## 9. 官方参考与适用限制
+
+以下均为Microsoft主资料，读取日期2026-11-08；用于设计/API边界，不能证明本机Explorer菜单文字/顺序或Blink的实际显示效果。
+
+1. [Title bar customization](https://learn.microsoft.com/en-us/windows/apps/develop/title-bar?tabs=winui3)：系统caption、AppWindow/Window关系和TitleBar控件；用于标题栏结构核对。
+2. [Title bar design](https://learn.microsoft.com/en-us/windows/apps/design/basics/titlebar-design)：标题栏布局、系统按钮保留、主题/高对比度适配；只作为设计目标。
+3. [Tab view — Keyboard navigation](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/tab-view#keyboard-navigation)：标准TabView相邻切换与Ctrl+F4；必须另验Blink的焦点作用域。
+4. [Keyboard accelerators](https://learn.microsoft.com/en-us/windows/apps/develop/input/keyboard-accelerators#override-default-keyboard-behavior)：控件与应用accelerator及文本编辑优先级；菜单提示文本本身不注册动作。
+5. [Accessibility overview](https://learn.microsoft.com/en-us/windows/apps/design/accessibility/accessibility-overview)：标准XAML的UIA基础、键盘、缩放和辅助技术；基础支持不等于已完成应用级验收。
+
+## 10. 源码和测试入口索引
+
+| 职责 | 实际入口 | 可复用验证入口 |
+| --- | --- | --- |
+| 主窗口/标题栏/命令布局 | `src/Blink/src/main.cpp`；`src/Blink/App.xaml` | 历史标题栏/导航记录见PROGRESS；不在本轮重跑 |
+| Location/history/Tab | `NavigationModel.cpp`、`TabState.cpp`、`TabWindowState.cpp`、`Location.cpp` | `tests/Blink.Phase1.Tests/src/main.cpp:389 RunNavigationModelTests`及Tab/排序/选择检查；`FolderNavigationTests.cpp` |
+| 树与滚动 | `NavigationTree.cpp`、`NavigationPane.cpp`；`main.cpp`树异步展开/滚轮桥接 | `scripts/run-blink-navigation-wheel-smoke.ps1`；本轮NOT RUN |
+| 视图、列与选择 | `FolderViewPresentation.cpp`、`FolderViewFormatting.cpp`；P0的Build/Populate/SyncFolderViewCommands | 本轮GUI 02/03/04/07/09/10/11/12；旧`run-blink-view-smoke.ps1`仅适配并静态解析，未冒称整份重跑 |
+| 显隐 | `ItemVisibilityPolicy.h`、`TabWindowState::SetVisibilityPolicy`、`SetShowHiddenItems` | 本轮GUI 05/06/08；旧visibility脚本已适配未完整重跑；树展开和搜索Hidden集成NOT RUN |
+| 搜索与菜单 | `SearchPresentation.cpp`、`SearchContextMenuPresentation.cpp`、`SearchContextCommands.cpp` | `SearchIntegrationTests.cpp`、`SearchContextMenuTests.cpp`；范围19及搜索18历史GUI |
+| 菜单主题/系统能力 | `ContextMenuAppearance.h`、`ShellContextMenuController.cpp`、`ShellContextMenu.cpp`、`src/Blink.ShellMenuHost/src/main.cpp` | 普通目录/搜索菜单历史记录；Bandizip代表性实测不能外推全部扩展 |
+| 编辑/冲突/删除/属性 | `FolderNameDialog.cpp`、`FileCopyConflictDialog.cpp`、`DeleteConfirmationDialog.cpp`、`PropertiesDialog.cpp` | 各操作/Coordinator/ItemProperties回归；Slice21 GUI 8检查 |
+| Clipboard/DragDrop | `ClipboardFileTransfer.cpp`、`FileDragDropController.cpp`、`FileDragDropModel.cpp` | `ClipboardFileTransferTests.cpp`、`FileDragDropTests.cpp`、`MoveTransferTests.cpp` |
+
+构建继续采用仓库`build.ps1`和既有Windows工具链，单并发。新增文档与源码、构建/索引数据分离；本次文档编制不自行生成测试fixture、截图或运行日志；主模型受控验证及其清理范围见原始报告，不清理其它任务资产。

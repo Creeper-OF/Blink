@@ -623,3 +623,10 @@ SearchState / SearchCoordinator 实现独立 query/generation、只读后台请�
 同盘和跨盘目录Move Merge已复用目录计划、原文件操作与唯一队列接入生产冲突菜单。内部文件支持Replace/Skip/KeepBoth/Cancel；跳过项保留来源，只移除实际移空目录，取消/失败保留前缀，已有变更的树只Skip/Cancel续尾。目录标签只按实际移除目录及真实目标跟随。此前各slice的未开始/待做描述保留为历史，不代表当前状态。
 
 Debug/Release完整构建及各1516 PASS / 0 FAIL / 4权限SKIP，新增59项，235输入/368资源一致；8项自有生产窗口检查通过并发布默认Release。标签跟随本轮无GUI组合验收，人工体验暂缓，UI外观等用户提供提示词。见[Slice21记录](docs/PHASE1D_SLICE21_HANDOFF.md)。clipboard外部反馈/剪切外观、搜索Busy/首屏和组合场景仍待续，再推进SFTP/远端；整项目与Phase1不标完成。
+
+
+## Explorer UI compatibility — Stage A and one P0 slice (2026-11-08)
+
+用户任务书见[原文](docs/EXPLORER_UI_MASTER_PROMPT.md)。先以e497600单独提交阶段A的UI树、210条菜单台账、差距与交互矩阵，再仅实施顶部查看/显示：已有Grid/List/Details和隐藏项复用原命令与状态，排序暂保留。完整命令栏、面包屑、F2选区、其他右键/焦点场景分别后续推进，不把P1/P2全部并进一次提交。
+
+235输入/369资源，Debug和Release完整构建及各1516 PASS/0 FAIL/4权限SKIP通过，15项自有窗口检查全部通过，默认Release已发布并打开。发布、清理和具体结果见[本轮交接](docs/EXPLORER_VIEW_MENU_HANDOFF.md)。当前主机25H2；Blink报告DPI96，Explorer参考DPI120，均只证明限定动作/观察。24H2和完整主题/DPI、人工验收仍NOT RUN。不能凭本切片升级整个P0、Phase1或项目完成状态。

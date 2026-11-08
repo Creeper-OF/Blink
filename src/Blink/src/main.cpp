@@ -1062,7 +1062,7 @@ struct App : AppT<App>
         Grid::SetColumn(navigation_pane_, 0);
 
         content_grid_ = Grid();
-        AddGridRow(content_grid_, 36, GridUnitType::Pixel);
+        AddGridRow(content_grid_, 1, GridUnitType::Auto);
         AddGridRow(content_grid_, 1, GridUnitType::Auto);
         AddGridRow(content_grid_, 1, GridUnitType::Star);
 
@@ -1166,6 +1166,7 @@ struct App : AppT<App>
 
     void CloseOperationDialogs() noexcept
     {
+        try { if (folder_view_menu_) { folder_view_menu_.Hide(); } } catch (...) {}
         if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
         const bool had_conflict = copy_conflict_wait_operation_id_ != 0 || copy_conflict_dialog_.IsOpen();
         const bool had_merge_conflict = directory_merge_dialog_operation_id_ != 0;
@@ -2883,30 +2884,26 @@ struct App : AppT<App>
         auto commands = StackPanel();
         commands.Orientation(Orientation::Horizontal);
         commands.Spacing(8);
+        commands.MinHeight(40);
         commands.VerticalAlignment(VerticalAlignment::Center);
 
-        view_mode_picker_ = ComboBox();
-        view_mode_picker_.Width(150);
-        for (const auto key : { L"View.Details", L"View.List", L"View.Grid" })
-        {
-            view_mode_picker_.Items().Append(winrt::box_value(hstring(localization_.GetString(key))));
-        }
-        Automation::AutomationProperties::SetAutomationId(view_mode_picker_, L"FolderViewMode");
+        view_mode_button_ = DropDownButton();
+        view_mode_button_.MinWidth(96);
+        view_mode_button_.IsEnabled(ui_probe_mode_ == UiProbeMode::None);
+        view_mode_button_.Content(winrt::box_value(hstring(localization_.GetString(L"Command.View"))));
+        Automation::AutomationProperties::SetAutomationId(view_mode_button_, L"FolderViewMode");
         Automation::AutomationProperties::SetName(
-            view_mode_picker_, hstring(localization_.GetString(L"Toolbar.View")));
-        view_mode_picker_.SelectionChanged([this](auto&&, auto&&) {
-            if (view_commands_sync_suppressed_ || ui_probe_mode_ != UiProbeMode::None)
+            view_mode_button_, hstring(localization_.GetString(L"Command.View")));
+        folder_view_menu_ = MenuFlyout();
+        const auto view_weak = get_weak();
+        folder_view_menu_.Opening([view_weak](auto&&, auto&&) {
+            if (auto app = view_weak.get(); app && !app->window_style_closed_)
             {
-                return;
-            }
-            const auto index = view_mode_picker_.SelectedIndex();
-            if (index >= 0 && index <= 2)
-            {
-                SetFolderViewMode(index == 2 ? blink::app::FolderViewMode::Grid :
-                    index == 1 ? blink::app::FolderViewMode::List : blink::app::FolderViewMode::Details);
+                app->PopulateFolderViewMenu();
             }
         });
-        commands.Children().Append(view_mode_picker_);
+        view_mode_button_.Flyout(folder_view_menu_);
+        commands.Children().Append(view_mode_button_);
 
         sort_field_picker_ = ComboBox();
         sort_field_picker_.Width(150);
@@ -2946,16 +2943,6 @@ struct App : AppT<App>
         });
         commands.Children().Append(sort_direction_button_);
 
-        show_hidden_items_ = CheckBox();
-        show_hidden_items_.Content(winrt::box_value(hstring(
-            localization_.GetString(L"View.ShowHiddenItems"))));
-        show_hidden_items_.VerticalAlignment(VerticalAlignment::Center);
-        Automation::AutomationProperties::SetAutomationId(show_hidden_items_, L"ShowHiddenItems");
-        ToolTipService::SetToolTip(show_hidden_items_, winrt::box_value(hstring(
-            localization_.GetString(L"View.ShowHiddenItemsHint"))));
-        show_hidden_items_.Checked([this](auto&&, auto&&) { SetShowHiddenItems(true); });
-        show_hidden_items_.Unchecked([this](auto&&, auto&&) { SetShowHiddenItems(false); });
-        commands.Children().Append(show_hidden_items_);
         content_grid_.Children().Append(commands);
     }
 
@@ -3278,6 +3265,57 @@ struct App : AppT<App>
         { result.IsEnabled(result.IsEnabled() && IsClipboardFormatAvailable(CF_HDROP)); }
         Automation::AutomationProperties::SetAutomationId(result, automation_id);
         return result;
+    }
+
+    void PopulateFolderViewMenu()
+    {
+        using blink::app::FolderCommand;
+        folder_view_menu_.Items().Clear();
+        blink::app::ApplyContextMenuAppearance(folder_view_menu_, view_mode_button_, L"TopViewMenu");
+        const auto context = CaptureFolderMenuContext(std::nullopt);
+        const auto mode = ActiveState().GetViewMode();
+        folder_view_menu_.Items().Append(MakeFolderMenuItem(FolderCommand::ViewGrid,
+            context, L"TopViewGrid", mode == blink::app::FolderViewMode::Grid));
+        folder_view_menu_.Items().Append(MakeFolderMenuItem(FolderCommand::ViewList,
+            context, L"TopViewList", mode == blink::app::FolderViewMode::List));
+        folder_view_menu_.Items().Append(MakeFolderMenuItem(FolderCommand::ViewDetails,
+            context, L"TopViewDetails", mode == blink::app::FolderViewMode::Details));
+        folder_view_menu_.Items().Append(MenuFlyoutSeparator());
+
+        auto show = MenuFlyoutSubItem();
+        show.Text(hstring(localization_.GetString(L"View.Show")));
+        blink::app::StyleContextMenuSubItem(show, L"\xE890");
+        Automation::AutomationProperties::SetAutomationId(show, L"TopViewShow");
+        auto hidden = ToggleMenuFlyoutItem();
+        hidden.Text(hstring(localization_.GetString(L"View.ShowHiddenItems")));
+        hidden.IsChecked(tab_window_state_.GetVisibilityPolicy().show_hidden_items);
+        const bool ready = ui_probe_mode_ == UiProbeMode::None &&
+            blink::app::EvaluateFolderCommand(FolderCommand::ViewDetails,
+                FolderCommandCapabilities(context)) == blink::app::FolderCommandStatus::Ready;
+        show.IsEnabled(ready);
+        hidden.IsEnabled(ready);
+        blink::app::StyleContextMenuItem(hidden, L"\xE8A7");
+        Automation::AutomationProperties::SetAutomationId(hidden, L"TopViewShowHidden");
+        ToolTipService::SetToolTip(hidden, winrt::box_value(hstring(
+            localization_.GetString(L"View.ShowHiddenItemsHint"))));
+        const auto weak = get_weak();
+        hidden.Click([weak, context](auto&&, auto&&) {
+            if (auto app = weak.get(); app && !app->window_style_closed_)
+            {
+                if (!app->IsFolderMenuContextCurrent(context))
+                {
+                    app->status_.Text(hstring(app->localization_.GetString(L"Status.CommandStale")));
+                    return;
+                }
+                if (blink::app::EvaluateFolderCommand(FolderCommand::ViewDetails,
+                        app->FolderCommandCapabilities(context)) == blink::app::FolderCommandStatus::Ready)
+                {
+                    app->SetShowHiddenItems(!app->tab_window_state_.GetVisibilityPolicy().show_hidden_items);
+                }
+            }
+        });
+        show.Items().Append(hidden);
+        folder_view_menu_.Items().Append(show);
     }
 
     void ShowFolderContextMenu(const std::optional<std::size_t> row_index,
@@ -3650,8 +3688,10 @@ struct App : AppT<App>
         const auto mode = ActiveState().GetViewMode();
         const auto sort = ActiveState().GetSortDescriptor();
         view_commands_sync_suppressed_ = true;
-        view_mode_picker_.SelectedIndex(mode == blink::app::FolderViewMode::Grid ? 2 :
-            mode == blink::app::FolderViewMode::List ? 1 : 0);
+        const auto mode_label = localization_.GetString(mode == blink::app::FolderViewMode::Grid ?
+            L"View.Grid" : mode == blink::app::FolderViewMode::List ? L"View.List" : L"View.Details");
+        Automation::AutomationProperties::SetHelpText(view_mode_button_, hstring(mode_label));
+        ToolTipService::SetToolTip(view_mode_button_, winrt::box_value(hstring(mode_label)));
         sort_field_picker_.SelectedIndex(sort.field == blink::app::SortField::Type ? 1 :
             sort.field == blink::app::SortField::Size ? 2 :
             sort.field == blink::app::SortField::Modified ? 3 : 0);
@@ -3706,7 +3746,6 @@ struct App : AppT<App>
         }
 
         tab_window_state_.SetVisibilityPolicy(policy);
-        show_hidden_items_.IsChecked(winrt::box_value(show).as<Windows::Foundation::IReference<bool>>());
         ++folder_view_generation_;
         for (const auto id : tab_window_state_.TabIds())
         {
@@ -6696,6 +6735,7 @@ struct App : AppT<App>
 
     void BindFolderViewToActiveTab()
     {
+        if (folder_view_menu_) { folder_view_menu_.Hide(); }
         // Any tab/source presentation invalidates a delayed focus restore,
         // including A -> B -> A switches that reuse the same view control.
         ++folder_view_generation_;
@@ -7877,10 +7917,10 @@ struct App : AppT<App>
     TreeView navigation_tree_{ nullptr };
     Grid content_grid_{ nullptr };
     Grid details_header_{ nullptr };
-    ComboBox view_mode_picker_{ nullptr };
+    DropDownButton view_mode_button_{ nullptr };
+    MenuFlyout folder_view_menu_{ nullptr };
     ComboBox sort_field_picker_{ nullptr };
     Button sort_direction_button_{ nullptr };
-    CheckBox show_hidden_items_{ nullptr };
     blink::app::FolderViewPresentation folder_view_presentation_;
     blink::app::FolderViewMode rendered_view_mode_{ blink::app::FolderViewMode::Details };
     std::uint64_t folder_view_generation_{};

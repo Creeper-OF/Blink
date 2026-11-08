@@ -81,22 +81,83 @@ function SubmitPath([string]$path){
  [BlinkVisibilityInput]::Key($process.MainWindowHandle,$process.Id,13)
 }
 function Navigate([string]$path,[int]$count){SubmitPath $path;WaitFor ('navigate '+$path) { (AddressValue) -eq $path -and (Ready $count) }}
-function IsShown {return (ById 'ShowHiddenItems').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Current.ToggleState -eq [Windows.Automation.ToggleState]::On}
+# View is now a DropDownButton; flyout peers may be sibling popup roots.
+function TopViewElement([string]$automationId){
+ $element=ById $automationId
+ if($element -and $element.Current.ProcessId -eq $process.Id -and -not $element.Current.IsOffscreen){return $element}
+ $roots=@([Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,
+  [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty,$process.Id)))
+ foreach($ownedRoot in $roots){
+  if($ownedRoot.Current.ProcessId -ne $process.Id){continue}
+  if($ownedRoot.Current.AutomationId -eq $automationId -and -not $ownedRoot.Current.IsOffscreen){return $ownedRoot}
+  foreach($candidate in @($ownedRoot.FindAll([Windows.Automation.TreeScope]::Descendants,
+   [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty,$automationId)))){
+   if($candidate.Current.ProcessId -eq $process.Id -and -not $candidate.Current.IsOffscreen){return $candidate}
+  }
+ }
+ return $null
+}
+function InvokeTopViewElement($element){
+ if(-not $element -or $element.Current.ProcessId -ne $process.Id -or -not $element.Current.IsEnabled){throw 'Enabled owned View control required'}
+ $uiaPattern=$null
+ if($element.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$uiaPattern)){$uiaPattern.Invoke()}
+ elseif($element.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern,[ref]$uiaPattern)){$uiaPattern.Toggle()}
+ elseif($element.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$uiaPattern)){$uiaPattern.Expand()}
+ else{throw 'Owned View control has no Invoke/Toggle/Expand pattern'}
+}
+function OpenTopViewMenu{
+ if(-not(TopViewElement 'TopViewMenu')){InvokeTopViewElement (ById 'FolderViewMode')}
+ WaitFor 'top View menu realized' {$null -ne (TopViewElement 'TopViewMenu')}
+}
+function SetTopViewMode([int]$modeIndex){
+ if($modeIndex -lt 0 -or $modeIndex -gt 2){throw 'Unknown View mode index'}
+ OpenTopViewMenu
+ $modeId=@('TopViewDetails','TopViewList','TopViewGrid')[$modeIndex]
+ WaitFor ('top View choice '+$modeId) {$null -ne (TopViewElement $modeId)}
+ InvokeTopViewElement (TopViewElement $modeId)
+ WaitFor 'top View menu closes after mode choice' {$null -eq (TopViewElement 'TopViewMenu')}
+}
+function TopViewHiddenItem{
+ OpenTopViewMenu
+ if(-not(TopViewElement 'TopViewShowHidden')){
+  $submenu=TopViewElement 'TopViewShow';$uiaPattern=$null
+  if($submenu -and $submenu.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$uiaPattern)){$uiaPattern.Expand()}
+  else{InvokeTopViewElement $submenu}
+ }
+ WaitFor 'top View Show hidden-items choice realized' {$null -ne (TopViewElement 'TopViewShowHidden')}
+ return (TopViewElement 'TopViewShowHidden')
+}
+function TopViewChecked($element){
+ $uiaPattern=$null
+ if($element.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern,[ref]$uiaPattern)){return $uiaPattern.Current.ToggleState -eq [Windows.Automation.ToggleState]::On}
+ if($element.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern,[ref]$uiaPattern)){return $uiaPattern.Current.IsSelected}
+ throw 'Owned View toggle has no readable checked state'
+}
+function CloseTopViewMenu{
+ if(-not(TopViewElement 'TopViewMenu')){return}
+ $button=ById 'FolderViewMode';$uiaPattern=$null
+ if($button -and $button.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$uiaPattern)){$uiaPattern.Collapse()}
+ else{
+  for($escapeIndex=0;$escapeIndex -lt 2 -and (TopViewElement 'TopViewMenu');$escapeIndex++){
+   [BlinkVisibilityInput]::Key($process.MainWindowHandle,$process.Id,27)
+  }
+ }
+ WaitFor 'top View menu dismissed without policy change' {$null -eq (TopViewElement 'TopViewMenu')}
+}
+function IsShown{
+ $previousFocus=[Windows.Automation.AutomationElement]::FocusedElement
+ try{return (TopViewChecked (TopViewHiddenItem))}
+ finally{
+  CloseTopViewMenu
+  if($previousFocus -and $previousFocus.Current.ProcessId -eq $process.Id){$previousFocus.SetFocus()}
+ }
+}
 function SetShown([bool]$show){
- $deadline=[DateTime]::UtcNow.AddSeconds(10);$last=''
- do {
-  try {
-   $control=ById 'ShowHiddenItems'
-   if($control){
-    $pattern=$control.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
-    $current=$pattern.Current.ToggleState -eq [Windows.Automation.ToggleState]::On
-    if($current -ne $show){$pattern.Toggle()}
-    return
-   }
-  }catch{$last=$_.Exception.Message}
-  [Threading.Thread]::Sleep(150)
- }while([DateTime]::UtcNow -lt $deadline)
- throw ('Hidden-items toggle unavailable: '+$last)
+ $item=TopViewHiddenItem
+ if((TopViewChecked $item) -ne $show){
+  InvokeTopViewElement $item
+  WaitFor 'top View menu closes after hidden-items choice' {$null -eq (TopViewElement 'TopViewMenu')}
+ }else{CloseTopViewMenu}
 }
 function Rows {return @(OfType (ById 'FolderEntries') ([Windows.Automation.ControlType]::ListItem))}
 function RowNames {return @(Rows | ForEach-Object {$_.Current.Name})}
@@ -113,9 +174,9 @@ function ExpandFixture {
 }
 function TreeHas([string]$name){return $null -ne (Find (ById 'NavigationPane') ([Windows.Automation.AutomationElement]::NameProperty) $name)}
 function SetView([int]$index){
- $control=ById 'FolderViewMode';$control.SetFocus()
- [BlinkVisibilityInput]::Key($process.MainWindowHandle,$process.Id,0x24)
- for($i=0;$i -lt $index;$i++){[BlinkVisibilityInput]::Key($process.MainWindowHandle,$process.Id,0x28)}
+ SetTopViewMode $index
+ $viewPattern=@('Details|详细信息','List|列表','Grid|网格')[$index]
+ WaitFor ('top View authoritative mode '+$index) {(ById 'FolderViewMode').Current.HelpText -match $viewPattern}
 }
 try {
  $psi=[Diagnostics.ProcessStartInfo]::new();$psi.FileName=Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe')
@@ -123,7 +184,7 @@ try {
  $psi.EnvironmentVariables['BLINK_STARTUP_TELEMETRY']=$telemetry
  $process=[Diagnostics.Process]::new();$process.StartInfo=$psi
  if(-not $process.Start()){throw 'Blink start failed'}
- WaitFor 'startup ThisPC defaults hidden off' { $null -ne (ById 'ShowHiddenItems') -and -not (IsShown) -and (Status '(?:Ready|就绪).*locations|(?:就绪).*位置') }
+ WaitFor 'startup ThisPC defaults hidden off' { $null -ne (ById 'FolderViewMode') -and -not (IsShown) -and (Status '(?:Ready|就绪).*locations|(?:就绪).*位置') }
  Navigate $fixture $visibleCount
  WaitFor 'default file view excludes hidden and system entries' { (RowNames) -contains '010-link-a.txt' -and (RowNames) -notcontains '012-hidden.txt' -and (RowNames) -notcontains '001-hidden-dir' -and (RowNames) -notcontains '003-protected-dir' -and (RowNames) -notcontains '014-system.txt' }
  ExpandFixture

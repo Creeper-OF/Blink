@@ -517,3 +517,12 @@ DragDrop、Clipboard adapter、ContextMenu 或 Search UI；本条只是 Phase 1 
 目录Merge扩展至Move，使用同一目录计划/逐文件冲突机制和原coordinator；同卷叶原生移动，跨卷复制提交后移除。正常Skip保留来源且不算整个根已移动，取消/失败不撤回已完成前缀，发生实际变更后不能自动重跑整树。原始来源目录与保留目标目录的身份分别处理，只有实际移空目录才能跟随至其真实目标路径，避免根前缀覆盖KeepBoth子目录路径。
 
 目标类型只在现有worker读取以决定冲突选项；根与内部冲突仍使用原对话框和operation/conflict ID，不引入第二队列、事务文件系统或防护平台。UI外观按用户另行提供提示词推进。本轮实际验证进度见docs/PHASE1D_SLICE21_HANDOFF.md。
+
+
+## D-0037：Explorer兼容任务先审计、再按单一P0切片落实 — 2026-11-08
+
+用户提供完整UI任务书并要求遵循。任务书及UI树、菜单矩阵、差距、交互验收先以7135a14完成只读审计，形成纯文档提交e497600，随后才修改业务。此授权替代早期对Explorer外观对齐的延后，不意味着接管系统默认管理器、完整Shell Namespace或一次性实现全部远端/预览功能。
+
+本轮只将已有三视图和窗口级Hidden收拢为顶部查看/显示菜单。视图、排序、选择仍属于TabState，visibility属于TabWindowState；菜单复用现有FolderCommand、主题及上下文代次，隐藏开关复用SetShowHiddenItems，不新增第二套命令、文件操作引擎、索引协议或本地防护平台。未实现项目只进入台账，不做假按钮。现有View Combo专用脚本按新菜单语义适配，不能放宽原断言。
+
+主模型协调独立模块子代理，构建保持单并发。实机参考是25H2/26200.9711/125%而非24H2，UIA结构、主窗口截图、popup图像和人工体验分别记录；仅本轮实际执行结果才能提升对应台账状态。见docs/EXPLORER_VIEW_MENU_HANDOFF.md及四份规范。

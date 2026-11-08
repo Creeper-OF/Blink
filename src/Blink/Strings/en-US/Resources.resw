@@ -22,7 +22,8 @@
   <data name="View.Details" xml:space="preserve"><value>Details</value><comment>Detailed folder view.</comment></data>
   <data name="View.List" xml:space="preserve"><value>List</value><comment>Compact folder list view.</comment></data>
   <data name="View.Grid" xml:space="preserve"><value>Grid</value><comment>Folder icon grid view.</comment></data>
-  <data name="View.ShowHiddenItems" xml:space="preserve"><value>Show hidden items</value><comment>Window-wide hidden items toggle.</comment></data>
+  <data name="View.Show" xml:space="preserve"><value>Show</value><comment>Show submenu within the View menu.</comment></data>
+  <data name="View.ShowHiddenItems" xml:space="preserve"><value>Hidden items</value><comment>Window-wide hidden items toggle.</comment></data>
   <data name="View.ShowHiddenItemsHint" xml:space="preserve"><value>Applies to all tabs and the navigation tree. System items stay hidden.</value><comment>Hidden items scope and system items policy.</comment></data>
   <data name="Sort.Ascending" xml:space="preserve"><value>Ascending</value><comment>Current folder sort direction.</comment></data>
   <data name="Sort.Descending" xml:space="preserve"><value>Descending</value><comment>Current folder sort direction.</comment></data>
