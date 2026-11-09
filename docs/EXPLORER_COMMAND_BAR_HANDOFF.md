@@ -32,3 +32,6 @@
 默认旧窗已关闭，发布6个变化文件，EXE/PRI/helper/service哈希一致；新默认窗口PID7052可见并留给用户。发布主窗口图归`integration/visuals/command-bar-window.png`，只证明当前主布局。索引服务PID6848持续运行，服务/IPC/BLK5及真实C/D索引不改。重复候选、冗余日志和空fixture由cleanup-runtime处理；两份恢复点、清理字节、公开提交及工作区索引以本轮integration的最终记录为准。
 
 复现入口：[命令栏脚本](../scripts/run-blink-command-bar-smoke.ps1)。兼容旧View脚本本轮仅静态校验，不冒称重跑历史15项。下一切片按G03推进地址编辑闭环/面包屑，再处理F2选区和剩余焦点/菜单场景；完整项目与人工矩阵继续待做。
+
+
+2026-11-09维护补记：本轮完整原始重试/诊断脚本和报告已随已校验的G02恢复包封存，工作目录只保留当前最终验证及复用构建入口；不再以历史integration/attempts等路径仍展开存在为前提。旧功能记录收敛为`.build/maintenance/validation-history.json`，当前两个恢复包和正式运行状态已再次核验。维护未改变240项原生源码或11项已验证产物字节。
