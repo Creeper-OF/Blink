@@ -88,3 +88,9 @@ Blink 是一个使用 C++20、C++/WinRT 和 WinUI 3 开发的 Windows 文件管�
 | `docs` | 功能范围、开发计划及交接记录 |
 
 构建输出、依赖缓存、索引数据库、诊断工具和本机日志均在 `.gitignore` 中排除。
+
+## 开源许可
+
+Blink 项目中由项目作者拥有授权权利的源代码和文档以 **Apache License 2.0** 开源，详见 [LICENSE](LICENSE)。
+
+Copyright © 2026 Creeper-OF. 第三方依赖及其组件仍遵循各自的许可证；Apache 2.0 不会覆盖第三方组件的授权条款。
