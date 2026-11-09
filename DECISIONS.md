@@ -526,3 +526,15 @@ DragDrop、Clipboard adapter、ContextMenu 或 Search UI；本条只是 Phase 1 
 本轮只将已有三视图和窗口级Hidden收拢为顶部查看/显示菜单。视图、排序、选择仍属于TabState，visibility属于TabWindowState；菜单复用现有FolderCommand、主题及上下文代次，隐藏开关复用SetShowHiddenItems，不新增第二套命令、文件操作引擎、索引协议或本地防护平台。未实现项目只进入台账，不做假按钮。现有View Combo专用脚本按新菜单语义适配，不能放宽原断言。
 
 主模型协调独立模块子代理，构建保持单并发。实机参考是25H2/26200.9711/125%而非24H2，UIA结构、主窗口截图、popup图像和人工体验分别记录；仅本轮实际执行结果才能提升对应台账状态。见docs/EXPLORER_VIEW_MENU_HANDOFF.md及四份规范。
+
+
+## D-0038：顶部命令栏复用目录与搜索的现有能力 — 2026-11-09
+
+按用户Explorer任务书的G02继续单一P0切片。导航与内容之间独立一行使用标准WinUI CommandBar/AppBarButton，原生More及动态溢出收纳已有真实操作；New只提供已有新建文件夹，Sort/View复用标签状态和原FolderCommand，不填分享、ShellNew模板或分组占位。
+
+纯能力模型从TabState、Search和Clipboard格式派生，无逐行I/O；普通目录、ThisPC、Search分别保持原命令边界。搜索Paste明确指向所选结果父目录。overflow/下拉捕获原上下文代次，导航/标签/选择改变后失效，More关闭延后一轮清理以兼容原生Click事件顺序。反向选择只在既有可见有效RowIdentity上取补集，不扩展文件操作或索引管线。
+
+主模型集成，三个代理按策略/展示/受控脚本分工，构建单并发。实际构建、GUI、发布与未覆盖矩阵分别见[命令栏交接](docs/EXPLORER_COMMAND_BAR_HANDOFF.md)，不据此认定整个P0或项目完成。
+
+
+G02组合检查进一步修复原可见性切换的生命周期错误：LeaveSearch已取消旧查询，不能再Shutdown全部旧标签的搜索控制器。仅移除这一永久关闭调用，关闭标签/窗口仍沿原Shutdown；以活动/后台代次、show/hide重搜、关闭tab不影响survivor的3项模型回归和完整Hidden→Search真实UI串联验证，不修改索引服务或引入恢复防护平台。

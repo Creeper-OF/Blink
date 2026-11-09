@@ -449,4 +449,10 @@
   <data name="Search.MenuCopyParentPath" xml:space="preserve"><value>复制所在目录路径</value></data>
   <data name="Search.MenuSystemOptions" xml:space="preserve"><value>压缩与更多系统选项…</value></data>
   <data name="Move.MergeSkipped" xml:space="preserve"><value>跳过 {0} 个文件、{1} 个文件夹；未移动的项目保留在来源。</value><comment>Directory move merge skipped source items.</comment></data>
+  <data name="CommandBar.Name" xml:space="preserve"><value>文件命令</value></data>
+  <data name="Command.New" xml:space="preserve"><value>新建</value></data>
+  <data name="Command.SelectAll" xml:space="preserve"><value>全选</value></data>
+  <data name="Command.ClearSelection" xml:space="preserve"><value>取消选择</value></data>
+  <data name="Command.InvertSelection" xml:space="preserve"><value>反向选择</value></data>
+  <data name="Status.InvertSelectionFailed" xml:space="preserve"><value>无法反向选择，请重试。</value></data>
 </root>

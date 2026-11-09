@@ -10,6 +10,7 @@
 #include "DirectoryMergeTests.h"
 #include "DirectoryMoveMergeTests.h"
 #include "FolderRelocationTests.h"
+#include "ExplorerCommandBarTests.h"
 #include "CrossVolumeMoveTests.h"
 #include "FolderNavigationTests.h"
 #include "MoveOperationTests.h"
@@ -1395,6 +1396,50 @@ namespace
                 window_state.Find(closed_tab) == nullptr &&
                 closed_browse_state->Snapshot().shutting_down,
             "closed_tab_invalidates_async_state");
+
+        {
+            TabWindowState search_window;
+            const auto active_id = search_window.ActiveTabId();
+            const auto background_id = search_window.CreateTab();
+            const auto active_search = search_window.Find(active_id)->search_state;
+            const auto background_search = search_window.Find(background_id)->search_state;
+            const blink::app::SearchQuery query{ L"visibility-search" };
+            search_window.Find(active_id)->EnterSearch();
+            search_window.Find(background_id)->EnterSearch();
+            const auto old_active = active_search->Begin(query);
+            const auto old_background = background_search->Begin(query);
+            search_window.SetVisibilityPolicy({ true });
+            passed &= Check(old_active != 0 && old_background != 0 &&
+                    !active_search->IsCurrent(old_active) && !background_search->IsCurrent(old_background) &&
+                    active_search->Snapshot().stage == blink::app::SearchStage::Idle &&
+                    background_search->Snapshot().stage == blink::app::SearchStage::Idle &&
+                    !search_window.Find(active_id)->search_visible && !search_window.Find(background_id)->search_visible,
+                "visibility_change_cancels_active_and_background_search_generations");
+
+            const auto shown_active = active_search->Begin(query);
+            const auto shown_background = background_search->Begin(query);
+            (void)search_window.ActivateTab(background_id);
+            search_window.SetVisibilityPolicy({ false });
+            const bool shown_generations_cancelled = !active_search->IsCurrent(shown_active) &&
+                !background_search->IsCurrent(shown_background);
+            const auto hidden_active = active_search->Begin(query);
+            const auto hidden_background = background_search->Begin(query);
+            passed &= Check(shown_active != 0 && shown_background != 0 && shown_generations_cancelled &&
+                    hidden_active != 0 && hidden_background != 0 &&
+                    active_search->Snapshot().query == query && background_search->Snapshot().query == query,
+                "visibility_show_hide_preserves_search_restart_in_both_existing_tabs");
+
+            const auto close_status = search_window.CloseTab(background_id);
+            const bool survivor_current = active_search->IsCurrent(hidden_active);
+            if (auto* survivor = search_window.Find(active_id)) { survivor->LeaveSearch(); }
+            const auto reopened_survivor = active_search->Begin(query);
+            passed &= Check(close_status == CloseTabStatus::Closed &&
+                    search_window.ActiveTabId() == active_id && search_window.Find(background_id) == nullptr &&
+                    survivor_current && reopened_survivor != 0 &&
+                    background_search->Snapshot().stage == blink::app::SearchStage::Closed &&
+                    background_search->Begin(query) == 0,
+                "visibility_tab_close_preserves_survivor_search_and_permanently_retires_closed_state");
+        }
 
         return passed;
     }
@@ -3371,6 +3416,7 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunFileReplaceTests();
     passed &= RunDirectoryMergeTests();
     passed &= RunDirectoryMoveMergeTests();
+    passed &= RunExplorerCommandBarTests();
     passed &= RunDirectoryCopyOperationTests();
     passed &= RunDirectoryCopyConflictTests();
     passed &= RunDirectoryCopyCoordinatorTests();

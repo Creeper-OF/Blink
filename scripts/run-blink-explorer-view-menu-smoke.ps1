@@ -5,17 +5,18 @@ param(
     [ValidateRange(5,60)][int]$StepTimeoutSeconds = 25
 )
 
-# Reproducible owned-window View/Show smoke, not human or Explorer acceptance.
+# View/Show compatibility smoke for the CommandBar presentation.
+# Uses this slice's report path; preserves the older verified View/Show evidence.
 # No build/service changes, Clipboard, global SendInput or system preferences.
 # Exit 0 PASS, 1 FAIL, 2 SKIP/PARTIAL. Durable report after every check.
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $project = Split-Path -Parent $PSScriptRoot
-$stage = Join-Path $project '.build\explorer-ui-p0-view-menu'
+$stage = Join-Path $project '.build\explorer-command-bar'
 $integration = Join-Path $stage 'integration'
-$fixtureParent = Join-Path $stage 'ui-fixtures'
+$fixtureParent = Join-Path $stage 'ui-view-fixtures'
 New-Item -ItemType Directory -Path $integration -Force | Out-Null
-$reportPath = Join-Path $integration 'ui-view-menu-report.json'
+$reportPath = Join-Path $integration 'ui-view-compat-report.json'
 if (-not $Binary) { $Binary = Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe') }
 if (-not [IO.Path]::IsPathRooted($Binary)) { $Binary = Join-Path $project $Binary }
 $Binary = [IO.Path]::GetFullPath($Binary)
@@ -210,11 +211,11 @@ function Toggle-State($Element) {
 }
 function Close-Menus {
     for ($attempt=0; $attempt -lt 3; $attempt++) {
-        if (-not (Owned-Element 'TopViewMenu') -and -not (Owned-Element 'FolderContextMenu') -and -not (Owned-Element 'TopViewShowHidden')) { return }
+        if (-not (Owned-Element 'TopViewMenu') -and -not (Owned-Element 'FolderContextMenu') -and -not (Owned-Element 'TopViewShowHidden') -and -not (Owned-Element 'TopSortMenu') -and -not (Owned-Element 'TopNewMenu') -and -not (Owned-Element 'TopMoreMenu')) { return }
         Key 27
         $null=$process.WaitForExit(150)
     }
-    Wait-Ui 'owned menu presenters close' { -not (Owned-Element 'TopViewMenu') -and -not (Owned-Element 'FolderContextMenu') -and -not (Owned-Element 'TopViewShowHidden') }
+    Wait-Ui 'owned menu presenters close' { -not (Owned-Element 'TopViewMenu') -and -not (Owned-Element 'FolderContextMenu') -and -not (Owned-Element 'TopViewShowHidden') -and -not (Owned-Element 'TopSortMenu') -and -not (Owned-Element 'TopNewMenu') -and -not (Owned-Element 'TopMoreMenu') }
 }
 function Open-Top {
     Wait-Ui 'owned top View presenter reflects a ready page' {
@@ -265,7 +266,7 @@ function Navigate-Owned([string]$TargetFolder,[string]$MarkerName='') {
     Close-Menus; $editor=Address; $editor.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($TargetFolder); $editor.SetFocus(); Key 13
     Wait-Ui 'committed owned folder and its marker/empty page' {
         (Value (Address)) -ieq $TargetFolder -and (Visible (By-Id 'FolderEntries')) -and
-        (By-Id 'FolderSortField').Current.IsEnabled -and
+        (By-Id 'CommandSort').Current.IsEnabled -and
         $(if ($MarkerName) { @(Folder-Rows $MarkerName).Count -eq 1 } else { @(Folder-Rows).Count -eq 0 }) }
 }
 function Select-Owned([string]$RowLabel) {
@@ -286,9 +287,20 @@ function Set-ContextChoice([string]$ParentId,[string]$ChoiceId) {
     Wait-Ui ('owned context choice '+$ChoiceId) { $null -ne (Owned-Element $ChoiceId) }
     Act (Owned-Element $ChoiceId); Wait-Ui 'ordinary context command closes menu' { -not (Owned-Element 'FolderContextMenu') }
 }
+function Set-TopSort([ValidateSet('Name','Type','Size','Modified','Ascending','Descending')][string]$Choice) {
+    Close-Menus; Act (By-Id 'CommandSort')
+    Wait-Ui 'owned top Sort menu' { $null -ne (Owned-Element 'TopSortMenu') }
+    Act (Owned-Element ('TopSort'+$Choice))
+    Wait-Ui 'top Sort choice commits and closes' { -not (Owned-Element 'TopSortMenu') -and (By-Id 'CommandSort').Current.IsEnabled }
+    $expected=@(Resource-Values ($(if ($Choice -in @('Ascending','Descending')) { 'Sort.' } else { 'Column.' })+$Choice))
+    Wait-Ui 'Sort accessible state matches its authoritative descriptor' {
+        $sort=By-Id 'CommandSort'
+        $expected -ccontains $(if ($Choice -in @('Ascending','Descending')) { $sort.Current.ItemStatus } else { $sort.Current.HelpText })
+    }
+}
 function Sort-Snapshot {
-    $selection=(By-Id 'FolderSortField').GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()
-    return [pscustomobject]@{field=$(if ($selection.Count) { $selection[0].Current.Name } else { '' });direction=(By-Id 'FolderSortDirection').Current.Name}
+    $sort=By-Id 'CommandSort'
+    return [pscustomobject]@{field=$sort.Current.HelpText;direction=$sort.Current.ItemStatus}
 }
 function Tabs { return @(Of-Type (By-Id 'WindowTabs') ([Windows.Automation.ControlType]::TabItem)) }
 function New-OwnedTab([int]$ExpectedCount) {
@@ -452,13 +464,12 @@ public static class BlinkExplorerViewUiNative {
         if (@(Tabs).Count -ne 1) { throw 'New owned window must have one initial tab' }
         Set-Hidden $false; Assert-SystemExcluded
     }
-    Check '02 top View is the owned DropDownButton with real exclusive commands and Show' {
+    Check '02 top View is the owned CommandBar AppBarButton with real exclusive commands and Show' {
         $button=By-Id 'FolderViewMode'
-        # WinUI 3 reports this custom control's fully qualified class name.
-        # The owned-window probe also verifies its native Button role and both
-        # action patterns; a generic button with the same label is insufficient.
+        # Verify the AppBarButton peer as well as its Button role and both
+        # action patterns; a generic decorated button is insufficient.
         $invokePattern=$null; $expandPattern=$null
-        if ($button.Current.ClassName -ne 'Microsoft.UI.Xaml.Controls.DropDownButton' -or
+        if ($button.Current.ClassName -notin @('AppBarButton','Microsoft.UI.Xaml.Controls.AppBarButton') -or
             $button.Current.ControlType -ne [Windows.Automation.ControlType]::Button -or
             $toolbarViewLabels -cnotcontains $button.Current.Name -or
             -not $button.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$invokePattern) -or
@@ -474,7 +485,7 @@ public static class BlinkExplorerViewUiNative {
         Close-Menus
     }
     Check '03 Details List and Grid change actual layout while preserving path selection order and sort' {
-        Set-ContextChoice 'ContextSort' 'ContextSortSize'; Set-ContextChoice 'ContextSort' 'ContextSortDescending'
+        Set-TopSort 'Size'; Set-TopSort 'Descending'
         Select-Owned $marker; $beforeRows=@(Row-Names); $beforeSelection=@(Selected-Names); $beforeSort=Sort-Snapshot
         foreach ($mode in @('List','Grid','Details')) {
             Set-TopMode $mode

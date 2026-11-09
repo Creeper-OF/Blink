@@ -1,5 +1,14 @@
 # Blink Progress
 
+## Explorer G02 命令栏与隐藏项搜索修复完成 — 2026-11-09
+
+- **双配置各1542 PASS / 0 FAIL / 4权限SKIP，18项完整GUI全过，默认版本已发布并打开。** 240冻结输入/375资源；8个主入口、7个更多动作与原生溢出复用原目录/搜索/剪贴板及唯一队列，Search Paste明确结果父目录，ThisPC保持虚拟位置。
+- 完整串联发现旧SetVisibilityPolicy在取消后永久Shutdown全部旧tab搜索，导致query正确却Begin恒0。最小删多余Shutdown，保留关闭tab/窗口生命周期；3项新回归覆盖旧代次/重搜/survivor。26项新增=23命令栏/反选+3生命周期。修正后同一#08 Hidden开关→#14真实索引与父目录Paste已通过，不仅跑独立搜索。
+- 640px真实溢出、实际ListView/0列头及恢复宽度后的唯一勾选、真实文件字节/移动/永久删除取消确认、更多选择/反选/路径/属性刷新、stale peer、ThisPC、键盘/地址文本作用域均通过；测试退出0、fixture3152字节清理、文本剪贴板恢复。25H2/26200.9711/zh-CN、DPI96、theme未采集；24H2/全主题DPI和人工矩阵未冒称通过。
+- 默认6个变化文件发布，四关键产物哈希一致，PID7052可见；真实主窗口图已检查，非popup像素验收。主模型+3代理分工、compiler1；索引服务PID6848/IPC/BLK5与真实库不改，分类清理及最近两恢复点、公开副本以integration最终记录为准。
+- 初次编译和UIA typed变量/弹层ID/缓存作用域失败证据保留；真正Hidden→Search缺陷有修正前两次完整失败和独立成功对照，未用脚本绕过。详见[命令栏交接](docs/EXPLORER_COMMAND_BAR_HANDOFF.md)。后续G03地址闭环/面包屑、F2及其它菜单/焦点继续，整P0与项目未完成。
+
+
 ## Explorer UI 审计与查看/显示菜单 — 2026-11-08
 
 - **STAGE A COMMITTED / ONE P0 SLICE IMPLEMENTED / BOTH BUILDS AND 1516 REGRESSIONS PER CONFIG / 15 OWNED GUI CHECKS VERIFIED / DEFAULT PUBLISHED AND OPENED**。用户任务书原样归docs，先纯文档提交e497600，审计UI树、初始210条菜单记录和106项交互验收；再只实施顶部查看/显示。现菜单台账去掉旧控件重复行，共206条：54已验证、21待人工、40部分、68暂缓、4设计边界、19系统依赖，不将行数当功能完成率。

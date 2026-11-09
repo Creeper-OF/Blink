@@ -1,11 +1,12 @@
 # Explorer 兼容差距与切片顺序
 
-2026-11-08。接受用户提供的[任务书](EXPLORER_UI_MASTER_PROMPT.md)，以 `7135a14` 为阶段 A 的源码基线。该文档与[UI 规范](EXPLORER_UI_SPEC.md)、[菜单台账](EXPLORER_MENU_MATRIX.md)、[交互矩阵](EXPLORER_INTERACTION_TESTS.md)共同记录事实；下面的优先级是实施顺序，不是完成比例。
+阶段A审计2026-11-08；G02实现更新2026-11-09。接受用户提供的[任务书](EXPLORER_UI_MASTER_PROMPT.md)，以 `7135a14` 为阶段 A 的源码基线。该文档与[UI 规范](EXPLORER_UI_SPEC.md)、[菜单台账](EXPLORER_MENU_MATRIX.md)、[交互矩阵](EXPLORER_INTERACTION_TESTS.md)共同记录事实；下面的优先级是实施顺序，不是完成比例。
 
 ## 基线与证据边界
 
 - 已有本地浏览/多标签/三视图/选择、异步目录监听、MFT/USN 常驻索引、多盘范围搜索、文件关联打开、复制/移动/目录合并、覆盖、回收站/永久删除、属性统计、剪贴板及拖放管线；以真实源码和最新 Slice21 为准，不能依据历史计划中的“尚未开始”否认现状。
-- 最近成功记录为 Debug/Release 各1516 PASS、0 FAIL、4项符号链接权限1314 SKIP，235个原生输入、368个中英/fallback资源键；Slice21的8项GUI与此前菜单39项是历史已执行证据，不冒称本轮新跑。
+- 当前G02 Hidden/Search修正后：Debug/Release完整构建成功，普通回归各1542 PASS、0 FAIL、4项符号链接权限1314 SKIP；240个冻结原生输入哈希匹配、375套中英/fallback资源，26项新增检查（23项命令栏策略/选择模型、3项搜索生命周期）。修正前正式尝试13个子项PASS仅为红证据，私有Search3 PASS仅属诊断；修正后新Release完整18项GUI已18 PASS/0 FAIL/0 SKIP，Hidden→Search/PasteParent同一串联通过；4个未点击排序叶仍待验。
+- G01历史有效记录为235输入/369资源、两配置各1516/0/4、GUI15/0/0。更早Slice21为235输入/368资源、GUI8项，此前普通/搜索菜单39项仍是各自候选的历史证据；不冒称G02重跑。
 - 本轮真实参考主机为 Windows 11 家庭版 **25H2 / 10.0.26200.9711 / zh-CN / 125%**，自有 Explorer 窗口呈现深色。任务书目标24H2、其他主题/倍率、多显示器和文本放大本轮 **NOT RUN**。
 - Explorer 仅在新 HWND 的精确 GUID fixture 中观察“查看/显示”。主菜单11项，显示子菜单新增5项；完整Show树的16项包含父层11项，不能当作16个子命令。主菜单包括8种视图、详情/预览窗格和显示；显示包括导航窗格、紧凑视图、项目复选框、扩展名、隐藏项目。这是本机版本事实，不硬编码成所有版本的唯一列表。
 - 实际主窗口截图仅用于布局参考，PrintWindow未捕获弹出菜单。菜单内容证据来自UIA；没有菜单像素对照或人工验收结论。未切换Explorer开关，测试窗口正常关闭，83字节fixture已清理。
@@ -17,8 +18,8 @@
 
 | ID | 优先级 | 现状/差距 | 状态 | 真实入口与复用边界 | 取舍/风险与验收 |
 | --- | --- | --- | --- | --- | --- |
-| G01 | P0，本轮唯一切片已交付 | 顶部已改真实查看/显示菜单：Grid/List/Details及Hidden | IMPLEMENTED_VERIFIED | main `BuildFolderViewCommands/SetFolderViewMode/SetShowHiddenItems`，`FolderCommandPolicy`、`ContextMenuAppearance` | 只收拢三个已实现视图与隐藏项；复用每标签视图、窗口级visibility、既有命令；用实际布局、勾选、双标签和stale peer验证，不塞预览等占位 |
-| G02 | P0，后续 | 完整New/Cut/Copy/Paste/Rename/Delete/Sort/View/More CommandBar及窄宽溢出缺失；排序仍ComboBox | PARTIAL | main现有文件区命令与 `ExecuteFolderCommand`、`FolderCommandPolicy`、搜索意图 | 另一个独立界面切片，按位置/选择计算能力；不得建立第二套文件操作或把搜索目标当普通目录 |
+| G01 | P0，历史限定切片已交付 | 顶部已改真实查看/显示菜单：Grid/List/Details及Hidden | IMPLEMENTED_VERIFIED | main `BuildFolderViewCommands/SetFolderViewMode/SetShowHiddenItems`，`FolderCommandPolicy`、`ContextMenuAppearance` | 只收拢三个已实现视图与隐藏项；复用每标签视图、窗口级visibility、既有命令；用实际布局、勾选、双标签和stale peer验证，不塞预览等占位 |
+| G02 | P0，限定验证完成/4排序叶待验 | 标准CommandBar已集成8个主按钮、New/Sort/View菜单、原生More的7个次级动作及动态溢出；旧排序Combo/方向按钮已移除 | IMPLEMENTED_NEEDS_MANUAL | `CommandBarPresentation`仅展示；`ExplorerCommandBarModel`从现有Tab/Search推导能力；main复用 `ExecuteFolderCommand`、原搜索动作和唯一队列 | Hidden/Search修正后Debug/Release各1542/0/4，240冻结输入哈希匹配/375资源；新Release完整GUI18/0/0；实际覆盖24条顶部入口已验，Sort Name/Modified/Type/Ascending4条未点仍待验。命令行跨窗格，bar本体Left内容宽；640宽原生溢出已验，其他环境及整P0不外推 |
 | G03 | P0，后续 | 地址为常驻TextBox；面包屑、Alt+D、Esc恢复/返回列表、F4候选未接 | PARTIAL | main `BuildUi/RestoreNavigationUi/BrowseAsync`；`TabState/NavigationModel/Location` | 先补编辑焦点闭环再面包屑；ThisPC保持虚拟Location；历史候选有真实数据后才开放 |
 | G04 | P0，后续 | F3/F6焦点循环等未显式接线，TabView和ListView部分快捷键由控件提供 | IMPLEMENTED_NEEDS_MANUAL | main `AddAccelerator/CreateFolderViewControl`、WinUI TabView/Extended Selection | 不以未手写CtrlTab认定功能完全缺失；逐一实测标题/地址/搜索/列表焦点，避免重复accelerator，文本编辑优先 |
 | G05 | P0，后续 | F2对话框固定SelectAll，普通文件扩展名也全选 | PARTIAL | `FolderNameDialog.cpp`、普通/搜索重命名共同入口 | 独立补主名选区；目录、dotfile、多点名、IME、Enter/Esc与文本Ctrl+A/Delete覆盖，不改变rename引擎 |
@@ -33,7 +34,7 @@
 | G14 | P1 | 详情窗格/预览/缩略图未产品化，属性库/Provider原型不能代替前台功能 | DEFERRED | `Blink.Properties`、`PropertiesDialog`；未来独立metadata/preview边界 | 不提前开放无处理能力菜单，第三方预览不在主UI无限等待；格式与故障处理按实际后端落实 |
 | G15 | P1 | 标题/Mica/浅深色与基础UIA已做，激活、高对比、全部缩放/多屏/文本放大未完成矩阵 | IMPLEMENTED_NEEDS_MANUAL | main `BuildWindowFrame/SyncWindowFrameTheme`、App.xaml、现有框架检查 | 保留系统caption按钮/Snap/命中测试，不用自绘替换；本轮125%观察不能代替所有倍率和读屏验收 |
 | G16 | P1 | 每标签有路径/历史/排序/视图/选择/search；地址草稿、滚动offset与完整会话持久化不完整 | PARTIAL | `TabRecord/TabUiState/TabWindowState`、`PresentActiveTab` | 不把UI控件变成唯一真相源；用户切标签/关闭不能复活异步结果；会话落盘另立切片 |
-| G17 | P1 | New仅新建目录，ShellNew模板/快捷方式、新更多菜单及Blink设置页未接 | PARTIAL | `NewFolderOperation/FolderNameDialog/FolderCommandPolicy` | 系统Office等注册项动态获取；无实际模板不伪造Word/ZIP；设置仅承诺Blink自身可兑现部分 |
+| G17 | P1 | 顶部New已接真实新建目录，原生More已接7个真实动作；ShellNew模板/快捷方式、系统动态顶部动作及Blink设置页仍缺 | PARTIAL | `NewFolderOperation/FolderNameDialog/FolderCommandPolicy`、G02展示与命令绑定 | 系统Office等注册项动态获取；无实际模板不伪造Word/ZIP；设置仅承诺Blink自身可兑现部分 |
 | G18 | P1 | 本地索引搜索可用；同卷Busy/保存时等待与UI首屏仍待专项 | PARTIAL | `SearchState/Coordinator/Presentation`、`Blink.Index*` | UI任务不改索引模型/IPC/BLK5，不用全盘DFS掩盖服务离线；性能另给量化证据 |
 | G19 | P2 | 回收站浏览/恢复/清空、操作Undo/Redo未产品化 | DEFERRED | 当前仅 `DeleteOperation` 回收站提交，非回收站浏览器 | 不绑定假Ctrl+Z/Y，输入框自身编辑撤销仍由文本控件处理；不可把清空放普通目录菜单 |
 | G20 | P2 | 特殊Shell Namespace、MTP、图库、库、网络发现、云盘状态未原生管理 | DEFERRED | `Location`当前ThisPC/本地folder，Provider为原型 | 逐项区分系统跳转/有限操作/暂缓；路径不存在时不能造“文件夹”，不承诺替代完整Shell Namespace |
@@ -45,9 +46,11 @@
 
 A. 三代理只读审计UI、菜单、交互，主模型复核源模型/历史、采集自有Explorer参考，先提交四份规范与原始任务书。此阶段不修改业务代码。
 
-B. **只实施 G01**：顶部查看MenuFlyout含现有三视图，显示子菜单含隐藏项目；文案/图标/勾选/Tooltip/UIA共用WinUI和已有资源。开菜单时从TabState/窗口visibility读取，调用原命令。旧peer不能修改新标签或新目录，搜索面板仍按既有边界隐藏目录视图工具条。
+B. 历史首片**只实施 G01**：顶部查看MenuFlyout含现有三视图，显示子菜单含隐藏项目；文案/图标/勾选/Tooltip/UIA共用WinUI和已有资源。开菜单时从TabState/窗口visibility读取，调用原命令。旧peer不能修改新标签或新目录，搜索面板仍按既有边界隐藏目录视图工具条。
 
-C. 本切片Debug/Release及真实UI检查已通过（各1516/0/4、GUI15/0/0），G01仅按这些动作范围验证，再按G02/G03等逐个推进。后续P1/P2只登记，不在本提交里顺手实现。
+C. G01当时Debug/Release与真实UI检查已通过（各1516/0/4、GUI15/0/0），仅按这些动作范围保留验证。
+
+D. 当前独立推进G02：将真实New/Cut/Copy/Paste/Rename/Delete/Sort/View与原生More接入标准CommandBar，保留原状态/文件操作/搜索/索引边界。双配置原生1542/0/4与修正后完整18项GUI18/0/0已完成；仅升级实际覆盖入口，4个未点击排序叶和完整环境矩阵仍保留，不将原生总数替代GUI。G03地址闭环、G05主名选区和其他P0/P1/P2继续按独立切片推进。
 
 ### G01 交付前必须取得的证据
 
@@ -58,6 +61,21 @@ C. 本切片Debug/Release及真实UI检查已通过（各1516/0/4、GUI15/0/0）
 
 风险限于WinUI菜单生成、既有命令绑定和展示状态；索引服务、协议、存储、文件操作引擎与ShellHost均不在此切片修改范围。失败修原因，不通过关闭测试或添加无动作按钮掩盖问题。
 
-## 本轮P0实测更新
+## G01历史实测更新
 
 最终235输入/369资源、Debug/Release各1516 PASS/0 FAIL/4权限SKIP；15项自有窗口检查通过，涵盖新菜单、实际三布局、selection/order/sort保持、Hidden/SYSTEM、双现有及新Tab、旧peer、纯键盘菜单和焦点、空目录/ThisPC、地址Ctrl+A/Delete作用域，以及正常关闭/归属清理。原始报告ui-view-menu-report.json记录Blink窗口DPI96、主题未捕获；Explorer参考窗口DPI120，两者不能混同。树展开与搜索Hidden联动、本轮未覆盖的其他焦点/IME/主题/DPI/24H2仍NOT RUN。G01功能已验证不代表全部P0或全部视觉/人工矩阵完成。
+
+
+## G02当前实现与待确认项
+
+代码入口为`main.cpp::BuildFolderViewCommands/CommandBarState/CaptureCommandBarContext/SyncCommandBarState/ExecuteCommandBarAction/PopulateCommandBarMenu`。标准展示helper不执行I/O；菜单打开读取权威状态并绑定上下文，切标签、换目录、搜索结果/选择代次更新时关闭旧菜单，动作重验。Search的粘贴明确为“粘贴到所在目录”；ThisPC不继承背后目录目标；剪贴板变化同步启用态。反选由`TabState::InvertRowSelection`完成，保留硬链接名称独立性。
+
+当前原生记录归`.build/explorer-command-bar/integration/tests-debug.log`及`tests-release.log`：修正后两配置各1542 PASS/0 FAIL/4权限SKIP，240冻结输入哈希匹配/375资源。新增共26项检查（23项命令栏派生能力/选择模型、3项搜索生命周期），不代替GUI操作。启动probe确认真实ApplicationBar、AppBarButton和系统More；独立Release探针`ui-overflow-probe.json`正常exit0，实际overflow UIA为OverflowPopup（Popup / ControlType.Window），ControlView链为CommandSelectAll→OverflowPopup→ExplorerCommandBar，RawView另含无ID ScrollViewer。TopMoreMenu仅为源码Style给Presenter设置的ID，本机未暴露，不能继续把它当实际UIA入口。
+
+`TabWindowState::SetVisibilityPolicy`原先先执行`LeaveSearch()`取消当前查询，又额外调用`SearchCoordinator::Shutdown()`，将所有已有标签的搜索状态永久置为Closed；随后`SearchState::Begin()`恒为0。独立只测搜索会成功，完整脚本执行#08 Hidden开关后，#14搜索连续失败两次，才暴露这一真实组合问题。修复仅删除visibility切换中的多余Shutdown，保留LeaveSearch取消/离开语义、CloseTab和全局Shutdown的永久关闭职责。新增3个模型回归覆盖现有前后台标签的旧代次取消、显示/隐藏后均可重启，以及关标签只永久关闭被关标签且不影响存活标签。
+
+修正前正式GUI曾出现13个子项PASS，但在#08 Hidden之后#14连续失败两次；这份红尝试只用于定位问题，不能当最终验证。私有只搜索探针3 PASS同样仅属诊断，不能替代完整场景。修正后Release同一完整18项GUI已18 PASS/0 FAIL/0 SKIP，报告归`ui-command-bar-report.json`；#08 Hidden→#14真实索引/PasteParent及字节核对串联通过。早期第09的harness旧TopMoreMenu定位问题已通过真实OverflowPopup校正，与本次搜索生命周期缺陷分开记录。 最终报告已覆盖640宽原生overflow、More实际动作/键盘焦点及旧peer；24条实际顶部入口已按范围验证，4个未点击Sort Name/Modified/Type/Ascending仍IMPLEMENTED_NEEDS_MANUAL，因此G02整组仍保留待验边界，不将全部28条统一升级。
+
+本切片不提供Share、ShellNew、快捷方式、分组、预览/详情窗格或未实现视图；完整24H2/主题/DPI/多显示器/IME/Narrator矩阵仍按原台账保留。G01历史View/Hidden证据不因本轮新增命令而扩大，也不自动证明AppBarButton新host。详见[命令栏交接](EXPLORER_COMMAND_BAR_HANDOFF.md)和[交互矩阵](EXPLORER_INTERACTION_TESTS.md)。
+
+最终环境：25H2/build26200.9711、zh-CN、非管理员，window_dpi=96，theme="not captured"；这不是24H2或完整主题/DPI验收。自有进程exit0、无强杀；fixture已按精确路径/字节清理3152字节，compiler-temp已清、释放字节未记录，clipboard_restored=true。默认发布状态见[命令栏交接](EXPLORER_COMMAND_BAR_HANDOFF.md)，本页不虚构运行PID或把GUI通过当作默认发布完成。

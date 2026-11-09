@@ -138,6 +138,8 @@ copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(
     <ClInclude Include="include\Blink\App\SearchContextCommands.h" />
     <ClInclude Include="include\Blink\App\SearchContextMenuPresentation.h" />
     <ClInclude Include="include\Blink\App\ContextMenuAppearance.h" />
+    <ClInclude Include="include\Blink\App\CommandBarPresentation.h" />
+    <ClInclude Include="include\Blink\App\ExplorerCommandBarModel.h" />
     <ClInclude Include="include\Blink\App\ShellContextMenu.h" />
     <ClInclude Include="include\Blink\App\ShellContextMenuController.h" />
     <ClInclude Include="include\Blink\App\SearchViewModel.h" />
@@ -192,6 +194,7 @@ copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(
     <ClCompile Include="src\TabWindowState.cpp" />
     <ClCompile Include="src\FolderViewFormatting.cpp" />
     <ClCompile Include="src\FolderViewPresentation.cpp" />
+    <ClCompile Include="src\CommandBarPresentation.cpp" />
     <ClCompile Include="src\Localization.cpp" />
     <ClCompile Include="src\Location.cpp" />
     <ClCompile Include="src\NavigationTree.cpp" />

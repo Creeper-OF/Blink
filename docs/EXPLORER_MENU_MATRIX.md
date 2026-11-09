@@ -1,6 +1,8 @@
 # Explorer 菜单与命令矩阵
 
-阶段A只读审计基线为 `7135a14`，审计文档提交为 `e497600`。本页现更新到唯一P0“顶部查看/显示菜单”的当前冻结字节：235项原生输入、369套中英/fallback资源；最终Debug/Release各1516 PASS / 0 FAIL / 4权限SKIP。主模型最终Release自有窗口报告为 **15 PASS / 0 FAIL / 0 SKIP**，只将明确覆盖的查看、显示和四个命令行升级验证状态，不把其它菜单或Explorer兼容性一并标为完成。
+阶段A只读审计基线为`7135a14`，审计文档提交为`e497600`。2026-11-09更新到G02标准CommandBar当前实现：240冻结输入哈希匹配、375套中英/fallback资源；Hidden/Search修正后Debug/Release完整构建成功，普通回归各1542 PASS / 0 FAIL / 4符号链接权限1314 SKIP。新增共26项检查：23项命令栏能力/选择模型、3项搜索生命周期。修正后Release完整18项GUI已18 PASS/0 FAIL/0 SKIP；只将实际覆盖的24条顶部入口升级，4个未点击排序叶仍`IMPLEMENTED_NEEDS_MANUAL`。
+
+G01历史候选为235输入/369资源、两配置各1516/0/4、Release自有窗口15 PASS/0 FAIL/0 SKIP；下方保留这份有效证据。G02将查看host由DropDownButton换为AppBarButton，G01历史结果不自动证明新host、原生overflow或新增文件动作。
 
 此前目录合并移动8项UI检查、普通目录21项与搜索18项菜单检查继续作为各自范围的历史证据，不冒充本轮重跑。这里仅修改菜单台账；本次文档更新未改产品、构建或运行窗口。
 
@@ -20,13 +22,17 @@
 
 ## 当前树与目标树
 
-当前顶部实际是 `查看 DropDownButton > 网格/列表/详细信息；显示 > 隐藏的项目`，旁边保留 `Sort ComboBox(Name/Type/Size/Modified) + 方向按钮`。原三项视图ComboBox与独立Hidden CheckBox已替换；New/Sort/More完整CommandBar仍未接入。文件右键与背景右键不同，导航树、标签和列头没有复用它作为已实现菜单。
+当前顶部为标准WinUI `CommandBar`：8个主AppBarButton，New/Sort/View真实菜单，单个系统原生MoreButton承载7个SecondaryCommands和窄宽动态溢出。命令行容器横跨左右窗格，bar本体按内容期望宽度左对齐；不宣称其bounds铺满窗口。旧视图/排序Combo、独立Hidden和方向按钮已移除。文件右键与背景右键不同；导航树、标签和列头仍按各自缺口登记。
 
 ~~~text
-当前顶部（唯一P0已实现）
-├─ 查看 > 网格 / 列表 / 详细信息（互斥勾选）
-│         显示 > 隐藏的项目（窗口级Toggle）
-└─ 原排序选择器 + 升降序按钮（本轮未改）
+当前顶部（G02已实现，18项有限GUI通过；4个排序叶待验）
+├─ 新建 #CommandNew > 新建文件夹 #TopNewFolder
+├─ 剪切 / 复制 / 粘贴 / 重命名 / 删除（标准AppBarButton）
+├─ 排序 #CommandSort > 名称 / 修改时间 / 类型 / 大小；升序 / 降序
+├─ 查看 #FolderViewMode > 网格 / 列表 / 详细信息；显示 > 隐藏的项目
+└─ 系统MoreButton“…” → #OverflowPopup（Popup，UIA Window）
+   ├─ 全选 / 取消选择 / 反向选择；属性 / 刷新；复制完整路径 / 复制所在目录路径
+   └─ 窄宽时动态移入的主命令（没有第二个More按钮）
 当前普通文件/目录/多选右键
 ├─ 打开
 ├─ ─ 剪切 / 复制 / 粘贴（当前目录）
@@ -50,20 +56,19 @@
 └─ 更多 > 全选/取消/反选/属性/选项/系统设置/上下文动态动作
 ~~~
 
-本轮唯一P0已按限定范围实现并完成15项GUI验证：三视图和隐藏项收拢到“查看 > 三视图；显示 > 隐藏的项目”，保留Sort控件，复用原FolderCommand与窗口级VisibilityPolicy。`M-TOP-VIEW-DETAILS / LIST / GRID / SHOW-HIDDEN`四行及两个实际容器已有报告证据；这不代表完整Explorer查看功能。ShellNew、分组、面板、列管理和More仍按下表保留缺口，索引/导航/文件操作/ShellHost不因P0改写。
+G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍保留。G02保留三真实View模式及窗口级Hidden，新增标准栏与真实命令组织；策略按当前Folder/ThisPC/Search、选择和剪贴板推导，打开菜单/overflow捕获上下文并在动作时重验。Search粘贴改名“粘贴到所在目录”，ThisPC不继承旧目录目标。Share、ShellNew、分组、面板、列管理和未实现视图仍保留缺口，既有索引/导航/文件操作/ShellHost不为展示层另起模型。
 
 ## 场景与状态计数
 
-统计单位为审计行/命令族，不是每个UI叶子个数；引用共用树的场景仍有自己的状态与证据，不能据此算功能百分比。动态行也不等于某次系统返回的命令数。删除四行已替换的旧控件记录，不把旧控件和新菜单重复计算。
+统计单位为审计行/命令族，不是每个UI叶子个数；引用共用树的场景仍有自己的状态与证据，不能据此算功能百分比。动态行也不等于某次系统返回的命令数。移除已被G02排序菜单替换的5行旧排序控件记录，新增More中的刷新及两项路径复制；不重复统计已删除控件。
 
 | 场景 | 行数 | IMPLEMENTED_VERIFIED | IMPLEMENTED_NEEDS_MANUAL | PARTIAL | DEFERRED | UNSUPPORTED_BY_DESIGN | OS_DEPENDENT |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| T0 当前顶部保留的排序控件（P0未改） | 5 | 0 | 5 | 0 | 0 | 0 | 0 |
-| T-CORE 目标顶部常用命令区 | 6 | 0 | 0 | 5 | 1 | 0 | 0 |
-| T-NEW 目标顶部新建 | 4 | 0 | 0 | 2 | 2 | 0 | 0 |
-| T-SORT 目标排序与分组 | 9 | 0 | 0 | 7 | 2 | 0 | 0 |
+| T-CORE 当前顶部常用命令区及共享缺口 | 6 | 5 | 0 | 0 | 1 | 0 | 0 |
+| T-NEW 当前顶部新建及模板缺口 | 4 | 2 | 0 | 0 | 2 | 0 | 0 |
+| T-SORT 当前排序及分组缺口 | 9 | 3 | 4 | 0 | 2 | 0 | 0 |
 | T-VIEW 当前查看/显示及其余目标缺口 | 14 | 6 | 0 | 2 | 5 | 1 | 0 |
-| T-MORE 目标更多 | 12 | 0 | 0 | 3 | 8 | 1 | 0 |
+| T-MORE 当前原生更多及后续缺口 | 15 | 8 | 0 | 0 | 6 | 1 | 0 |
 | C01 普通文件单选 | 26 | 16 | 4 | 0 | 0 | 0 | 6 |
 | C02 普通目录单选 | 9 | 4 | 1 | 0 | 3 | 0 | 1 |
 | C03 多文件、多目录、混合选择 | 11 | 6 | 5 | 0 | 0 | 0 | 0 |
@@ -77,49 +82,39 @@
 | C11 UNC/SMB与远端Provider | 6 | 0 | 0 | 1 | 4 | 1 | 0 |
 | C12 标签、地址、搜索输入、列头 | 24 | 3 | 4 | 0 | 12 | 0 | 5 |
 | DYN 系统动态子菜单与执行机制 | 12 | 3 | 0 | 1 | 1 | 0 | 7 |
-| 合计 | 206 | 54 | 21 | 40 | 68 | 4 | 19 |
+| 合计 | 204 | 72 | 20 | 23 | 66 | 4 | 19 |
 
-## T0 当前顶部保留的排序控件（P0未改）
-
-| 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T0 | 当前命令区 > 排序选择器 > 名称 | 名称 | Name | 无（ComboBox文字） | 仅已提交普通目录；此电脑禁用排序 | SortField::Name；UIA FolderSortField | Blink | IMPLEMENTED_NEEDS_MANUAL | [TOP] [SORT] | command_folder_sort_supported |
-| T0 | 当前命令区 > 排序选择器 > 类型 | 类型 | Type | 无（ComboBox文字） | 仅已提交普通目录；此电脑禁用排序 | SortField::Type；UIA FolderSortField | Blink | IMPLEMENTED_NEEDS_MANUAL | [TOP] [SORT] | command_folder_sort_supported |
-| T0 | 当前命令区 > 排序选择器 > 大小 | 大小 | Size | 无（ComboBox文字） | 仅已提交普通目录；此电脑禁用排序 | SortField::Size；UIA FolderSortField | Blink | IMPLEMENTED_NEEDS_MANUAL | [TOP] [SORT] | command_folder_sort_supported |
-| T0 | 当前命令区 > 排序选择器 > 修改时间 | 修改时间 | Modified | 无（ComboBox文字） | 仅已提交普通目录；此电脑禁用排序 | SortField::Modified；UIA FolderSortField | Blink | IMPLEMENTED_NEEDS_MANUAL | [TOP] [SORT] | command_folder_sort_supported |
-| T0 | 当前命令区 > 排序方向按钮 | 升序/降序 | Ascending/Descending | 文字↑/↓ | 目录可排序时切换，沿每标签descriptor | UIA FolderSortDirection；SetFolderSort | Blink | IMPLEMENTED_NEEDS_MANUAL | [TOP] [SORT] | tab_sort_descriptors_are_isolated |
-
-## T-CORE 目标顶部常用命令区
+## T-CORE 当前顶部常用命令与共享缺口
 
 | 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T-CORE | 目标命令栏 > 剪切 | 剪切 | Cut | 尚无顶部按钮；已有右键Fluent图标 | 目标入口尚无；可复用既有选择/忙碌/目录身份判定 | FolderCommand::Cut | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_pending_or_projection_work_blocks_dispatch |
-| T-CORE | 目标命令栏 > 复制 | 复制 | Copy | 尚无顶部按钮；已有右键Fluent图标 | 目标入口尚无；可复用既有选择/忙碌/目录身份判定 | FolderCommand::Copy | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_pending_or_projection_work_blocks_dispatch |
-| T-CORE | 目标命令栏 > 粘贴 | 粘贴 | Paste | 尚无顶部按钮；已有右键Fluent图标 | 目标入口尚无；可复用既有选择/忙碌/目录身份判定 | FolderCommand::Paste | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_pending_or_projection_work_blocks_dispatch |
-| T-CORE | 目标命令栏 > 重命名 | 重命名 | Rename | 尚无顶部按钮；已有右键Fluent图标 | 目标入口尚无；可复用既有选择/忙碌/目录身份判定 | FolderCommand::Rename | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_pending_or_projection_work_blocks_dispatch |
-| T-CORE | 目标命令栏 > 删除 | 删除 | Delete | 尚无顶部按钮；已有右键Fluent图标 | 目标入口尚无；可复用既有选择/忙碌/目录身份判定 | FolderCommand::Delete | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_pending_or_projection_work_blocks_dispatch |
+| T-CORE | 当前命令栏 > 剪切 | 剪切 | Cut | Fluent E8C6；标准AppBarButton | 当前Folder选择沿原policy；Search仅当前有效单结果；ThisPC禁用。模态/导航/目标/队列能力按动作重验 | ExplorerCommandBarAction::Cut；UIA CommandCut；复用FolderCommand/Search动作 | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [F-CMD] [CB-UI] | [CB-UI] #05真实单文件MOVE提交及留源/移除；#02混选启用态；#14 Search仅启用态；纯策略见[CB-TESTS] |
+| T-CORE | 当前命令栏 > 复制 | 复制 | Copy | Fluent E8C8；标准AppBarButton | 当前Folder选择沿原policy；Search仅当前有效单结果；ThisPC禁用。模态/导航/目标/队列能力按动作重验 | ExplorerCommandBarAction::Copy；UIA CommandCopy；复用FolderCommand/Search动作 | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [F-CMD] [CB-UI] | [CB-UI] #04真实单文件COPY提交及字节；#02混选启用态；#14 Search仅启用态；纯策略见[CB-TESTS] |
+| T-CORE | 当前命令栏 > 粘贴 | 粘贴（搜索时为粘贴到所在目录） | Paste (Paste to containing folder in Search) | Fluent E77F；标准AppBarButton | CF_HDROP及有效当前目标；Folder为当前目录，Search明确“粘贴到所在目录”；ThisPC/旧浏览目录不可作目标 | ExplorerCommandBarAction::Paste；UIA CommandPaste；复用FolderCommand/Search动作 | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [F-CMD] [CB-UI] | [CB-UI] #04/#05当前目录COPY/MOVE；#14真实Search结果PasteParent与字节，不用旧浏览目录；纯策略见[CB-TESTS] |
+| T-CORE | 当前命令栏 > 重命名 | 重命名 | Rename | Fluent E8AC；标准AppBarButton | 当前Folder选择沿原policy；Search仅当前有效单结果；ThisPC禁用。模态/导航/目标/队列能力按动作重验；普通目录仅单选可改名 | ExplorerCommandBarAction::Rename；UIA CommandRename；复用FolderCommand/Search动作 | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [F-CMD] [CB-UI] | [CB-UI] #06普通目录单文件改名及字节；#14 Search仅启用态；纯策略见[CB-TESTS] |
+| T-CORE | 当前命令栏 > 删除 | 删除 | Delete | Fluent E74D；标准AppBarButton | 当前Folder选择沿原policy；Search仅当前有效单结果；ThisPC禁用。模态/导航/目标/队列能力按动作重验；Shift走已有永久删除确认，不默默降级；G02仅Shift永久分支实测，普通回收站本轮NOT RUN | ExplorerCommandBarAction::Delete；UIA CommandDelete；复用FolderCommand/Search动作 | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [F-CMD] [CB-UI] | [CB-UI] #07仅Shift永久删除取消/明确确认分支；#14 Search仅启用态；普通回收站本轮NOT RUN；纯策略见[CB-TESTS] |
 | T-CORE | 目标命令栏 > 共享 | 共享 | Share | 未接入 | 无静态共享按钮；系统扩展见DYN | —（尚未定义） | Blink | DEFERRED | [TOP] [HOST] | NOT RUN: M-T-CORE-06 |
 
-## T-NEW 目标顶部新建
+## T-NEW 当前顶部新建与模板缺口
 
 | 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T-NEW | 目标命令栏 > 新建 | 新建 | New | 未接入 | 没有顶部New下拉；背景仅直接新建文件夹 | —（菜单容器未定义） | Blink | PARTIAL | [TOP] [F-MENU] | NOT RUN: M-T-NEW-01 |
-| T-NEW | 目标命令栏 > 新建 > 文件夹 | 新建文件夹 | New folder | 未显示；既有E8F4 | 仅背景/快捷键已实现，顶部叶不存在；目录身份有效且无互斥任务 | FolderCommand::NewFolder | Blink | PARTIAL | [TOP] [F-CMD] | command_new_folder_ready_without_selection |
+| T-NEW | 当前命令栏 > 新建 | 新建 | New | Fluent E710；AppBarButton下拉 | Opening按当前Folder上下文重建；仅真实NewFolder，Search/ThisPC及互斥状态禁用 | UIA CommandNew / TopNewMenu | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [F-CMD] [CB-UI] | [CB-UI] #03真实New菜单/唯一文件夹叶及原名称对话框，精确自有空目录；#13/#14虚拟/Search禁用；纯策略见[CB-TESTS] |
+| T-NEW | 当前命令栏 > 新建 > 文件夹 | 新建文件夹 | New folder | 复用既有新建文件夹Fluent图标 | Opening按当前Folder上下文重建；仅真实NewFolder，Search/ThisPC及互斥状态禁用 | FolderCommand::NewFolder；UIA TopNewFolder | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [F-CMD] [CB-UI] | [CB-UI] #03真实New菜单/唯一文件夹叶及原名称对话框，精确自有空目录；#13/#14虚拟/Search禁用；纯策略见[CB-TESTS] |
 | T-NEW | 目标命令栏 > 新建 > 快捷方式 | 快捷方式 | Shortcut | 未接入 | 无创建快捷方式UI或命令，不等同打开已有lnk | —（尚未定义） | Shell | DEFERRED | [TOP] [HOST] | NOT RUN: M-T-NEW-03 |
 | T-NEW | 目标命令栏 > 新建 > 系统模板 > 文本及注册类型 | 系统注册的新建类型（动态） | Registered ShellNew templates (dynamic) | 系统注册图标；尚未接入 | 必须来自ShellNew/背景对象；当前host只获取选中项IContextMenu | —（尚无ShellNew枚举入口） | Shell | DEFERRED | [HOST] [TOP] | NOT RUN: M-T-NEW-04 |
 
-## T-SORT 目标排序与分组
+## T-SORT 当前排序与分组缺口
 
 | 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T-SORT | 目标命令栏 > 排序 | 排序 | Sort | 未接入下拉；已有选择器 | 排序后端存在；顶部层级尚未建立 | —（菜单容器未定义） | Blink | PARTIAL | [TOP] [F-MENU] | NOT RUN: M-T-SORT-01 |
-| T-SORT | 目标命令栏 > 排序 > 名称 | 名称 | Name | 未显示；右键已有图标 | 目录可排序；搜索/此电脑不得借用背后目录排序状态 | FolderCommand::SortName | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_this_pc_sort_disabled |
-| T-SORT | 目标命令栏 > 排序 > 修改时间 | 修改时间 | Modified | 未显示；右键已有图标 | 目录可排序；搜索/此电脑不得借用背后目录排序状态 | FolderCommand::SortModified | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_this_pc_sort_disabled |
-| T-SORT | 目标命令栏 > 排序 > 类型 | 类型 | Type | 未显示；右键已有图标 | 目录可排序；搜索/此电脑不得借用背后目录排序状态 | FolderCommand::SortType | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_this_pc_sort_disabled |
-| T-SORT | 目标命令栏 > 排序 > 大小 | 大小 | Size | 未显示；右键已有图标 | 目录可排序；搜索/此电脑不得借用背后目录排序状态 | FolderCommand::SortSize | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_this_pc_sort_disabled |
-| T-SORT | 目标命令栏 > 排序 > 升序 | 升序 | Ascending | 未显示；右键已有图标 | 目录可排序；搜索/此电脑不得借用背后目录排序状态 | FolderCommand::SortAscending | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_this_pc_sort_disabled |
-| T-SORT | 目标命令栏 > 排序 > 降序 | 降序 | Descending | 未显示；右键已有图标 | 目录可排序；搜索/此电脑不得借用背后目录排序状态 | FolderCommand::SortDescending | Blink | PARTIAL | [TOP] [F-CMD] [F-POLICY] | command_this_pc_sort_disabled |
+| T-SORT | 当前命令栏 > 排序 | 排序 | Sort | Fluent E8CB；AppBarButton下拉 | 仅当前可排序Folder；按Tab权威sort勾选。Search/ThisPC禁用；Opening捕获上下文，调用重验 | UIA CommandSort / TopSortMenu | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [SORT] [CB-UI] | [CB-UI] #08仅Size/Descending实际顺序及唯一勾选；#13/#14 ThisPC/Search禁用；其余4排序叶未点击 |
+| T-SORT | 当前命令栏 > 排序 > 名称 | 名称 | Name | 复用既有Fluent图标；Toggle勾选 | 仅当前可排序Folder；按Tab权威sort勾选。Search/ThisPC禁用；Opening捕获上下文，调用重验 | FolderCommand::SortName；UIA TopSortName | Blink | IMPLEMENTED_NEEDS_MANUAL | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [SORT] | command_bar_search_does_not_offer_fake_folder_projection_or_selection_modes；command_bar_this_pc_never_inherits_file_actions_from_old_folder_selection；本轮未点击该排序叶；保留GUI待验 [CB-GUI] |
+| T-SORT | 当前命令栏 > 排序 > 修改时间 | 修改时间 | Modified | 复用既有Fluent图标；Toggle勾选 | 仅当前可排序Folder；按Tab权威sort勾选。Search/ThisPC禁用；Opening捕获上下文，调用重验 | FolderCommand::SortModified；UIA TopSortModified | Blink | IMPLEMENTED_NEEDS_MANUAL | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [SORT] | command_bar_search_does_not_offer_fake_folder_projection_or_selection_modes；command_bar_this_pc_never_inherits_file_actions_from_old_folder_selection；本轮未点击该排序叶；保留GUI待验 [CB-GUI] |
+| T-SORT | 当前命令栏 > 排序 > 类型 | 类型 | Type | 复用既有Fluent图标；Toggle勾选 | 仅当前可排序Folder；按Tab权威sort勾选。Search/ThisPC禁用；Opening捕获上下文，调用重验 | FolderCommand::SortType；UIA TopSortType | Blink | IMPLEMENTED_NEEDS_MANUAL | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [SORT] | command_bar_search_does_not_offer_fake_folder_projection_or_selection_modes；command_bar_this_pc_never_inherits_file_actions_from_old_folder_selection；本轮未点击该排序叶；保留GUI待验 [CB-GUI] |
+| T-SORT | 当前命令栏 > 排序 > 大小 | 大小 | Size | 复用既有Fluent图标；Toggle勾选 | 仅当前可排序Folder；按Tab权威sort勾选。Search/ThisPC禁用；Opening捕获上下文，调用重验 | FolderCommand::SortSize；UIA TopSortSize | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [SORT] [CB-UI] | [CB-UI] #08仅Size/Descending实际顺序及唯一勾选；#13/#14 ThisPC/Search禁用；其余4排序叶未点击 |
+| T-SORT | 当前命令栏 > 排序 > 升序 | 升序 | Ascending | 复用既有Fluent图标；Toggle勾选 | 仅当前可排序Folder；按Tab权威sort勾选。Search/ThisPC禁用；Opening捕获上下文，调用重验 | FolderCommand::SortAscending；UIA TopSortAscending | Blink | IMPLEMENTED_NEEDS_MANUAL | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [SORT] | command_bar_search_does_not_offer_fake_folder_projection_or_selection_modes；command_bar_this_pc_never_inherits_file_actions_from_old_folder_selection；本轮未点击该排序叶；保留GUI待验 [CB-GUI] |
+| T-SORT | 当前命令栏 > 排序 > 降序 | 降序 | Descending | 复用既有Fluent图标；Toggle勾选 | 仅当前可排序Folder；按Tab权威sort勾选。Search/ThisPC禁用；Opening捕获上下文，调用重验 | FolderCommand::SortDescending；UIA TopSortDescending | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [SORT] [CB-UI] | [CB-UI] #08仅Size/Descending实际顺序及唯一勾选；#13/#14 ThisPC/Search禁用；其余4排序叶未点击 |
 | T-SORT | 目标命令栏 > 排序 > 其他属性 | 其他属性 | More properties | 未接入 | 当前只支持Name/Type/Size/Modified | —（尚未定义） | Blink | DEFERRED | [TOP] [SORT] | NOT RUN: M-T-SORT-08 |
 | T-SORT | 目标命令栏 > 分组依据 > 字段/方向/组操作 | 无/名称/修改日期/类型/大小；升降序；展开折叠 | None / Name / Date modified / Type / Size; direction; expand/collapse | 见共用树；缺口未显示 | 完整目标子树在上方；当前没有分组模型/组标题，不能用Sort冒充 | —（尚未定义） | Blink | DEFERRED | [TOP] [SORT] | NOT RUN: M-TSORT-GROUP |
 
@@ -127,30 +122,33 @@
 
 | 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T-VIEW | 当前命令栏 > 查看 | 查看 | View | WinUI下拉箭头；按钮无自定义图标 | DropDownButton每次Opening重建三种真实视图及Show；主标签为Command.View（查看）；不显示未来视图占位 | UIA FolderViewMode / TopViewMenu；PopulateFolderViewMenu | Blink | IMPLEMENTED_VERIFIED | [TOP] [TOP-VIEW] [P0-GUI] | 02 top View is the owned DropDownButton with real exclusive commands and Show；09 stale top View peer cannot change the next tab or its original tab；10 Space arrows Enter and Escape navigate Show using owned keyboard input and return focus |
-| T-VIEW | 当前命令栏 > 查看 > 详细信息 | 详细信息 | Details | Fluent E9D5；Toggle互斥勾选 | 每次打开按ActiveState勾选；原FolderCommand入口切换真实布局，保持路径/选择/顺序/排序，独立标签视图；空目录/ThisPC已测 | FolderCommand::ViewDetails；UIA TopViewDetails；矩阵 M-TOP-VIEW-DETAILS | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [P0-GUI] | 03 Details List and Grid change actual layout while preserving path selection order and sort；04 ordinary ContextView command and top View selection stay synchronized；07 two tabs independently retain real Grid and List layouts and paths；11 empty local directory supports actual layouts and Show without stale rows；12 ThisPC offers real view choices and retains virtual location semantics |
-| T-VIEW | 当前命令栏 > 查看 > 列表 | 列表 | List | Fluent EA37；Toggle互斥勾选 | 每次打开按ActiveState勾选；原FolderCommand入口切换真实布局，保持路径/选择/顺序/排序，独立标签视图；空目录/ThisPC已测 | FolderCommand::ViewList；UIA TopViewList；矩阵 M-TOP-VIEW-LIST | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [P0-GUI] | 03 Details List and Grid change actual layout while preserving path selection order and sort；04 ordinary ContextView command and top View selection stay synchronized；07 two tabs independently retain real Grid and List layouts and paths；11 empty local directory supports actual layouts and Show without stale rows；12 ThisPC offers real view choices and retains virtual location semantics |
-| T-VIEW | 当前命令栏 > 查看 > 网格 | 网格 | Grid | Fluent E80A；Toggle互斥勾选 | 每次打开按ActiveState勾选；原FolderCommand入口切换真实布局，保持路径/选择/顺序/排序，独立标签视图；空目录/ThisPC已测 | FolderCommand::ViewGrid；UIA TopViewGrid；矩阵 M-TOP-VIEW-GRID | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [P0-GUI] | 03 Details List and Grid change actual layout while preserving path selection order and sort；04 ordinary ContextView command and top View selection stay synchronized；07 two tabs independently retain real Grid and List layouts and paths；11 empty local directory supports actual layouts and Show without stale rows；12 ThisPC offers real view choices and retains virtual location semantics |
+| T-VIEW | 当前命令栏 > 查看 | 查看 | View | Fluent E8A9；标准AppBarButton下拉 | AppBarButton每次Opening重建三真实视图及Show；Name=Command.View，HelpText=当前模式；Search禁用，ThisPC保留真实View | UIA FolderViewMode / TopViewMenu；PopulateFolderViewMenu | Blink | IMPLEMENTED_VERIFIED | [TOP] [TOP-VIEW] [P0-GUI] [CB-PRESENTATION] [CB-APP] [CB-UI] | G01历史PASS：[P0-GUI]（02 top View is the owned DropDownButton with real exclusive commands and Show；09 stale top View peer cannot change the next tab or its original tab；10 Space arrows Enter and Escape navigate Show using owned keyboard input and return focus）；G02当前AppBarButton host [CB-UI] #08三布局/所选项/排序保留、Hidden开关与SYSTEM排除；#11 overflow内真实View；跨Tab等仍限G01历史 |
+| T-VIEW | 当前命令栏 > 查看 > 详细信息 | 详细信息 | Details | Fluent E9D5；Toggle互斥勾选 | 保留G01模型及菜单语义；每次打开按ActiveState勾选；原FolderCommand入口切换真实布局，保持路径/选择/顺序/排序，独立标签视图；空目录/ThisPC已测；当前AppBarButton host按G02 #08/#11限定验证 | FolderCommand::ViewDetails；UIA TopViewDetails；矩阵 M-TOP-VIEW-DETAILS | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [P0-GUI] [CB-PRESENTATION] [CB-APP] [CB-UI] | G01历史PASS：[P0-GUI]（03 Details List and Grid change actual layout while preserving path selection order and sort；04 ordinary ContextView command and top View selection stay synchronized；07 two tabs independently retain real Grid and List layouts and paths；11 empty local directory supports actual layouts and Show without stale rows；12 ThisPC offers real view choices and retains virtual location semantics）；G02当前AppBarButton host [CB-UI] #08三布局/所选项/排序保留、Hidden开关与SYSTEM排除；#11 overflow内真实View；跨Tab等仍限G01历史 |
+| T-VIEW | 当前命令栏 > 查看 > 列表 | 列表 | List | Fluent EA37；Toggle互斥勾选 | 保留G01模型及菜单语义；每次打开按ActiveState勾选；原FolderCommand入口切换真实布局，保持路径/选择/顺序/排序，独立标签视图；空目录/ThisPC已测；当前AppBarButton host按G02 #08/#11限定验证 | FolderCommand::ViewList；UIA TopViewList；矩阵 M-TOP-VIEW-LIST | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [P0-GUI] [CB-PRESENTATION] [CB-APP] [CB-UI] | G01历史PASS：[P0-GUI]（03 Details List and Grid change actual layout while preserving path selection order and sort；04 ordinary ContextView command and top View selection stay synchronized；07 two tabs independently retain real Grid and List layouts and paths；11 empty local directory supports actual layouts and Show without stale rows；12 ThisPC offers real view choices and retains virtual location semantics）；G02当前AppBarButton host [CB-UI] #08三布局/所选项/排序保留、Hidden开关与SYSTEM排除；#11 overflow内真实View；跨Tab等仍限G01历史 |
+| T-VIEW | 当前命令栏 > 查看 > 网格 | 网格 | Grid | Fluent E80A；Toggle互斥勾选 | 保留G01模型及菜单语义；每次打开按ActiveState勾选；原FolderCommand入口切换真实布局，保持路径/选择/顺序/排序，独立标签视图；空目录/ThisPC已测；当前AppBarButton host按G02 #08/#11限定验证 | FolderCommand::ViewGrid；UIA TopViewGrid；矩阵 M-TOP-VIEW-GRID | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [P0-GUI] [CB-PRESENTATION] [CB-APP] [CB-UI] | G01历史PASS：[P0-GUI]（03 Details List and Grid change actual layout while preserving path selection order and sort；04 ordinary ContextView command and top View selection stay synchronized；07 two tabs independently retain real Grid and List layouts and paths；11 empty local directory supports actual layouts and Show without stale rows；12 ThisPC offers real view choices and retains virtual location semantics）；G02当前AppBarButton host [CB-UI] #08三布局/所选项/排序保留、Hidden开关与SYSTEM排除；#11 overflow内真实View；跨Tab等仍限G01历史 |
 | T-VIEW | 目标命令栏 > 查看 > 详细信息窗格 | 详细信息窗格 | Details pane | 未接入 | 25H2实测为查看直属项；24H2位置NOT RUN；当前没有面板 | —（尚未定义） | Blink | DEFERRED | [TOP] [VIEW] [EXP25] | NOT RUN: M-T-VIEW-11 |
 | T-VIEW | 目标命令栏 > 查看 > 预览窗格 | 预览窗格 | Preview pane | 未接入 | 25H2实测为查看直属项；24H2位置NOT RUN；当前没有面板 | —（尚未定义） | Blink | DEFERRED | [TOP] [VIEW] [EXP25] | NOT RUN: M-T-VIEW-12 |
-| T-VIEW | 当前命令栏 > 查看 > 显示 | 显示 | Show | Fluent E890；系统子菜单箭头 | 当前仅包含Hidden items；没有导航窗格/紧凑视图/复选框/扩展名占位；Space/方向键/Enter/Escape已按报告限定验证 | UIA TopViewShow；MenuFlyoutSubItem | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [P0-GUI] [EXP25] | 02 top View is the owned DropDownButton with real exclusive commands and Show；05 Show Hidden reveals actual hidden file and directory but excludes both SYSTEM forms；10 Space arrows Enter and Escape navigate Show using owned keyboard input and return focus |
+| T-VIEW | 当前命令栏 > 查看 > 显示 | 显示 | Show | Fluent E890；系统子菜单箭头 | 保留G01模型及菜单语义；当前仅包含Hidden items；没有导航窗格/紧凑视图/复选框/扩展名占位；Space/方向键/Enter/Escape有G01历史报告限定验证；当前AppBarButton host按G02 #08/#11限定验证 | UIA TopViewShow；MenuFlyoutSubItem | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [P0-GUI] [EXP25] [CB-PRESENTATION] [CB-APP] [CB-UI] | G01历史PASS：[P0-GUI]（02 top View is the owned DropDownButton with real exclusive commands and Show；05 Show Hidden reveals actual hidden file and directory but excludes both SYSTEM forms；10 Space arrows Enter and Escape navigate Show using owned keyboard input and return focus）；G02当前AppBarButton host [CB-UI] #08三布局/所选项/排序保留、Hidden开关与SYSTEM排除；#11 overflow内真实View；跨Tab等仍限G01历史 |
 | T-VIEW | 目标命令栏 > 查看 > 显示 > 导航窗格 | 导航窗格 | Navigation pane | 未接入 | 现有导航窗格常驻，无显隐开关；25H2位于Show | —（尚未定义） | Blink | PARTIAL | [NAV] [EXP25] | NOT RUN: M-T-VIEW-14 |
 | T-VIEW | 目标命令栏 > 查看 > 显示 > 紧凑视图 | 紧凑视图 | Compact view | 未接入 | 25H2位于Show；当前模板固定行高，无紧凑模式 | —（尚未定义） | Blink | DEFERRED | [VIEW] [EXP25] | NOT RUN: M-T-VIEW-15 |
 | T-VIEW | 目标命令栏 > 查看 > 显示 > 项目复选框 | 项目复选框 | Item check boxes | 未接入 | 现用ListView选择模型，无项目复选框设置 | —（尚未定义） | Blink | DEFERRED | [VIEW] [EXP25] | NOT RUN: M-T-VIEW-16 |
 | T-VIEW | 目标命令栏 > 查看 > 显示 > 文件扩展名 | 文件扩展名 | File name extensions | 未接入 | 当前始终显示完整entry.name，无可切换扩展名隐藏策略 | —（尚未定义） | Blink | PARTIAL | [VIEW] [EXP25] | NOT RUN: M-T-VIEW-17 |
-| T-VIEW | 当前命令栏 > 查看 > 显示 > 隐藏项目 | 隐藏的项目 | Hidden items | Fluent E8A7；Toggle勾选 | 窗口级VisibilityPolicy作用既有/新标签；隐藏时裁剪隐藏选择且不复活；SYSTEM两种形式继续排除；树/搜索联动本轮NOT RUN | SetShowHiddenItems；UIA TopViewShowHidden；矩阵 M-TOP-VIEW-SHOW-HIDDEN | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [HIDDEN] [P0-GUI] | 05 Show Hidden reveals actual hidden file and directory but excludes both SYSTEM forms；06 hiding items removes hidden selection without resurrecting it；08 Hidden is synchronized across existing tabs and inherited by a new tab；10 Space arrows Enter and Escape navigate Show using owned keyboard input and return focus |
+| T-VIEW | 当前命令栏 > 查看 > 显示 > 隐藏项目 | 隐藏的项目 | Hidden items | Fluent E8A7；Toggle勾选 | 保留G01模型及菜单语义；窗口级VisibilityPolicy作用既有/新标签；隐藏时裁剪隐藏选择且不复活；SYSTEM两种形式继续排除；Hidden后Search可重启及PasteParent已在#08→#14串联通过；树展开/搜索隐藏结果显隐联动仍NOT RUN；当前AppBarButton host按G02 #08/#11限定验证 | SetShowHiddenItems；UIA TopViewShowHidden；矩阵 M-TOP-VIEW-SHOW-HIDDEN | Blink | IMPLEMENTED_VERIFIED | [TOP-VIEW] [HIDDEN] [P0-GUI] [CB-PRESENTATION] [CB-APP] [CB-UI] | G01历史PASS：[P0-GUI]（05 Show Hidden reveals actual hidden file and directory but excludes both SYSTEM forms；06 hiding items removes hidden selection without resurrecting it；08 Hidden is synchronized across existing tabs and inherited by a new tab；10 Space arrows Enter and Escape navigate Show using owned keyboard input and return focus）；G02当前AppBarButton host [CB-UI] #08三布局/所选项/排序保留、Hidden开关与SYSTEM排除；#11 overflow内真实View；跨Tab等仍限G01历史 |
 | T-VIEW | 范围边界 > 受保护系统项目 | 受保护系统项目 | Protected operating system files | 不显示入口 | 现有策略始终排除SYSTEM属性；不是隐藏项开关的一部分 | ItemVisibilityPolicy::Includes | Blink | UNSUPPORTED_BY_DESIGN | [HIDDEN] | visibility_show_hidden_does_not_expose_system_rows |
 | T-VIEW | 目标命令栏 > 查看 > 尚缺的视图模式 | 超大/大/中/小图标、平铺、内容 | Extra large / Large / Medium / Small icons; Tiles; Content | 见共用树；缺口未显示 | 25H2 UIA有六项；Blink Grid是固定136×112，不能映射为六个已实现模式 | —（尚未定义） | Blink | DEFERRED | [VIEW] [EXP25] | NOT RUN: M-TVIEW-MODES |
 
-## T-MORE 目标更多
+## T-MORE 当前原生更多与后续缺口
 
 | 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T-MORE | 目标命令栏 > … | 更多 | More | 未接入 | 当前没有More/overflow菜单，窄窗口也无命令溢出适配 | —（菜单容器未定义） | Blink | DEFERRED | [TOP] | NOT RUN: M-T-MORE-01 |
-| T-MORE | 目标命令栏 > 更多 > 全选 | 全选 | Select all | 未接入 | 目标入口未实现；不能以文本框编辑撤销替代文件操作撤销 | SelectAllFolderRows / Ctrl+A | Blink | PARTIAL | [F-KEY] | select_all_only_includes_visible_rows |
-| T-MORE | 目标命令栏 > 更多 > 全部取消 | 全部取消 | Select none | 未接入 | 目标入口未实现；不能以文本框编辑撤销替代文件操作撤销 | 现有清选状态；无顶部命令ID | Blink | PARTIAL | [F-MENU] | NOT RUN: M-TMORE-CLEAR |
-| T-MORE | 目标命令栏 > 更多 > 反向选择 | 反向选择 | Invert selection | 未接入 | 目标入口未实现；不能以文本框编辑撤销替代文件操作撤销 | —（尚未定义） | Blink | DEFERRED | [F-POLICY] | NOT RUN: M-TMORE-INVERT |
-| T-MORE | 目标命令栏 > 更多 > 属性 | 属性 | Properties | 未接入 | 目标入口未实现；不能以文本框编辑撤销替代文件操作撤销 | FolderCommand::Properties | Blink | PARTIAL | [F-CMD] | NOT RUN: M-TMORE-PROPERTIES |
+| T-MORE | 当前命令栏 > … | 更多 | More | 系统原生MoreButton“…”；没有重复自建按钮 | CommandBar默认overflow；7个真实SecondaryCommands及窄宽主命令；捕获当前上下文，Closed按dispatcher+epoch清理 | 原生CommandBar overflow；实际UIA OverflowPopup / Popup / Window；TopMoreMenu仅源码Style ID未暴露；无AppBarButton(Action.More) | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [CB-TESTS] [CB-UI] | [CB-UI] #09/#10实际More动作；#11 640宽原生动态overflow；#12旧peer；#15定向Space/Escape焦点及真实键盘全选；[CB-OVERFLOW]真实OverflowPopup |
+| T-MORE | 当前命令栏 > 更多 > 全选 | 全选 | Select all | Fluent E8B3；Secondary AppBarButton | 仅当前非空Folder，权威可见行；Search/ThisPC禁用，不借用虚拟容器可见项 | ExplorerCommandBarAction::SelectAll；UIA CommandSelectAll | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [CB-TESTS] [CB-UI] | [CB-UI] #09当前Folder全部可见行；#15原生More键盘真实全选；#14 Search禁用 |
+| T-MORE | 当前命令栏 > 更多 > 取消选择 | 取消选择 | Clear selection | Fluent E8B4；Secondary AppBarButton | 当前Folder存在权威选择时启用；调用TabState.ClearSelection，不改文本选择 | ExplorerCommandBarAction::ClearSelection；UIA CommandClearSelection | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [CB-TESTS] [CB-UI] | [CB-UI] #09清空当前Folder权威选择；#14 Search禁用 |
+| T-MORE | 当前命令栏 > 更多 > 反向选择 | 反向选择 | Invert selection | Fluent E8B5；Secondary AppBarButton | 仅当前非空Folder可见有效行；TabState反选，隐藏/SYSTEM不选，硬链接名称独立；不改导航/视图/排序 | ExplorerCommandBarAction::InvertSelection；UIA CommandInvertSelection | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [CB-TESTS] [CB-UI] | [CB-UI] #09反选补集且二次反选还原；#14 Search禁用；纯模型3相关检查见[CB-TESTS] |
+| T-MORE | 当前命令栏 > 更多 > 属性 | 属性 | Properties | Fluent E946；Secondary AppBarButton | Folder沿既有只读属性；当前有效Search结果走系统属性；ThisPC禁用，不假称所有属性可编辑 | ExplorerCommandBarAction::Properties；UIA CommandProperties | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [CB-TESTS] [CB-UI] | [CB-UI] #10普通目录选择的Blink只读属性；Search系统属性本轮未点击 |
+| T-MORE | 当前命令栏 > 更多 > 刷新 | 刷新 | Refresh | Fluent E72C；Secondary AppBarButton | Folder/ThisPC沿原刷新；Search重新提交当前查询，无需旧选择；模态禁用 | ExplorerCommandBarAction::Refresh；UIA CommandRefresh | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [CB-UI] | [CB-UI] #10同一已提交目录实际新增文件刷新；Search重新提交分支本轮未点击 |
+| T-MORE | 当前命令栏 > 更多 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B；Secondary AppBarButton | 当前Folder权威选择或有效Search单结果；动作时重验上下文，ThisPC禁用 | ExplorerCommandBarAction::CopyFullPath；UIA CommandCopyFullPath | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [CB-UI] | [CB-UI] #09 Folder真实路径；#14实际Search命中原路径复制 |
+| T-MORE | 当前命令栏 > 更多 > 复制所在目录路径 | 复制所在目录路径 | Copy containing folder path | Fluent E8B7；Secondary AppBarButton | 复制当前所选项包含目录；不是选中文件夹内部，不使用背后浏览目录 | ExplorerCommandBarAction::CopyParentPath；UIA CommandCopyParentPath | Blink | IMPLEMENTED_VERIFIED | [CB-PRESENTATION] [CB-MODEL] [CB-APP] [CB-UI] | [CB-UI] #09 Folder包含目录真实路径；Search该分支本轮未点击 |
 | T-MORE | 目标命令栏 > 更多 > 选项/文件夹选项 | 选项/文件夹选项 | Options / Folder options | 未接入 | 目标入口未实现；不能以文本框编辑撤销替代文件操作撤销 | —（尚未定义） | Blink | DEFERRED | [TOP] | NOT RUN: M-TMORE-OPTIONS |
 | T-MORE | 目标命令栏 > 更多 > 打开Windows设置 | 打开Windows设置 | Open Windows Settings | 未接入 | 目标入口未实现；不能以文本框编辑撤销替代文件操作撤销 | —（尚未定义） | Blink | DEFERRED | [TOP] | NOT RUN: M-TMORE-SETTINGS |
 | T-MORE | 目标命令栏 > 更多 > 在终端中打开 | 在终端中打开 | Open in Terminal | 未接入 | 目标入口未实现；不能以文本框编辑撤销替代文件操作撤销 | —（无Blink专属入口；动态项另见DYN） | Blink | DEFERRED | [HOST] | NOT RUN: M-TMORE-TERMINAL |
@@ -382,7 +380,10 @@
 
 ## 证据索引与验证边界
 
-- [TOP]：`main.cpp::BuildFolderViewCommands`，阶段A选择器已在唯一P0中替换为查看DropDownButton，原Sort与方向按钮保留；不能据此宣称New/Sort/Show/More整套CommandBar已完成。
+- [TOP]：`main.cpp::BuildFolderViewCommands`。G01历史是查看DropDownButton及旧排序控件；G02当前改为标准CommandBar/AppBarButton，新建/排序/查看Flyout和原生More，旧选择器/方向按钮已移除。
+- [CB-OVERFLOW]：独立Release probe正常exit0，实际Bar类ApplicationBar；overflow真实UIA入口为OverflowPopup（Popup / Window），不是源码内部Presenter样式ID TopMoreMenu。
+- [CB-PRESENTATION]/[CB-MODEL]/[CB-APP]：展示helper、纯派生能力和窗口绑定分别负责控件、状态判断和调用原命令；helper不执行I/O。菜单/overflow在Opening捕获上下文并在动作重验，切页/代次变更关闭旧菜单。
+- [CB-TESTS]与[CB-LIFECYCLE]：新增26项检查（命令栏23项、搜索生命周期3项），修正后两配置各1542/0/4；不代表新建/传输/删除/溢出的GUI通过。[CB-GUI]为正式18项脚本入口，[CB-UI]为修正后最终18/0/0报告；交接归[CB-HANDOFF]。
 - [F-MENU]：`ShowFolderContextMenu / MakeFolderMenuItem`。背景无row_index；单选/多选捕获已提交选择；右键已选项保持集合，未选项改为单选。分隔线和图标是WinUI样式，不代表支持所有Explorer现代动词。
 - [F-POLICY]：`EvaluateFolderCommand`按位置、选择数、目标、busy判断。此电脑禁用文件系统操作与排序；多选Open/Rename禁用。普通文件夹右键Paste目标为当前目录，搜索为命中所在目录。
 - [HOST]：helper的`SHParseDisplayName / GetUIObjectOf / QueryContextMenu`、IContextMenu2/3消息转发、TrackPopupMenuEx、InvokeCommand；单/多选身份核对、同父数组和取消。stdout选择回复不声称原生操作完成；选择后停止取消监听、STA按线程引用/可见窗口延寿，无无意义强杀操作超时。没有完整IExplorerCommand现代扩展枚举。
@@ -390,13 +391,13 @@
 - H-FOLDER21 / H-SEARCH18：`FOLDER_MENU_SYNC_HANDOFF.md`与`SEARCH_THEMED_MENU_HANDOFF.md`记录的历史真实窗口21+18检查。覆盖文件/路径复制、文件夹打开、背景新建/刷新/改名、视图/排序、普通只读属性、搜索系统属性、同父多选系统菜单与取消，以及一款已安装压缩扩展的真实ZIP名称和字节。此历史不是所有文件类型、全部属性页、所有厂商扩展或24H2验收；本轮P0使用下面最终报告中的真实check名称，原拟定但未使用的Test ID不当作已跑。
 - 本地保留证据`.build/folder-menu-sync/integration`、`.build/search-themed-menu/integration`；这些目录被忽略，不能假定公开clone包含原始运行文件。
 - [EXP25]：本轮主模型只读采集`.build/explorer-ui-p0-view-menu/integration/explorer-reference.json`。View UIA有11项；Show数组含父层11项，实际新增5项，不能按16条当16个Show子项。View直属Details pane / Preview pane；Show为Navigation pane / Compact view / Item check boxes / File name extensions / Hidden items。仅zh-CN标签是实机记录，英文为目标语义。自有83字节fixture及窗口已清理/正常关闭，未改系统开关。
-- 代码所示字体菜单图标统一为Segoe Fluent Icons；顶部旧ComboBox本身无每项图标。Shell扩展owner-draw与图标不得转换成硬编码品牌静态WinUI菜单。
+- 代码所示字体菜单图标统一为Segoe Fluent Icons；G02主/次AppBarButton使用实际Fluent图标；旧ComboBox图标事实仅属阶段A历史。Shell扩展owner-draw与图标不得转换成硬编码品牌静态WinUI菜单。
 - 普通目录/搜索的Shift+F10仍按历史39项证据，不冒充本轮重跑。P0 check10仅验证自有窗口里Space、方向键、Enter、Escape导航Show并返回FolderViewMode焦点；check13仅覆盖地址文本焦点下Ctrl+A/Delete不触发文件动作。100/125/150/200%、高对比度、触摸、左右屏边展开、其它IME/语言与24H2焦点仍需独立矩阵。
 - 回收站删除已实现，不等于回收站浏览/还原/清空；Provider原型存在，不等于SFTP/网盘菜单已接产品；普通路径可表示UNC，不等于网络共享的写操作、凭据、断线UI已完整验证。
 
-## 本轮P0最终GUI报告（限定范围）
+## G01历史最终GUI报告（限定旧候选范围）
 
-证据：[P0-GUI]；`status=PASS, passed=true, skipped=false`，15条check全部PASS；`process_exited=true, exit_code=0, forced_termination=false`。当前候选Release Blink.exe SHA256为 `940DAD8BEA687BDCC5FB6CAC71A2D19665845F048D90C3BCEEC98B4A35B342B2`。报告中`fixture_removed=true, fixture_bytes_removed=1015, fixture_retained=false, fixture_ownership_failures=[]`；`compiler_temp_removed=true`，其释放字节未记录，不虚构数值。
+证据：[P0-GUI]；`status=PASS, passed=true, skipped=false`，15条check全部PASS；`process_exited=true, exit_code=0, forced_termination=false`。G01候选Release Blink.exe SHA256为 `940DAD8BEA687BDCC5FB6CAC71A2D19665845F048D90C3BCEEC98B4A35B342B2`。报告中`fixture_removed=true, fixture_bytes_removed=1015, fixture_retained=false, fixture_ownership_failures=[]`；`compiler_temp_removed=true`，其释放字节未记录，不虚构数值。
 
 执行环境按报告为Windows 11 25H2 build26200.9711、zh-CN、普通用户、64位，`window_dpi=96`；`theme="not captured"`。输入仅为自有PID/HWND的InputSite键盘消息和WinUI UIA模式，没有全局输入、剪贴板或文件变更命令。实物人工验收、24H2、主题/DPI/语言矩阵、树展开、搜索Hidden、Narrator、菜单视觉截屏对比仍为NOT RUN。
 
@@ -419,6 +420,16 @@
 | 15 exact owned marker bytes and paths verified before fixture cleanup | PASS |
 
 字段级证据：`menu_snapshots`记录TopViewGrid/List/Details的ToggleMenuFlyoutItem与唯一勾选；`layout_snapshots`记录真实ListView/GridView、Details四列显隐、地址、行序和选中项；`tab_evidence`记录两标签Grid/List及路径隔离；`stale_peer.new_tab_unchanged/original_tab_unchanged=true`只证明被测过期peer未改两页。`keyboard_evidence`记录Space/Home/Down/Right/Enter及Escape序列、Hidden前后变化和返回焦点ID FolderViewMode。`not_run`与`notes`是限制来源，不能省略。
+
+## G02当前验证状态
+
+Hidden/Search生命周期修正后Debug/Release均完成完整构建与普通回归：240冻结输入哈希匹配、375套中英/fallback资源，各1542 PASS/0 FAIL/4符号链接权限1314 SKIP。启动结构probe已确认真实类ApplicationBar、8个AppBarButton和系统MoreButton。独立Release探针[CB-OVERFLOW]成功：原生overflow实际为AutomationId=OverflowPopup、ClassName=Popup、ControlType.Window；ControlView链为CommandSelectAll→OverflowPopup→ExplorerCommandBar，RawView另有无ID ScrollViewer。TopMoreMenu只是源码Style给Presenter设置的ID，本机未暴露为UIA入口，不能写成已验菜单定位ID。结构存在不等于窄宽动态overflow、菜单键盘或全部动作已验证。
+
+`TabWindowState::SetVisibilityPolicy`原先先执行`LeaveSearch()`取消当前查询，又额外调用`SearchCoordinator::Shutdown()`，将所有已有标签的搜索状态永久置为Closed；随后`SearchState::Begin()`恒为0。独立只测搜索会成功，完整脚本执行#08 Hidden开关后，#14搜索连续失败两次，才暴露这一真实组合问题。修复仅删除visibility切换中的多余Shutdown，保留LeaveSearch取消/离开语义、CloseTab和全局Shutdown的永久关闭职责。新增3个模型回归覆盖现有前后台标签的旧代次取消、显示/隐藏后均可重启，以及关标签只永久关闭被关标签且不影响存活标签。
+
+修正前正式GUI曾出现13个子项PASS，但在#08 Hidden之后#14连续失败两次；这份红尝试只用于定位问题，不能当最终验证。私有只搜索探针3 PASS同样仅属诊断，不能替代完整场景。修正后Release同一完整18项GUI最终18 PASS/0 FAIL/0 SKIP，报告归`ui-command-bar-report.json`；#08 Hidden后#14真实索引结果、PasteParent实际目标和字节核对串联通过。早期第09的harness旧TopMoreMenu定位问题已通过真实OverflowPopup校正，与本次搜索生命周期缺陷分开记录。 本页仅将实际覆盖的24条顶部入口列`IMPLEMENTED_VERIFIED`；Name/Modified/Type/Ascending4个排序叶尚无本轮点击证据，保留`IMPLEMENTED_NEEDS_MANUAL`，不由#08外推为PASS。各行已注明Search仅启用态或未点击的动态分支，普通回收站本轮仍NOT RUN。G01表内15条PASS保留历史范围，不升级为G02或全部P0通过。完整主题/DPI、24H2、IME/Narrator及所有右键仍遵循各自未验边界。
+
+最终[CB-UI]运行时间为2026-11-09 05:41:20–05:45:02 UTC，候选SHA256 `5AFE3C46D519EF13C378FF7539C80821F313A860820949FBC5A5CF7F8E41662A`；环境为25H2/build26200.9711、zh-CN、非管理员，window_dpi=96、theme="not captured"。18 checks全部PASS；进程正常exit0、无强杀；自有fixture已删除3152字节，compiler-temp已清理但释放字节未记录，clipboard_restored=true。这不是24H2/全主题DPI/人工验收，默认发布状态见[CB-HANDOFF]，不由GUI结果推断默认EXE已替换。
 
 ## 尚未实机核验的Explorer行为
 
@@ -444,7 +455,7 @@ print({scene: dict(values) for scene, values in counts.items()})
 print("rows", sum(sum(values.values()) for values in counts.values()))
 ~~~
 
-[TOP]: ../src/Blink/src/main.cpp#L2882
+[TOP]: ../src/Blink/src/main.cpp
 [F-MENU]: ../src/Blink/src/main.cpp#L3203
 [F-CMD]: ../src/Blink/src/main.cpp#L3021
 [F-POLICY]: ../src/Blink/include/Blink/App/FolderCommandPolicy.h#L31
@@ -470,6 +481,16 @@ print("rows", sum(sum(values.values()) for values in counts.values()))
 [MENU-HANDOFF]: FOLDER_MENU_SYNC_HANDOFF.md
 [EXP25]: ../.build/explorer-ui-p0-view-menu/integration/explorer-reference.json
 
-[TOP-VIEW]: ../src/Blink/src/main.cpp#L3270
+[TOP-VIEW]: ../src/Blink/src/main.cpp
 
 [P0-GUI]: ../.build/explorer-ui-p0-view-menu/integration/ui-view-menu-report.json
+
+[CB-PRESENTATION]: ../src/Blink/src/CommandBarPresentation.cpp
+[CB-MODEL]: ../src/Blink/include/Blink/App/ExplorerCommandBarModel.h
+[CB-APP]: ../src/Blink/src/main.cpp
+[CB-TESTS]: ../tests/Blink.Phase1.Tests/src/ExplorerCommandBarTests.cpp
+[CB-HANDOFF]: EXPLORER_COMMAND_BAR_HANDOFF.md
+[CB-GUI]: ../scripts/run-blink-command-bar-smoke.ps1
+[CB-OVERFLOW]: ../.build/explorer-command-bar/integration/ui-overflow-probe.json
+[CB-LIFECYCLE]: ../tests/Blink.Phase1.Tests/src/main.cpp
+[CB-UI]: ../.build/explorer-command-bar/integration/ui-command-bar-report.json

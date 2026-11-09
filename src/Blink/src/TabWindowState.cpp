@@ -228,7 +228,6 @@ namespace blink::app
         for (auto& record : tabs_)
         {
             record->LeaveSearch();
-            if (record->search_controller) { (void)record->search_controller->Shutdown(); }
             record->state->SetVisibilityPolicy(policy);
         }
     }

@@ -630,3 +630,10 @@ Debug/Release完整构建及各1516 PASS / 0 FAIL / 4权限SKIP，新增59项，
 用户任务书见[原文](docs/EXPLORER_UI_MASTER_PROMPT.md)。先以e497600单独提交阶段A的UI树、210条菜单台账、差距与交互矩阵，再仅实施顶部查看/显示：已有Grid/List/Details和隐藏项复用原命令与状态，排序暂保留。完整命令栏、面包屑、F2选区、其他右键/焦点场景分别后续推进，不把P1/P2全部并进一次提交。
 
 235输入/369资源，Debug和Release完整构建及各1516 PASS/0 FAIL/4权限SKIP通过，15项自有窗口检查全部通过，默认Release已发布并打开。发布、清理和具体结果见[本轮交接](docs/EXPLORER_VIEW_MENU_HANDOFF.md)。当前主机25H2；Blink报告DPI96，Explorer参考DPI120，均只证明限定动作/观察。24H2和完整主题/DPI、人工验收仍NOT RUN。不能凭本切片升级整个P0、Phase1或项目完成状态。
+
+
+## Explorer UI compatibility — G02 CommandBar (2026-11-09)
+
+继G01顶部查看/显示之后，将新建、剪切、复制、粘贴、重命名、删除、排序、查看组织为标准顶部CommandBar；More提供已有选择/属性/刷新/路径能力，并使用原生动态溢出。所有动作仍进原Folder/Search命令及唯一队列；Search Paste为所选结果父目录，ThisPC不承接目录权限。无后端的分享、ShellNew、分组不列为已实现。
+
+组合检查修复隐藏项目开关永久关闭旧tab搜索控制器的缺陷，取消与真正关闭生命周期仍分开。240输入/375资源，Debug与Release各1542 PASS/0 FAIL/4权限1314 SKIP，新增26项；同一完整18项GUI通过，含Hidden开关后真实索引及父目录Paste，默认6文件发布并打开。具体证据见[命令栏交接](docs/EXPLORER_COMMAND_BAR_HANDOFF.md)。面包屑/地址焦点、F2选区、更多菜单场景和完整主题/DPI验收继续按差距台账逐项推进，不升级整个P0或Phase1完成状态。

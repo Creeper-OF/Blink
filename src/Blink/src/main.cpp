@@ -21,6 +21,7 @@
 #include "Blink/App/SearchPresentation.h"
 #include "Blink/App/SearchContextMenuPresentation.h"
 #include "Blink/App/ContextMenuAppearance.h"
+#include "Blink/App/CommandBarPresentation.h"
 #include "Blink/App/SearchRequestQueue.h"
 #include "Blink/App/SearchResultValidation.h"
 #include "Blink/App/ShellContextMenuController.h"
@@ -809,6 +810,7 @@ struct App : AppT<App>
         window_frame_ = Grid();
         root_.Padding(Thickness{ 12, 10, 12, 8 });
         AddGridRow(root_, 48, GridUnitType::Pixel);
+        AddGridRow(root_, 1, GridUnitType::Auto);
         AddGridRow(root_, 1, GridUnitType::Star);
         AddGridRow(root_, 30, GridUnitType::Pixel);
         AddGridRow(root_, 1, GridUnitType::Auto);
@@ -1062,7 +1064,7 @@ struct App : AppT<App>
         Grid::SetColumn(navigation_pane_, 0);
 
         content_grid_ = Grid();
-        AddGridRow(content_grid_, 1, GridUnitType::Auto);
+        AddGridRow(content_grid_, 0, GridUnitType::Pixel);
         AddGridRow(content_grid_, 1, GridUnitType::Auto);
         AddGridRow(content_grid_, 1, GridUnitType::Star);
 
@@ -1114,7 +1116,7 @@ struct App : AppT<App>
         body.Children().Append(search_surface_);
         Grid::SetColumn(search_surface_, 1);
 
-        Grid::SetRow(body, 1);
+        Grid::SetRow(body, 2);
         root_.Children().Append(body);
 
         auto status_bar = Grid();
@@ -1143,7 +1145,7 @@ struct App : AppT<App>
         Grid::SetColumn(status_, 0);
         Grid::SetColumn(selection_status_, 1);
         Grid::SetColumn(index_status_, 2);
-        Grid::SetRow(status_bar, 2);
+        Grid::SetRow(status_bar, 3);
         root_.Children().Append(status_bar);
         BuildFileOperationStatus();
 
@@ -1166,7 +1168,7 @@ struct App : AppT<App>
 
     void CloseOperationDialogs() noexcept
     {
-        try { if (folder_view_menu_) { folder_view_menu_.Hide(); } } catch (...) {}
+        DismissCommandBarMenus();
         if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
         const bool had_conflict = copy_conflict_wait_operation_id_ != 0 || copy_conflict_dialog_.IsOpen();
         const bool had_merge_conflict = directory_merge_dialog_operation_id_ != 0;
@@ -1268,11 +1270,12 @@ struct App : AppT<App>
         operation_panel_.Children().Append(operation_retry_); Grid::SetColumn(operation_retry_, 2);
         operation_panel_.Children().Append(operation_skip_); Grid::SetColumn(operation_skip_, 3);
         operation_panel_.Visibility(Visibility::Collapsed);
-        Grid::SetRow(operation_panel_, 3); root_.Children().Append(operation_panel_);
+        Grid::SetRow(operation_panel_, 4); root_.Children().Append(operation_panel_);
     }
 
     void RenderFileOperationStatus()
     {
+        SyncCommandBarState();
         if (!operation_panel_ || window_style_closed_) { return; }
         operation_skip_.Visibility(Visibility::Collapsed);
         if (file_drag_drop_.Preparing())
@@ -2881,69 +2884,60 @@ struct App : AppT<App>
 
     void BuildFolderViewCommands()
     {
-        auto commands = StackPanel();
-        commands.Orientation(Orientation::Horizontal);
-        commands.Spacing(8);
-        commands.MinHeight(40);
-        commands.VerticalAlignment(VerticalAlignment::Center);
-
-        view_mode_button_ = DropDownButton();
-        view_mode_button_.MinWidth(96);
-        view_mode_button_.IsEnabled(ui_probe_mode_ == UiProbeMode::None);
-        view_mode_button_.Content(winrt::box_value(hstring(localization_.GetString(L"Command.View"))));
-        Automation::AutomationProperties::SetAutomationId(view_mode_button_, L"FolderViewMode");
-        Automation::AutomationProperties::SetName(
-            view_mode_button_, hstring(localization_.GetString(L"Command.View")));
-        folder_view_menu_ = MenuFlyout();
-        const auto view_weak = get_weak();
-        folder_view_menu_.Opening([view_weak](auto&&, auto&&) {
-            if (auto app = view_weak.get(); app && !app->window_style_closed_)
+        const auto weak = get_weak();
+        blink::app::CommandBarPresentation::Callbacks callbacks;
+        callbacks.command = [weak](blink::app::ExplorerCommandBarAction action, bool overflow) {
+            if (auto app = weak.get(); app && !app->window_style_closed_)
             {
-                app->PopulateFolderViewMenu();
+                if (overflow)
+                {
+                    if (!app->command_bar_context_) { return; }
+                    const auto context = *app->command_bar_context_;
+                    app->ExecuteCommandBarAction(action, context, (GetKeyState(VK_SHIFT) & 0x8000) != 0);
+                }
+                else
+                {
+                    app->ExecuteCommandBarAction(action, app->CaptureCommandBarContext(),
+                        (GetKeyState(VK_SHIFT) & 0x8000) != 0);
+                }
             }
-        });
-        view_mode_button_.Flyout(folder_view_menu_);
-        commands.Children().Append(view_mode_button_);
-
-        sort_field_picker_ = ComboBox();
-        sort_field_picker_.Width(150);
-        for (const auto key : { L"Column.Name", L"Column.Type", L"Column.Size", L"Column.Modified" })
-        {
-            sort_field_picker_.Items().Append(winrt::box_value(hstring(localization_.Format(
-                L"Toolbar.SortBy", localization_.GetString(key)))));
-        }
-        Automation::AutomationProperties::SetAutomationId(sort_field_picker_, L"FolderSortField");
-        Automation::AutomationProperties::SetName(
-            sort_field_picker_, hstring(localization_.GetString(L"Toolbar.Sort")));
-        sort_field_picker_.SelectionChanged([this](auto&&, auto&&) {
-            if (view_commands_sync_suppressed_)
+        };
+        callbacks.menu_opening = [weak](blink::app::CommandBarMenu menu) {
+            if (auto app = weak.get(); app && !app->window_style_closed_)
             {
-                return;
+                app->SyncCommandBarState();
+                if (menu == blink::app::CommandBarMenu::View) { app->PopulateFolderViewMenu(); }
+                else { app->PopulateCommandBarMenu(menu); }
             }
-            constexpr blink::app::SortField fields[]{ blink::app::SortField::Name,
-                blink::app::SortField::Type, blink::app::SortField::Size, blink::app::SortField::Modified };
-            const auto index = sort_field_picker_.SelectedIndex();
-            if (index >= 0 && index < 4)
+        };
+        callbacks.overflow_opening = [weak] {
+            if (auto app = weak.get(); app && !app->window_style_closed_)
             {
-                auto descriptor = ActiveState().GetSortDescriptor();
-                descriptor.field = fields[index];
-                SetFolderSort(descriptor);
+                app->SyncCommandBarState();
+                ++app->command_bar_popup_epoch_;
+                app->command_bar_context_ = app->CaptureCommandBarContext();
             }
+        };
+        callbacks.overflow_closed = [weak] {
+            if (auto app = weak.get(); app && !app->window_style_closed_)
+            {
+                const auto epoch = app->command_bar_popup_epoch_;
+                // Native overflow may close before dispatching the selected
+                // button's Click. Keep its captured target for this event only.
+                (void)app->dispatcher_.TryEnqueue([weak, epoch] {
+                    if (auto current = weak.get(); current && current->command_bar_popup_epoch_ == epoch)
+                    { current->command_bar_context_.reset(); }
+                });
+            }
+        };
+        auto bar = command_bar_.Build(localization_, std::move(callbacks));
+        view_mode_button_ = command_bar_.Button(blink::app::ExplorerCommandBarAction::View);
+        folder_view_menu_ = command_bar_.Flyout(blink::app::CommandBarMenu::View);
+        Grid::SetRow(bar, 1);
+        root_.Children().Append(bar);
+        window_frame_.GotFocus([weak](auto&&, auto&&) {
+            if (auto app = weak.get(); app && !app->window_style_closed_) { app->SyncCommandBarState(); }
         });
-        commands.Children().Append(sort_field_picker_);
-
-        sort_direction_button_ = Button();
-        sort_direction_button_.Width(36);
-        Automation::AutomationProperties::SetAutomationId(sort_direction_button_, L"FolderSortDirection");
-        sort_direction_button_.Click([this](auto&&, auto&&) {
-            auto descriptor = ActiveState().GetSortDescriptor();
-            descriptor.direction = descriptor.direction == blink::app::SortDirection::Ascending ?
-                blink::app::SortDirection::Descending : blink::app::SortDirection::Ascending;
-            SetFolderSort(descriptor);
-        });
-        commands.Children().Append(sort_direction_button_);
-
-        content_grid_.Children().Append(commands);
     }
 
     struct FolderMenuContext
@@ -2958,6 +2952,200 @@ struct App : AppT<App>
         std::size_t selected_count{};
         std::vector<blink::app::RowIdentity> selected_rows;
     };
+
+    struct CommandBarInvocationContext
+    {
+        FolderMenuContext folder;
+        blink::app::ExplorerCommandBarSurface surface{ blink::app::ExplorerCommandBarSurface::ThisPc };
+        std::optional<blink::app::SearchContextSelection> search;
+        std::uint64_t query_generation{};
+    };
+    std::optional<CommandBarInvocationContext> command_bar_context_;
+    std::uint64_t command_bar_popup_epoch_{};
+
+    blink::app::ExplorerCommandBarContext CommandBarState() const
+    {
+        blink::app::ExplorerCommandBarContext state;
+        const auto* tab = ActiveTab();
+        const auto* ui = ActiveTabUi();
+        if (!tab || !ui) { state.modal_open = true; return state; }
+        const auto snapshot = ActiveState().PresentationSnapshot();
+        state.surface = snapshot.committed_location.IsFolder() ?
+            blink::app::ExplorerCommandBarSurface::Folder : blink::app::ExplorerCommandBarSurface::ThisPc;
+        // Selection in TabState already contains only current valid row IDs.
+        // Do not walk every presented row just to update toolbar enablement.
+        state.folder = { snapshot.committed_location.IsFolder(), snapshot.has_pending || ui->presentation_in_progress,
+            snapshot.selected_count, snapshot.selected_count != 0, ActiveState().CommittedDirectoryIdentity().valid,
+            FileDropBusy() || file_drag_drop_.Pending() || copy_conflict_wait_operation_id_ != 0 };
+        state.has_file_drop = IsClipboardFormatAvailable(CF_HDROP) != FALSE;
+        state.item_count = snapshot.committed_item_count;
+        state.modal_open = IsOperationDialogOpen() || ui_probe_mode_ != UiProbeMode::None;
+        if (tab->search_visible)
+        {
+            state.surface = blink::app::ExplorerCommandBarSurface::Search;
+            // Match the existing search menu's independent busy contract.
+            state.folder.mutation_busy = FileDropBusy();
+            state.search_ready = !tab->search_queued && !tab->search_action_pending && tab->search_snapshot &&
+                (tab->search_snapshot->stage == blink::app::SearchStage::Complete ||
+                    tab->search_snapshot->stage == blink::app::SearchStage::Partial);
+            if (state.search_ready && tab->search_selection)
+            {
+                state.has_search_selection = blink::app::IsSearchContextCurrent(
+                    { tab->id, tab->search_snapshot->generation, *tab->search_selection }, tab, window_style_closed_);
+            }
+        }
+        return state;
+    }
+
+    CommandBarInvocationContext CaptureCommandBarContext() const
+    {
+        CommandBarInvocationContext context;
+        const auto* tab = ActiveTab();
+        const auto* ui = ActiveTabUi();
+        std::optional<std::size_t> row;
+        if (tab && ui && !tab->search_visible && ui->showing_committed_folder &&
+            tab->state->PresentationSnapshot().selected_count)
+        {
+            for (std::size_t index = 0; index < ui->row_models.size(); ++index)
+            {
+                if (tab->state->IsRowSelected(ui->row_models[index].row_identity)) { row = index; break; }
+            }
+        }
+        context.folder = CaptureFolderMenuContext(row);
+        context.surface = context.folder.location.IsFolder() ? blink::app::ExplorerCommandBarSurface::Folder :
+            blink::app::ExplorerCommandBarSurface::ThisPc;
+        if (tab && tab->search_visible)
+        {
+            context.surface = blink::app::ExplorerCommandBarSurface::Search;
+            context.query_generation = tab->search_snapshot ? tab->search_snapshot->generation : 0;
+            if (tab->search_selection)
+            { context.search = blink::app::SearchContextSelection{ tab->id, context.query_generation, *tab->search_selection }; }
+        }
+        return context;
+    }
+
+    bool IsCommandBarContextCurrent(const CommandBarInvocationContext& context) const
+    {
+        const auto* tab = ActiveTab();
+        if (window_style_closed_ || !tab || context.folder.tab_id != tab->id ||
+            context.folder.operation_generation != tab->file_operation_generation ||
+            context.folder.view_generation != folder_view_generation_) { return false; }
+        if (context.surface != blink::app::ExplorerCommandBarSurface::Search)
+        {
+            return !tab->search_visible && IsFolderMenuContextCurrent(context.folder) &&
+                context.folder.selection_generation == folder_selection_generation_;
+        }
+        if (!tab->search_visible || context.query_generation != (tab->search_snapshot ? tab->search_snapshot->generation : 0))
+        { return false; }
+        if (!context.search) { return !tab->search_selection; }
+        return tab->search_selection && blink::app::SameSearchLink(context.search->result, *tab->search_selection) &&
+            blink::app::IsSearchContextCurrent(*context.search, tab, window_style_closed_);
+    }
+
+    void DismissCommandBarMenus() noexcept
+    {
+        ++command_bar_popup_epoch_;
+        command_bar_context_.reset();
+        command_bar_.HideMenus();
+    }
+
+    void SyncCommandBarState()
+    {
+        const auto bar = command_bar_.Element();
+        if (window_style_closed_ || !bar || !ActiveTab()) { return; }
+        if (command_bar_context_ && !IsCommandBarContextCurrent(*command_bar_context_)) { DismissCommandBarMenus(); }
+        const auto state = CommandBarState();
+        bar.IsEnabled(blink::app::EvaluateExplorerCommandBarAction(
+            blink::app::ExplorerCommandBarAction::More, state) == blink::app::FolderCommandStatus::Ready);
+        using Action = blink::app::ExplorerCommandBarAction;
+        for (const auto action : { Action::NewFolder, Action::Cut, Action::Copy, Action::Paste, Action::Rename,
+            Action::Delete, Action::Sort, Action::View, Action::Properties, Action::Refresh, Action::SelectAll,
+            Action::ClearSelection, Action::InvertSelection, Action::CopyFullPath, Action::CopyParentPath })
+        {
+            command_bar_.SetEnabled(action, blink::app::EvaluateExplorerCommandBarAction(action, state) ==
+                blink::app::FolderCommandStatus::Ready);
+        }
+        command_bar_.SetLabel(Action::Paste, localization_.GetString(
+            state.surface == blink::app::ExplorerCommandBarSurface::Search ? L"Search.MenuPasteParent" : L"Command.Paste"));
+    }
+
+    void ExecuteCommandBarAction(const blink::app::ExplorerCommandBarAction action,
+        const CommandBarInvocationContext& context, const bool permanent = false)
+    {
+        using Action = blink::app::ExplorerCommandBarAction;
+        using blink::app::FolderCommand;
+        if (!IsCommandBarContextCurrent(context))
+        { if (!window_style_closed_) { status_.Text(hstring(localization_.GetString(L"Status.CommandStale"))); } return; }
+        if (blink::app::EvaluateExplorerCommandBarAction(action, CommandBarState()) != blink::app::FolderCommandStatus::Ready)
+        { SyncCommandBarState(); return; }
+        if (action == Action::Refresh) { RefreshNavigation(); SyncCommandBarState(); return; }
+        if (action == Action::SelectAll) { SelectAllFolderRows(); SyncCommandBarState(); return; }
+        if (action == Action::ClearSelection || action == Action::InvertSelection)
+        {
+            if (action == Action::ClearSelection) { ActiveState().ClearSelection(); }
+            else if (!ActiveState().InvertRowSelection())
+            { status_.Text(hstring(localization_.GetString(L"Status.InvertSelectionFailed"))); return; }
+            ++folder_selection_generation_;
+            BindFolderViewToActiveTab();
+            UpdateSelectionStatus();
+            return;
+        }
+        FolderCommand command{};
+        switch (action)
+        {
+        case Action::NewFolder: command = FolderCommand::NewFolder; break;
+        case Action::Cut: command = FolderCommand::Cut; break;
+        case Action::Copy: command = FolderCommand::Copy; break;
+        case Action::Paste: command = FolderCommand::Paste; break;
+        case Action::Rename: command = FolderCommand::Rename; break;
+        case Action::Delete: command = permanent ? FolderCommand::PermanentDelete : FolderCommand::Delete; break;
+        case Action::Properties: command = FolderCommand::Properties; break;
+        case Action::CopyFullPath: command = FolderCommand::CopyFullPath; break;
+        case Action::CopyParentPath: command = FolderCommand::CopyParentPath; break;
+        default: return;
+        }
+        if (context.surface == blink::app::ExplorerCommandBarSurface::Search)
+        {
+            if (!context.search) { return; }
+            if (action == Action::CopyFullPath || action == Action::CopyParentPath)
+            {
+                ExecuteSearchContextCommand(*context.search, action == Action::CopyFullPath ?
+                    blink::app::ShellMenuCommand::CopyFullPath : blink::app::ShellMenuCommand::CopyParentPath);
+            }
+            else { ExecuteSearchKeyboardCommand(*context.search, command); }
+        }
+        else { ExecuteFolderCommand(command, context.folder); }
+        SyncCommandBarState();
+    }
+
+    void PopulateCommandBarMenu(const blink::app::CommandBarMenu kind)
+    {
+        const auto menu = command_bar_.Flyout(kind);
+        menu.Items().Clear();
+        blink::app::ApplyContextMenuAppearance(menu, command_bar_.Element(),
+            kind == blink::app::CommandBarMenu::New ? L"TopNewMenu" : L"TopSortMenu");
+        const auto context = CaptureFolderMenuContext(std::nullopt);
+        using blink::app::FolderCommand;
+        if (kind == blink::app::CommandBarMenu::New)
+        {
+            menu.Items().Append(MakeFolderMenuItem(FolderCommand::NewFolder, context, L"TopNewFolder"));
+            return;
+        }
+        const auto sort = ActiveState().GetSortDescriptor();
+        menu.Items().Append(MakeFolderMenuItem(FolderCommand::SortName, context, L"TopSortName",
+            sort.field == blink::app::SortField::Name));
+        menu.Items().Append(MakeFolderMenuItem(FolderCommand::SortModified, context, L"TopSortModified",
+            sort.field == blink::app::SortField::Modified));
+        menu.Items().Append(MakeFolderMenuItem(FolderCommand::SortType, context, L"TopSortType",
+            sort.field == blink::app::SortField::Type));
+        menu.Items().Append(MakeFolderMenuItem(FolderCommand::SortSize, context, L"TopSortSize",
+            sort.field == blink::app::SortField::Size));
+        menu.Items().Append(MenuFlyoutSeparator());
+        menu.Items().Append(MakeFolderMenuItem(FolderCommand::SortAscending, context, L"TopSortAscending",
+            sort.direction == blink::app::SortDirection::Ascending));
+        menu.Items().Append(MakeFolderMenuItem(FolderCommand::SortDescending, context, L"TopSortDescending",
+            sort.direction == blink::app::SortDirection::Descending));
+    }
 
     FolderMenuContext CaptureFolderMenuContext(
         const std::optional<std::size_t> row_index) const
@@ -3687,23 +3875,23 @@ struct App : AppT<App>
     {
         const auto mode = ActiveState().GetViewMode();
         const auto sort = ActiveState().GetSortDescriptor();
-        view_commands_sync_suppressed_ = true;
         const auto mode_label = localization_.GetString(mode == blink::app::FolderViewMode::Grid ?
             L"View.Grid" : mode == blink::app::FolderViewMode::List ? L"View.List" : L"View.Details");
-        Automation::AutomationProperties::SetHelpText(view_mode_button_, hstring(mode_label));
-        ToolTipService::SetToolTip(view_mode_button_, winrt::box_value(hstring(mode_label)));
-        sort_field_picker_.SelectedIndex(sort.field == blink::app::SortField::Type ? 1 :
-            sort.field == blink::app::SortField::Size ? 2 :
-            sort.field == blink::app::SortField::Modified ? 3 : 0);
-        const bool descending = sort.direction == blink::app::SortDirection::Descending;
-        sort_direction_button_.Content(winrt::box_value(hstring(descending ? L"\x2193" : L"\x2191")));
-        const auto direction_label = localization_.GetString(
-            descending ? L"Sort.Descending" : L"Sort.Ascending");
-        Automation::AutomationProperties::SetName(sort_direction_button_, hstring(direction_label));
-        ToolTipService::SetToolTip(sort_direction_button_, winrt::box_value(hstring(direction_label)));
+        command_bar_.SetViewHelpText(mode_label);
+        const auto field_label = localization_.GetString(sort.field == blink::app::SortField::Type ? L"Column.Type" :
+            sort.field == blink::app::SortField::Size ? L"Column.Size" :
+            sort.field == blink::app::SortField::Modified ? L"Column.Modified" : L"Column.Name");
+        const auto direction_label = localization_.GetString(sort.direction == blink::app::SortDirection::Descending ?
+            L"Sort.Descending" : L"Sort.Ascending");
+        if (const auto button = command_bar_.Button(blink::app::ExplorerCommandBarAction::Sort))
+        {
+            Automation::AutomationProperties::SetHelpText(button, hstring(field_label));
+            Automation::AutomationProperties::SetItemStatus(button, hstring(direction_label));
+            ToolTipService::SetToolTip(button, winrt::box_value(hstring(field_label + L" / " + direction_label)));
+        }
         details_header_.Visibility(mode == blink::app::FolderViewMode::Details ?
             Visibility::Visible : Visibility::Collapsed);
-        view_commands_sync_suppressed_ = false;
+        SyncCommandBarState();
     }
 
     void SetFolderSort(const blink::app::SortDescriptor descriptor)
@@ -3891,6 +4079,11 @@ struct App : AppT<App>
         {
             RemoveWindowSubclass(window, NavigationWheelSubclass, id);
         }
+        else if (message == WM_CLIPBOARDUPDATE && window == app->navigation_window_handle_)
+        {
+            try { app->SyncCommandBarState(); }
+            catch (...) { app->startup_.GenericFailure("command-bar.clipboard"); }
+        }
         else if (message == WM_LBUTTONDOWN || message == WM_POINTERDOWN || message == WM_KEYDOWN)
         {
             app->navigation_wheel_target_.reset();
@@ -3936,9 +4129,12 @@ struct App : AppT<App>
 
     void InstallNavigationWheelInput()
     {
+        if (window_style_closed_) { return; }
         winrt::check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(
             &navigation_window_handle_));
         AddNavigationWheelWindow(navigation_window_handle_);
+        if (!clipboard_format_listener_)
+        { clipboard_format_listener_ = AddClipboardFormatListener(navigation_window_handle_) != FALSE; }
         EnumChildWindows(navigation_window_handle_, [](HWND child, LPARAM context) -> BOOL {
             auto* app = reinterpret_cast<App*>(context);
             try { app->AddNavigationWheelWindow(child); }
@@ -3949,6 +4145,8 @@ struct App : AppT<App>
 
     void RemoveNavigationWheelInput() noexcept
     {
+        if (clipboard_format_listener_ && navigation_window_handle_)
+        { RemoveClipboardFormatListener(navigation_window_handle_); clipboard_format_listener_ = false; }
         for (const auto window : navigation_wheel_windows_)
         {
             RemoveWindowSubclass(window, NavigationWheelSubclass,
@@ -4685,6 +4883,7 @@ struct App : AppT<App>
 
     void UpdateSelectionStatus()
     {
+        SyncCommandBarState();
         if (folder_system_menu_context_ && !IsFolderMenuContextCurrent(*folder_system_menu_context_))
         { CancelFolderSystemMenu(); }
         if (const auto* tab = ActiveTab(); tab && tab->search_visible)
@@ -4895,6 +5094,7 @@ struct App : AppT<App>
 
     void PresentSearchSurface()
     {
+        SyncCommandBarState();
         auto* tab = ActiveTab(); if (!tab || !search_surface_ || window_style_closed_) { return; }
         if (search_menu_selection_ && (!blink::app::IsSearchContextCurrent(*search_menu_selection_, tab) ||
             tab->file_operation_generation != search_menu_owner_generation_)) { DismissSearchContextMenu(); }
@@ -6735,7 +6935,7 @@ struct App : AppT<App>
 
     void BindFolderViewToActiveTab()
     {
-        if (folder_view_menu_) { folder_view_menu_.Hide(); }
+        DismissCommandBarMenus();
         // Any tab/source presentation invalidates a delayed focus restore,
         // including A -> B -> A switches that reuse the same view control.
         ++folder_view_generation_;
@@ -6835,8 +7035,7 @@ struct App : AppT<App>
         refresh_button_.IsEnabled(enabled || (active && active->search_visible));
         search_box_.IsEnabled(!snapshot.has_pending || (active && active->search_visible));
         const bool can_sort = enabled && snapshot.committed_location.IsFolder();
-        sort_field_picker_.IsEnabled(can_sort);
-        sort_direction_button_.IsEnabled(can_sort);
+        SyncCommandBarState();
         for (const auto& child : details_header_.Children())
         {
             if (const auto control = child.try_as<Control>())
@@ -7909,6 +8108,7 @@ struct App : AppT<App>
     ScrollViewer navigation_pane_{ nullptr };
     std::optional<double> navigation_wheel_target_;
     HWND navigation_window_handle_{};
+    bool clipboard_format_listener_{};
     std::vector<HWND> navigation_wheel_windows_;
     ListView navigation_quick_list_{ nullptr };
     winrt::Windows::Foundation::Collections::IObservableVector<IInspectable>
@@ -7917,14 +8117,12 @@ struct App : AppT<App>
     TreeView navigation_tree_{ nullptr };
     Grid content_grid_{ nullptr };
     Grid details_header_{ nullptr };
-    DropDownButton view_mode_button_{ nullptr };
+    blink::app::CommandBarPresentation command_bar_;
+    AppBarButton view_mode_button_{ nullptr };
     MenuFlyout folder_view_menu_{ nullptr };
-    ComboBox sort_field_picker_{ nullptr };
-    Button sort_direction_button_{ nullptr };
     blink::app::FolderViewPresentation folder_view_presentation_;
     blink::app::FolderViewMode rendered_view_mode_{ blink::app::FolderViewMode::Details };
     std::uint64_t folder_view_generation_{};
-    bool view_commands_sync_suppressed_{};
     TextBox path_box_{ nullptr };
     Button back_button_{ nullptr };
     Button forward_button_{ nullptr };

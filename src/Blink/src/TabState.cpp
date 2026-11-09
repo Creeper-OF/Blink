@@ -478,6 +478,40 @@ namespace blink::app
         }
     }
 
+    bool TabState::InvertRowSelection() noexcept
+    {
+        try
+        {
+            std::vector<RowIdentity> rows;
+            std::unordered_set<RowIdentity, RowIdentityHash> lookup;
+            rows.reserve(committed_rows_lookup_.size());
+            lookup.reserve(committed_rows_lookup_.size());
+            for (const auto& entry : committed_listing_.entries)
+            {
+                if (!visibility_policy_.Includes(entry.attributes))
+                {
+                    continue;
+                }
+                auto row = MakeRowIdentity(entry);
+                if (row.file_identity.valid && !selection_lookup_.contains(row) &&
+                    lookup.insert(row).second)
+                {
+                    rows.push_back(std::move(row));
+                }
+            }
+            auto focus = rows.empty() ?
+                std::nullopt : std::optional<RowIdentity>(rows.front());
+            selection_.swap(rows);
+            selection_lookup_.swap(lookup);
+            focused_item_.swap(focus);
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+
     void TabState::SetSelection(std::vector<blink::core::FileIdentity> identities) noexcept
     {
         std::vector<RowIdentity> rows;

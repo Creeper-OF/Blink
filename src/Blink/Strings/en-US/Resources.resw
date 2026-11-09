@@ -449,4 +449,10 @@
   <data name="Search.MenuCopyParentPath" xml:space="preserve"><value>Copy containing folder path</value></data>
   <data name="Search.MenuSystemOptions" xml:space="preserve"><value>Compression and more system options…</value></data>
   <data name="Move.MergeSkipped" xml:space="preserve"><value>Skipped {0} files and {1} folders; items not moved remain at the source.</value><comment>Directory move merge skipped source items.</comment></data>
+  <data name="CommandBar.Name" xml:space="preserve"><value>File commands</value></data>
+  <data name="Command.New" xml:space="preserve"><value>New</value></data>
+  <data name="Command.SelectAll" xml:space="preserve"><value>Select all</value></data>
+  <data name="Command.ClearSelection" xml:space="preserve"><value>Clear selection</value></data>
+  <data name="Command.InvertSelection" xml:space="preserve"><value>Invert selection</value></data>
+  <data name="Status.InvertSelectionFailed" xml:space="preserve"><value>Unable to invert selection. Try again.</value></data>
 </root>

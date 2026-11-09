@@ -166,6 +166,9 @@ namespace blink::app
         [[nodiscard]] bool SelectEntry(const blink::core::FileEntry& entry);
         void SetRowSelection(std::vector<RowIdentity> rows) noexcept;
         [[nodiscard]] bool SelectAllRows() noexcept;
+        // Complement within the current visible committed rows. Allocation
+        // failure leaves the existing selection and logical focus unchanged.
+        [[nodiscard]] bool InvertRowSelection() noexcept;
         [[nodiscard]] std::optional<blink::core::FileEntry> CommittedRow(
             const RowIdentity& row) const;
         [[nodiscard]] bool IsRowSelected(const RowIdentity& row) const noexcept;
