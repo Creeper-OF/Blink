@@ -152,6 +152,8 @@ namespace blink::app
         void Shutdown() noexcept;
 
         [[nodiscard]] TabSnapshot Snapshot() const;
+        // Address history does not need to copy a potentially large directory listing.
+        [[nodiscard]] NavigationSnapshot NavigationState() const { return navigation_.Snapshot(); }
         [[nodiscard]] blink::core::FileIdentity CommittedDirectoryIdentity() const noexcept
         { return committed_listing_.directory_identity; }
         [[nodiscard]] TabPresentationSnapshot PresentationSnapshot() const;

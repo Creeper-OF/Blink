@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $project = Split-Path -Parent $PSScriptRoot
-$stage = Join-Path $project '.build\explorer-command-bar'
+$stage = Join-Path $project '.build\explorer-address-bar'
 $integration = Join-Path $stage 'integration'
 $fixtureParent = Join-Path $stage 'ui-view-fixtures'
 New-Item -ItemType Directory -Path $integration -Force | Out-Null
@@ -121,13 +121,19 @@ function Owned-Element([string]$AutomationId) {
     }
     return $null
 }
+# AddressBar.HelpText is a passive draft/committed address read.
 function Address {
+    $addressHost=By-Id 'AddressBar'; if ($addressHost) { return $addressHost }
+    return Address-Editor
+}
+function Address-Editor {
+    $addressEditor=By-Id 'AddressEditor'; if (Visible $addressEditor) { return $addressEditor }
     $editors=@(Of-Type (Window) ([Windows.Automation.ControlType]::Edit) | Where-Object {
-        $_.Current.IsEnabled -and -not $_.Current.IsOffscreen -and $_.Current.AutomationId -notin @('SearchQuery','SearchSelectedVolumes','SearchSelectedFolder','RenameName') })
-    if ($editors.Count -ne 1) { throw ('Expected one visible address editor; found '+$editors.Count) }
+        $_.Current.IsEnabled -and -not $_.Current.IsOffscreen -and $_.Current.AutomationId -notin @('SearchQuery','SearchSelectedVolumes','SearchSelectedFolder','RenameName','NewFolderName') })
+    if ($editors.Count -ne 1) { return $null }
     return $editors[0]
 }
-function Value($Element) { return $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value }
+function Value($Element) { if ($Element.Current.AutomationId -ceq 'AddressBar') { return $Element.Current.HelpText }; return $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value }
 function Folder-Rows([string]$RowLabel='') {
     return @(Of-Type (By-Id 'FolderEntries') ([Windows.Automation.ControlType]::ListItem) | Where-Object {
         -not $_.Current.IsOffscreen -and (-not $RowLabel -or $_.Current.Name -ceq $RowLabel) })
@@ -263,7 +269,7 @@ function Set-Hidden([bool]$Enabled) {
 }
 function Navigate-Owned([string]$TargetFolder,[string]$MarkerName='') {
     if ($TargetFolder -notin @($mainFolder,$otherFolder,$emptyFolder)) { throw 'Refusing navigation outside this run fixture' }
-    Close-Menus; $editor=Address; $editor.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($TargetFolder); $editor.SetFocus(); Key 13
+    Close-Menus; Key 0x4C 1; Wait-Ui 'Ctrl L reveals the owned address editor' { $null -ne (Address-Editor) }; $editor=Address-Editor; $editor.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($TargetFolder); $editor.SetFocus(); Key 13
     Wait-Ui 'committed owned folder and its marker/empty page' {
         (Value (Address)) -ieq $TargetFolder -and (Visible (By-Id 'FolderEntries')) -and
         (By-Id 'CommandSort').Current.IsEnabled -and
@@ -575,7 +581,7 @@ public static class BlinkExplorerViewUiNative {
         Key 0x4C 1; Wait-Ui 'Ctrl L focuses the owned address editor' { $focused=[Windows.Automation.AutomationElement]::FocusedElement; $focused.Current.ProcessId -eq $process.Id -and $focused.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and (Value $focused) -ieq $mainFolder }
         Key 0x41 1; Key 0x2E; Wait-Ui 'Delete clears only the address text selection' { (Value (Address)) -ceq '' }
         if (-not (Test-Path -LiteralPath (Join-Path $mainFolder $marker) -PathType Leaf) -or -not (Same-Names @(Row-Names) $beforeRows) -or (By-Id 'FolderViewMode').Current.HelpText -cne $beforeMode) { throw 'Text editing affected the selected file, listing or View' }
-        (Address).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($mainFolder)
+        (Address-Editor).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($mainFolder)
         (By-Id 'FolderViewMode').SetFocus()
     }
     $notes.Add('Search Hidden, navigation tree expansion, human visual/IME/accessibility and theme/DPI matrix were not exercised. No Clipboard or file mutation command was invoked.')

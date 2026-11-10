@@ -10,11 +10,11 @@ param(
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $project=Split-Path -Parent $PSScriptRoot
-$stage=Join-Path $project '.build\explorer-command-bar'
+$stage=Join-Path $project '.build\explorer-address-bar'
 $integration=Join-Path $stage 'integration'
 $fixtureParent=Join-Path $stage 'ui-fixtures'
 New-Item -ItemType Directory -Path $integration -Force|Out-Null
-$reportPath=Join-Path $integration 'ui-command-bar-report.json'
+$reportPath=Join-Path $integration 'ui-command-bar-compat-report.json'
 if(-not $Binary){$Binary=Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe')}
 if(-not [IO.Path]::IsPathRooted($Binary)){$Binary=Join-Path $project $Binary}
 $Binary=[IO.Path]::GetFullPath($Binary)
@@ -58,10 +58,15 @@ function Find-In($Root,[string]$Id,[bool]$VisibleOnly=$false){if(-not $Root){ret
 function By-Id([string]$Id){$metrics.window_queries++;return Find-In (Window) $Id}
 function Bar{if(-not $script:barCache){$script:barCache=By-Id 'ExplorerCommandBar'};return $script:barCache}
 function Entries{if(-not $script:entriesCache){$script:entriesCache=By-Id 'FolderEntries'};return $script:entriesCache}
+# Reading the host does not enter edit mode or dismiss an open menu.
 function Address{
- if(-not $script:addressCache){$editCondition=[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit);$editors=@((Window).FindAll([Windows.Automation.TreeScope]::Descendants,$editCondition)|Where-Object{-not $_.Current.IsOffscreen -and $_.Current.AutomationId -notin @('SearchQuery','SearchSelectedVolumes','SearchSelectedFolder','RenameName','NewFolderName')});if($editors.Count -ne 1){throw 'Unique address editor unavailable'};$script:addressCache=$editors[0]};return $script:addressCache
+ if(-not $script:addressCache){$script:addressCache=By-Id 'AddressBar';if(-not $script:addressCache){$script:addressCache=Address-Editor}};return $script:addressCache
 }
-function Value($Element){return $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value}
+function Address-Editor{
+ $addressEditor=Find-In (Window) 'AddressEditor' $true;if($addressEditor){return $addressEditor}
+ $editCondition=[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit);$editors=@((Window).FindAll([Windows.Automation.TreeScope]::Descendants,$editCondition)|Where-Object{-not $_.Current.IsOffscreen -and $_.Current.AutomationId -notin @('SearchQuery','SearchSelectedVolumes','SearchSelectedFolder','RenameName','NewFolderName')});if($editors.Count -ne 1){return $null};return $editors[0]
+}
+function Value($Element){if($Element.Current.AutomationId -ceq 'AddressBar'){return $Element.Current.HelpText};return $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value}
 function Of-Type($Root,$Type){if(-not $Root){return @()};return @($Root.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,$Type)))}
 function Cache-Request{
  $request=[Windows.Automation.CacheRequest]::new();$request.TreeScope=[Windows.Automation.TreeScope]::Element
@@ -187,7 +192,7 @@ function Selected-Names{return @((Row-Snapshot)|Where-Object{$_.selected}|ForEac
 function Same-Names([string[]]$A,[string[]]$B){return $A.Count -eq $B.Count -and ($A -join "`n") -ceq ($B -join "`n")}
 function Navigate([string]$Path,[string]$Marker=''){
  if($Path -notin @($source,$copyTarget,$moveTarget,$other,$child,$created)){throw 'Navigation outside the owned fixture'}
- Close-Menus;$editor=Address;$editor.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($Path);$editor.SetFocus();Key 13;$script:entriesCache=$null
+ Close-Menus;Key 0x4C 1;Wait-Ui 'Ctrl L reveals the owned address editor' {$null -ne (Address-Editor)};$editor=Address-Editor;$editor.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($Path);$editor.SetFocus();Key 13;$script:entriesCache=$null
  Wait-Ui 'exact committed fixture location and ready commands' {if((Value (Address)) -ine $Path -or -not (Entries)){return $false};$bar=Bar-Snapshot;if(-not $bar['CommandNew'].enabled -or -not $bar['CommandSort'].enabled){return $false};if($Marker){return @(Row-Names) -ccontains $Marker};return $true}
 }
 function Select-Rows([string[]]$Names){
@@ -611,7 +616,7 @@ public sealed class BlinkCommandBarClipboard { public uint Sequence,DropEffect; 
   Key 0x41 1;Key 0x2E;Wait-Ui 'Delete clears only selected address text' {(Value (Address)) -ceq ''}
   if(-not (Same-Names @(Row-Names) $beforeRows) -or (Bar-Control 'FolderViewMode').Current.HelpText -cne $mode){throw 'Address edit changed listing or view'}
   foreach($path in @((Join-Path $source $copyName),(Join-Path $source $renamedName),(Join-Path $source $searchName),(Join-Path $source $sortName))){Verify-Bytes $path}
-  (Address).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($source);(Bar-Control 'FolderViewMode').SetFocus()
+  (Address-Editor).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($source);(Bar-Control 'FolderViewMode').SetFocus()
  }
  $notes.Add('System Recycle Bin/default Delete, Explorer comparisons, full theme/DPI/language/IME/Narrator, device/UNC and extension scenarios were not exercised. Permanent deletion used only the named fixture and explicit Shift plus confirmation.')
  $report.status='PASS'

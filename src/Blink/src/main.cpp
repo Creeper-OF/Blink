@@ -22,6 +22,7 @@
 #include "Blink/App/SearchContextMenuPresentation.h"
 #include "Blink/App/ContextMenuAppearance.h"
 #include "Blink/App/CommandBarPresentation.h"
+#include "Blink/App/AddressBarPresentation.h"
 #include "Blink/App/SearchRequestQueue.h"
 #include "Blink/App/SearchResultValidation.h"
 #include "Blink/App/ShellContextMenuController.h"
@@ -849,10 +850,27 @@ struct App : AppT<App>
         window_frame_.KeyboardAccelerators().Append(close_tab_accelerator);
 
         AddAccelerator(window_frame_, Windows::System::VirtualKey::L,
-            Windows::System::VirtualKeyModifiers::Control, [this] {
-                path_box_.Focus(FocusState::Keyboard);
-                path_box_.SelectAll();
-            });
+            Windows::System::VirtualKeyModifiers::Control, [this] { BeginAddressEdit(); });
+        AddAccelerator(window_frame_, Windows::System::VirtualKey::D,
+            Windows::System::VirtualKeyModifiers::Menu, [this] { BeginAddressEdit(); });
+        auto address_history_accelerator = KeyboardAccelerator();
+        address_history_accelerator.Key(Windows::System::VirtualKey::F4);
+        const auto address_weak = get_weak();
+        address_history_accelerator.Invoked([address_weak](auto&&, auto&& args) {
+            const auto app = address_weak.get();
+            if (!app || app->window_style_closed_ || app->IsOperationDialogOpen()) { return; }
+            // A native combo/menu keeps its own F4 behavior.
+            auto focused = FocusManager::GetFocusedElement(app->window_frame_.XamlRoot()).try_as<DependencyObject>();
+            for (; focused; focused = VisualTreeHelper::GetParent(focused))
+            {
+                if (focused.try_as<ComboBox>() || focused.try_as<ComboBoxItem>() || focused.try_as<MenuFlyoutItemBase>()) { return; }
+            }
+            app->DismissCommandBarMenus();
+            app->DismissSearchContextMenu();
+            app->address_bar_.OpenHistory();
+            args.Handled(true);
+        });
+        window_frame_.KeyboardAccelerators().Append(address_history_accelerator);
         AddAccelerator(window_frame_, Windows::System::VirtualKey::F5,
             Windows::System::VirtualKeyModifiers::None, [this] { RefreshNavigation(); });
         for (const auto key : { Windows::System::VirtualKey::F, Windows::System::VirtualKey::E })
@@ -901,21 +919,7 @@ struct App : AppT<App>
         Grid::SetColumn(up_button_, 2);
         Grid::SetColumn(refresh_button_, 3);
 
-        path_box_ = TextBox();
-        path_box_.Text(hstring(localization_.GetString(L"Location.ThisPC")));
-        path_box_.PlaceholderText(hstring(localization_.GetString(L"Toolbar.PathPlaceholder")));
-        path_box_.HorizontalAlignment(HorizontalAlignment::Stretch);
-        path_box_.VerticalAlignment(VerticalAlignment::Center);
-        path_box_.Margin(Thickness{ 6, 0, 8, 0 });
-        path_box_.KeyDown([this](IInspectable const&, KeyRoutedEventArgs const& args) {
-            if (args.Key() == Windows::System::VirtualKey::Enter)
-            {
-                BrowseAsync(path_box_.Text().c_str());
-                args.Handled(true);
-            }
-        });
-        navigation_bar.Children().Append(path_box_);
-        Grid::SetColumn(path_box_, 4);
+        BuildAddressBar(navigation_bar);
 
         search_box_ = TextBox();
         winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(search_box_, L"SearchQuery");
@@ -1169,6 +1173,7 @@ struct App : AppT<App>
     void CloseOperationDialogs() noexcept
     {
         DismissCommandBarMenus();
+        address_bar_.HideMenus();
         if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
         const bool had_conflict = copy_conflict_wait_operation_id_ != 0 || copy_conflict_dialog_.IsOpen();
         const bool had_merge_conflict = directory_merge_dialog_operation_id_ != 0;
@@ -4079,6 +4084,11 @@ struct App : AppT<App>
         {
             RemoveWindowSubclass(window, NavigationWheelSubclass, id);
         }
+        else if (message == WM_CLOSE && window == app->navigation_window_handle_)
+        {
+            // End native text services before WinUI unloads the focus host.
+            app->PrepareWindowClose();
+        }
         else if (message == WM_CLIPBOARDUPDATE && window == app->navigation_window_handle_)
         {
             try { app->SyncCommandBarState(); }
@@ -6905,7 +6915,8 @@ struct App : AppT<App>
         {
             if (window_)
             {
-                window_.Close();
+                PrepareWindowClose();
+            window_.Close();
             }
             return;
         }
@@ -6996,16 +7007,72 @@ struct App : AppT<App>
         PresentSearchSurface();
     }
 
+    void BuildAddressBar(const Grid& navigation_bar)
+    {
+        const auto weak = get_weak();
+        blink::app::AddressBarPresentation::Callbacks callbacks;
+        callbacks.submit = [weak](std::wstring text) {
+            if (auto app = weak.get(); app && !app->window_style_closed_ && !app->IsOperationDialogOpen())
+            { app->BrowseAsync(std::move(text)); }
+        };
+        callbacks.navigate = [weak](blink::app::Location location) {
+            if (auto app = weak.get(); app && !app->window_style_closed_ && !app->IsOperationDialogOpen())
+            { app->NavigateToLocation(location); }
+        };
+        callbacks.cancel = [weak] {
+            if (auto app = weak.get(); app && !app->window_style_closed_ && !app->IsOperationDialogOpen())
+            { app->CancelAddressEdit(); }
+        };
+        callbacks.history_opening = [weak] {
+            if (auto app = weak.get(); app && !app->window_style_closed_)
+            { app->SyncAddressBar(true); }
+        };
+        const auto surface = address_bar_.Build(localization_, std::move(callbacks));
+        // Escape after dismissing the native history popup also returns to
+        // the visible list. TextBox Escape (including IME) stays with its editor.
+        surface.KeyDown([weak](auto&&, const KeyRoutedEventArgs& args) {
+            if (args.Key() != Windows::System::VirtualKey::Escape) { return; }
+            auto source = args.OriginalSource().try_as<DependencyObject>();
+            for (; source; source = VisualTreeHelper::GetParent(source))
+            { if (source.try_as<TextBox>()) { return; } }
+            if (auto app = weak.get(); app && !app->window_style_closed_ && !app->IsOperationDialogOpen())
+            { app->CancelAddressEdit(); args.Handled(true); }
+        });
+        path_box_ = address_bar_.Editor();
+        navigation_bar.Children().Append(surface);
+        Grid::SetColumn(surface, 4);
+        SyncAddressBar();
+    }
+
+    void SyncAddressBar(const bool preserve_draft = false)
+    {
+        const auto* tab = ActiveTab();
+        if (!tab) { return; }
+        const auto navigation = tab->state->NavigationState();
+        address_bar_.Present(tab_window_state_.ActiveTabId(), navigation.committed_location,
+            blink::app::BuildAddressBreadcrumbs(navigation.committed_location, localization_.GetString(L"Location.ThisPC")),
+            blink::app::BuildAddressHistory(navigation), preserve_draft);
+    }
+
+    void BeginAddressEdit()
+    {
+        DismissCommandBarMenus();
+        DismissSearchContextMenu();
+        address_bar_.BeginEdit();
+    }
+
+    void CancelAddressEdit()
+    {
+        SyncAddressBar();
+        if (const auto* tab = ActiveTab(); tab && tab->search_visible)
+        { search_presentation_.FocusResults(); }
+        else if (entries_) { entries_.Focus(FocusState::Keyboard); }
+    }
+
     void RestoreNavigationUi(const bool preserve_address_draft = false)
     {
         startup_.Stage("restore.path.begin");
-        const auto snapshot = ActiveState().PresentationSnapshot();
-        if (!preserve_address_draft)
-        {
-            path_box_.Text(hstring(snapshot.committed_location.IsThisPC() ?
-                localization_.GetString(L"Location.ThisPC") :
-                snapshot.committed_location.FolderPath()));
-        }
+        SyncAddressBar(preserve_address_draft);
         startup_.Stage("restore.path.end");
         startup_.Stage("restore.navigation.begin");
         UpdateNavigationButtons();
@@ -7047,9 +7114,25 @@ struct App : AppT<App>
         startup_.Stage("navigation-buttons.end");
     }
 
+    void PrepareWindowClose() noexcept
+    {
+        if (window_style_closed_) { return; }
+        try
+        {
+            if (search_surface_ && search_surface_.Visibility() == Visibility::Visible)
+            { search_presentation_.FocusResults(); }
+            else if (entries_) { (void)entries_.Focus(FocusState::Programmatic); }
+            // Use the cached committed address; the final tab may be closing.
+            // This only leaves edit mode, without rebuilding any breadcrumb.
+            address_bar_.PrepareForClose();
+        }
+        catch (...) { startup_.GenericFailure("address.prepare-close"); }
+    }
+
     void OnWindowClosed() noexcept
     {
         window_style_closed_ = true;
+        address_bar_.Close();
         DismissSearchContextMenu();
         shell_context_menu_.Shutdown(); search_menu_selection_.reset(); pending_search_folder_command_.reset();
         CloseOperationDialogs();
@@ -8123,6 +8206,7 @@ struct App : AppT<App>
     blink::app::FolderViewPresentation folder_view_presentation_;
     blink::app::FolderViewMode rendered_view_mode_{ blink::app::FolderViewMode::Details };
     std::uint64_t folder_view_generation_{};
+    blink::app::AddressBarPresentation address_bar_;
     TextBox path_box_{ nullptr };
     Button back_button_{ nullptr };
     Button forward_button_{ nullptr };

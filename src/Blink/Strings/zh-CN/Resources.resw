@@ -455,4 +455,7 @@
   <data name="Command.ClearSelection" xml:space="preserve"><value>取消选择</value></data>
   <data name="Command.InvertSelection" xml:space="preserve"><value>反向选择</value></data>
   <data name="Status.InvertSelectionFailed" xml:space="preserve"><value>无法反向选择，请重试。</value></data>
+  <data name="AddressBar.Name" xml:space="preserve"><value>地址栏</value><comment>Address bar navigation.</comment></data>
+  <data name="AddressBar.Edit" xml:space="preserve"><value>编辑地址</value><comment>Address bar navigation.</comment></data>
+  <data name="AddressBar.History" xml:space="preserve"><value>最近访问的位置</value><comment>Address bar navigation.</comment></data>
 </root>

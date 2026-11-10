@@ -59,6 +59,10 @@
     <OutputPath>$(BlinkOutputDirectory)</OutputPath>
     <OutDir>$(BlinkOutputDirectory)</OutDir>
   </PropertyGroup>
+  <PropertyGroup>
+    <BlinkIndexServiceBinary Condition="'$(BlinkIndexServiceOutputDirectory)' == ''">$(SolutionDir)$(Platform)\$(Configuration)\Blink.IndexService.exe</BlinkIndexServiceBinary>
+    <BlinkIndexServiceBinary Condition="'$(BlinkIndexServiceOutputDirectory)' != ''">$(BlinkIndexServiceOutputDirectory)Blink.IndexService.exe</BlinkIndexServiceBinary>
+  </PropertyGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
 
@@ -86,7 +90,7 @@
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ProviderHost.exe" "$(OutDir)Blink.ProviderHost.exe"
-copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.IndexService.exe" "$(OutDir)Blink.IndexService.exe"
+copy /Y "$(BlinkIndexServiceBinary)" "$(OutDir)Blink.IndexService.exe"
 copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.FileActivationHost.exe" "$(OutDir)Blink.FileActivationHost.exe"
 copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(OutDir)Blink.ShellMenuHost.exe"</Command>
     </PostBuildEvent>
@@ -138,6 +142,8 @@ copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(
     <ClInclude Include="include\Blink\App\SearchContextCommands.h" />
     <ClInclude Include="include\Blink\App\SearchContextMenuPresentation.h" />
     <ClInclude Include="include\Blink\App\ContextMenuAppearance.h" />
+    <ClInclude Include="include\Blink\App\AddressBarModel.h" />
+    <ClInclude Include="include\Blink\App\AddressBarPresentation.h" />
     <ClInclude Include="include\Blink\App\CommandBarPresentation.h" />
     <ClInclude Include="include\Blink\App\ExplorerCommandBarModel.h" />
     <ClInclude Include="include\Blink\App\ShellContextMenu.h" />
@@ -194,6 +200,8 @@ copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(
     <ClCompile Include="src\TabWindowState.cpp" />
     <ClCompile Include="src\FolderViewFormatting.cpp" />
     <ClCompile Include="src\FolderViewPresentation.cpp" />
+    <ClCompile Include="src\AddressBarModel.cpp" />
+    <ClCompile Include="src\AddressBarPresentation.cpp" />
     <ClCompile Include="src\CommandBarPresentation.cpp" />
     <ClCompile Include="src\Localization.cpp" />
     <ClCompile Include="src\Location.cpp" />

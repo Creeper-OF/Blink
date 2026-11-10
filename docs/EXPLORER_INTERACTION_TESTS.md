@@ -1,8 +1,8 @@
 # Explorer 交互能力与验证矩阵
 
-阶段A审计2026-11-08；G02实现更新2026-11-09。阶段A基线`7135a14`为235输入/368资源，只读审计提交`e497600`。G01顶部View/Show为235输入/369资源；当前G02标准CommandBar为240输入/375资源。依据完整316行任务书和实际源码/报告持续更新，保留完整待验范围。
+阶段A审计2026-11-08；G02实现更新2026-11-09；G03a实现更新2026-11-10（同一最终Release限定GUI53项通过）。阶段A基线`7135a14`为235输入/368资源，只读审计提交`e497600`。G01顶部View/Show为235输入/369资源；G02标准CommandBar为240输入/375资源；G03a为246输入/378资源。依据完整316行任务书和实际源码/报告持续更新，保留完整待验范围；各候选结果不互相套用。
 
-**G02 Hidden/Search生命周期修正后，Debug/Release完整构建与普通回归各1542 PASS / 0 FAIL / 4权限1314 SKIP，240冻结输入哈希匹配/375资源；修正后Release同一完整18项GUI已18 PASS / 0 FAIL / 0 SKIP，#08 Hidden→#14真实索引/PasteParent串联通过。** 本文更新代理只核对源码与主模型提供的结果，没有另行构建或运行GUI。H-*为早期历史，B-*保留G01有效结果，C-*为G02当前结果；不能用G01的15 PASS自动证明当前AppBarButton host或新增动作。`NOT RUN`表示未执行；当前PASS仅限报告实际检查，4个未点击排序叶和完整环境矩阵继续待验。
+**最终WM_CLOSE修正后，两配置原生各1565 PASS / 0 FAIL / 4既有权限SKIP（23项新增地址模型），246输入/378资源；同一最终Release地址20/命令18/查看15，合计53 PASS / 0 FAIL / 0 SKIP。独立关闭A/B/C/D四项均PASS、exit0，C真后台、D实际Ctrl+W关闭唯一Tab且无WM_CLOSE fallback；另列不加入53。旧Debug52项仅preflight，完整G03/P0仍`PARTIAL`。** 本文更新代理只读源码、报告与主模型结果，没有另行构建/GUI；不从验证通过推断默认发布成功。H/B/C为各自历史，D为本轮G03a，完整环境/人工矩阵仍按未测保留。
 
 ## 1. 状态、环境与证据
 
@@ -14,6 +14,7 @@
 | 本轮参考主机 | Windows 11 家庭版 **25H2，10.0.26200.9711**，zh-CN；所观察 Explorer 窗口 DPI 120（125%） |
 | G01历史 Blink GUI | G01最终 Release 报告：25H2 / build 26200 / UBR 9711，zh-CN，x64、非管理员；**window_dpi=96**，主题未采集。Explorer 参考的 DPI 120 不能带入 Blink 结果，不推断差异原因，不声称跨 DPI 对照完成 |
 | G02当前Blink GUI | 修正后Release最终报告：25H2/build26200.9711、zh-CN、非管理员；**window_dpi=96**、**theme="not captured"**。18 PASS/0 FAIL/0 SKIP；不把该窗口采样当作100%完整矩阵或25H2/24H2视觉对照 |
+| G03a本轮Blink GUI | 同一最终Release地址20/命令18/查看15合计53/0/0；25H2/build26200.9711、zh-CN、x64、非管理员、window_dpi=96，系统AppsUseLightTheme=0、Blink实际主题not captured。关闭A/B/C/D另全PASS，含真后台和Ctrl+W唯一标签；不外推完整环境矩阵 |
 | 参考观察 | 主模型新建并核对自有 GUID 目录/新 HWND，UIA 读取 View/Show，未改变系统选项；正常关闭窗口，清理 83 字节 fixture |
 | 参考证据 | [explorer-reference.json](../.build/explorer-ui-p0-view-menu/integration/explorer-reference.json)，`OBSERVED_VIEW_SHOW_ONLY`；不是 12 类上下文、其他主题或其他 DPI 的验收 |
 | 参考图像边界 | PrintWindow 只捕获主窗口，未包含弹出菜单；不作为菜单视觉、像素一致或可读性凭据。View 的 UIA 记录 11 项；Show 记录含父层，新增子项实际为 5 项，不能把全部 16 项当成 Show 子项 |
@@ -23,7 +24,7 @@
 | 第三方扩展 | 历史记录实际安装 Bandizip 7.46，已验证代表性真实 ZIP；7-Zip、Git、VS Code 和其他扩展不因规范列举即视为已安装/验收 |
 | 自动化限制 | 本机 .NET Win32 UIA proxy 注册曾失败；WinUI UIA 可用，经典菜单/属性采用 Win32 HMENU/页签证据。没有把代理失败归因于产品无控件 |
 
-证据索引（H-*为早期历史；B-*为G01历史；C-*为G02当前）：
+证据索引（H-*为早期历史；B-*为G01；C-*为G02；D-*为G03a最终结果，D-PREFLIGHT仅旧Debug镜像）：
 
 | 证据号 | 产物与结果 | 能证明的范围 |
 | --- | --- | --- |
@@ -38,6 +39,12 @@
 | C-NATIVE | `.build/explorer-command-bar/integration/tests-debug.log`、`tests-release.log`及构建状态；Hidden/Search修正后Debug/Release完整构建成功，普通回归各 **1542 PASS / 0 FAIL / 4权限1314 SKIP**；240冻结输入哈希匹配/375套中英/fallback资源，单并发 | 新增26项检查（23项命令栏能力/反选模型、3项搜索生命周期）；包含三surface、模态/忙碌/剪贴板和权威选择边界，不等于实际按钮、菜单键盘、文件动作或overflow通过；4项符号链接SKIP仍保留 |
 | C-STRUCT | 启动probe读取到真实类ApplicationBar、8个AppBarButton和系统MoreButton；独立Release [ui-overflow-probe.json](../.build/explorer-command-bar/integration/ui-overflow-probe.json)正常exit0，真实overflow为`OverflowPopup / Popup / ControlType.Window`，ControlView链`CommandSelectAll → OverflowPopup → ExplorerCommandBar`，RawView另含无ID ScrollViewer | TopMoreMenu仅为源码给Presenter的Style ID，本机未暴露为UIA入口；结构观察不能证明bar bounds全宽、窄宽动态溢出、菜单键盘、焦点或Narrator通过 |
 | C-UI | [最终ui-command-bar-report](../.build/explorer-command-bar/integration/ui-command-bar-report.json)：**18 PASS / 0 FAIL / 0 SKIP**，2026-11-09 05:41:20–05:45:02 UTC；修正后Release SHA256 `5AFE3C46D519EF13C378FF7539C80821F313A860820949FBC5A5CF7F8E41662A` | 同一完整脚本#08 Hidden→#14真实索引/PasteParent串联通过；正常exit0、无强杀；fixture清理3152字节，compiler-temp已清但释放字节未记录，clipboard_restored=true。修正前13子项PASS红尝试和私有Search3 PASS仅保留诊断，不算本次最终结果；4个未点击排序叶、完整环境和人工验收仍未验 |
+| D-NATIVE | `.build/explorer-address-bar/integration`的最终两配置build/test状态与`tests-debug.log/tests-release.log`：WM_CLOSE修正后Debug/Release均构建exit0，原生各**1565 PASS / 0 FAIL / 4既有权限SKIP**；246输入/378资源，单并发 | 新增23项地址模型；不能证明真实IME/UNC或GUI，不将权限SKIP改写为通过 |
+| D-UI | [最终Release地址GUI报告](../.build/explorer-address-bar/integration/ui-address-bar-report.json)：**20 PASS / 0 FAIL / 0 SKIP**，2026-11-10 12:33:45–12:40:38 UTC；SHA256 `CF1D8A2BAE1A8B67ED2C99E53DFF373369EE8362060D69B8DAD3481A8E5FCA9D` | 18功能+2收尾；#18保留未提交draft/实际editor焦点直接Close，#19正常exit0、#20清理366字节fixture。compiler-temp已清、字节未记录；无系统剪贴板/全局输入。与下列命令/查看共53项，关闭四场景另列 |
+| D-CMD | [最终Release命令兼容报告](../.build/explorer-address-bar/integration/ui-command-bar-compat-report.json)：**18 PASS / 0 FAIL / 0 SKIP**，2026-11-10 12:43:04–12:45:07 UTC，与D-UI同SHA | 当前镜像重跑G02命令18项限定场景；正常exit0、3152字节fixture/临时目录已清、clipboard_restored=true，不由历史C-UI代替 |
+| D-VIEW | [最终Release查看兼容报告](../.build/explorer-address-bar/integration/ui-view-compat-report.json)：**15 PASS / 0 FAIL / 0 SKIP**，2026-11-10 12:45:33–12:54:28 UTC，与D-UI同SHA | 当前镜像重跑查看/显示15项限定场景；正常exit0、1015字节fixture/临时目录已清；旧G01的DropDownButton类名不因此套用于当前host。D-UI+D-CMD+D-VIEW=53，非全P0验收 |
+| D-PREFLIGHT | [旧Debug地址报告](../.build/explorer-address-bar/integration/ui-address-bar-debug-report.json)19项，旧镜像另有命令18/查看15，共52 PASS；该地址SHA256 `50B3D782D7737E9017914C78C08245BAB3DACAF2FA44BBBDC7218BB6A3C24A17` | 只作preflight历史，不是最终WM_CLOSE修正后镜像GUI，不混入D-UI的20项或冒称最终Debug52项重跑 |
+| D-CLOSE | [最终固定版关闭报告](../.build/explorer-address-bar/integration/window-close-probe/fixed/probe-report.json)：同一CF1D...镜像A/B/C/D四项均**PASS、exit0**，2026-11-10 12:54:43–12:54:51 UTC；无新dump | C以自有WinForms伴随窗口核验Ctrl+L前后真后台，background_branch=COVERED；D实际Ctrl+W关唯一Tab、无WM_CLOSE fallback。前期两dump的StackWalk64共64帧匹配、顶栈WinUIEdit/Xaml，仅诊断，不宣称还原内部根因；四项不并入53 |
 
 H-FOLDER-UI/H-SEARCH-UI使用上一菜单切片候选的SHA，不等于对G01或G02重新跑了39项。G01历史结果仅证明其当时候选。native中源码文字扫描断言、fake executor/RPC、真实文件操作的证明力不同；按下文具体测试入口使用，不把总计数作为 Windows Explorer 对比结果。
 
@@ -45,28 +52,28 @@ B-VIEW 的输入仅自有 PID/HWND InputSite 键盘消息及 WinUI UIA，未使�
 
 ## 2. 快捷键矩阵
 
-代码入口：`main.cpp::BuildUi/AddAccelerator/CreateFolderViewControl`，`SearchPresentation::Build`，`FolderNameDialog::Show`。普通目录列表的 accelerator 设置 `ScopeOwner(control)`；通用 accelerator 和 Ctrl+T/W 检查 `IsOperationDialogOpen()`。搜索动作绑定 `SearchResults` 列表，地址/搜索编辑框不是文件操作快捷键的 owner。
+代码入口：`main.cpp::BuildUi/AddAccelerator/CreateFolderViewControl/BuildAddressBar/BeginAddressEdit/CancelAddressEdit`，`AddressBarPresentation::Build`、`SearchPresentation::Build`、`FolderNameDialog::Show`。普通目录列表的 accelerator 设置 `ScopeOwner(control)`；通用 accelerator 和 Ctrl+T/W 检查 `IsOperationDialogOpen()`。搜索动作绑定 `SearchResults` 列表，地址/搜索编辑框不是文件操作快捷键的 owner。
 
 **优先级规则**：文本控件内部编辑 → 当前模态对话框 → 所在列表/菜单 → 窗口导航命令。当前代码对列表作用域与对话框已有门控，但跨焦点的完整实际键盘序列尚未逐项跑过，不凭源码宣称所有输入法和焦点状态均正确。
 
 | 测试编号 | 按键/操作 | 当前实现、适用焦点 | 文本/对话框优先级与待验项 | 状态/既有执行 |
 | --- | --- | --- | --- | --- |
 | EXP-KEY-01 | Alt+← / Alt+→ / Alt+↑ | 窗口 accelerator 调用 Back/Forward/Up；使用导航状态机 | 操作对话框打开时门控；地址输入中的 Alt 组合/IME 待实机 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
-| EXP-KEY-02 | Ctrl+L | 聚焦地址 TextBox 并全选 | B-VIEW #13 验证普通目录中聚焦当前路径；当前没有面包屑/显示与编辑双模式，模态场景未验 | IMPLEMENTED_VERIFIED（限定普通地址焦点）/ PASS；模态 NOT RUN |
-| EXP-KEY-03 | Alt+D、F4 | 未接地址栏专用 handler/历史下拉 | 不用 Ctrl+L 的存在冒充这两项已实现 | DEFERRED / NOT RUN |
+| EXP-KEY-02 | Ctrl+L | G03a从面包屑进入编辑全选；重复Ctrl+L保留最新草稿再全选 | Release D-UI #02/#04已验；模态/真实IME另验 | IMPLEMENTED_VERIFIED（最终Release所列键盘）；其余NOT RUN |
+| EXP-KEY-03 | Alt+D、F4 | Alt+D进入编辑全选；F4打开真实已commit历史；空历史只进入编辑 | Release D-UI #04/#08/#16已验Alt+D及F4实际导航；原生Combo/Menu自身F4、空历史仍待专项；无自动完成/下级目录菜单 | IMPLEMENTED_VERIFIED（最终Release所列子项）；其余IMPLEMENTED_NEEDS_MANUAL |
 | EXP-KEY-04 | F5 | 窗口刷新当前位置 | 刷新不是新历史记录；模态时不提交 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-05 | F6、Shift+F6 | 未接区域焦点轮转 | 需另定地址/命令/树/列表/状态的循环顺序 | DEFERRED / NOT RUN |
 | EXP-KEY-06 | F3 | 未接搜索聚焦键 | 已有 Ctrl+F/E 不等于 F3 | DEFERRED / NOT RUN |
 | EXP-KEY-07 | Ctrl+F、Ctrl+E | 窗口聚焦搜索 TextBox 并全选 | 模态时门控；文本框焦点下的行为待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-08 | Tab、Shift+Tab | WinUI 标准焦点导航；列表明确 IsTabStop(true) | 没有显式跨区域焦点恢复模型；菜单关闭/导航重投影后的落点待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
-| EXP-KEY-09 | Enter：地址 | `path_box_.KeyDown` 提交 BrowseAsync | B-VIEW #01/#07/#11 提交真实自有目录；非法/不存在/无权限仍需分别验证 | IMPLEMENTED_NEEDS_MANUAL / 自有合法路径 PASS；错误分支 NOT RUN |
+| EXP-KEY-09 | Enter：地址 | G03a同步读取实际AddressEditor.Text并提交原BrowseAsync；成功恢复面包屑 | D-UI #03/#09已验Unicode目录和不存在路径失败恢复/不入历史；composition守卫已实现，真实IME/其他错误未验 | IMPLEMENTED_VERIFIED（最终Release所列子项）；真实IME/其他错误NOT RUN |
 | EXP-KEY-10 | Enter：搜索/高级范围输入 | 搜索框及指定盘/目录输入提交查询 | 搜索草稿/范围属于当前 Tab；不可当文件 Open | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-11 | Enter：普通列表 | scoped accelerator 打开焦点/所选行；目录导航、文件关联 helper | 不作用于地址、搜索、重命名框 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-12 | Enter、Ctrl+Enter：搜索列表 | Enter 打开；Ctrl+Enter 打开父目录并选中原命中项 | 只作用于结果列表；历史 H-SEARCH-UI #11 覆盖 Ctrl+Enter | IMPLEMENTED_VERIFIED（限定历史）/ NOT RUN |
-| EXP-KEY-13 | Esc：地址 | 未接取消草稿并恢复已提交路径的专用逻辑 | 保留原生 TextBox 行为，不能说已满足 Explorer 地址 Esc | DEFERRED / NOT RUN |
+| EXP-KEY-13 | Esc：地址 | G03a取消草稿、恢复committed地址并回到当前普通/搜索列表；原生历史菜单先按自身取消语义关闭 | Release D-UI #02/#04/#06/#17已验普通/真实SearchResults回焦和菜单取消；composition/LostFocus/完整焦点组合仍待验 | IMPLEMENTED_VERIFIED（最终Release所列子项）；真实IME等NOT RUN |
 | EXP-KEY-14 | Esc：搜索 | 搜索框/结果列表离开搜索 | 菜单、模态内 Esc 应先关闭当前界面；IME 候选取消优先级待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-15 | Esc、Enter：菜单/名称对话框 | MenuFlyout/ContentDialog 标准取消/默认按钮；名称 Primary 启用取决于合法性 | B-VIEW #10 验证顶部菜单 Space、Home/Down/Right、Enter、两级 Esc 并返回 FolderViewMode；名称对话框/IME 未验 | IMPLEMENTED_NEEDS_MANUAL / 顶部菜单 PASS；名称/IME NOT RUN |
-| EXP-KEY-16 | Ctrl+T、Ctrl+W | 窗口新建/关闭活动标签；关闭最后标签请求关窗口 | B-VIEW #07/#08/#12 验证新增及关闭临时 Tab；最后标签/模态防误关未验 | IMPLEMENTED_NEEDS_MANUAL / 自有多 Tab PASS；其余 NOT RUN |
+| EXP-KEY-16 | Ctrl+T、Ctrl+W | 窗口新建/关闭活动标签；关闭最后标签请求关窗口 | D-CLOSE D已验实际Ctrl+W关唯一Tab、正常exit0且无WM_CLOSE fallback；D-UI/D-VIEW有限多Tab动作通过；全部模态/焦点组合另验 | IMPLEMENTED_VERIFIED（上述实际子项）；完整模态/焦点NOT RUN |
 | EXP-KEY-17 | Ctrl+Tab、Ctrl+Shift+Tab | TabView **默认**相邻标签选择；SelectionChanged 已接业务状态 | 不能凭 main 无手写绑定认定未实现；从地址/列表等 TabView 内容树之外焦点调用的范围未核验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-18 | Ctrl+F4 | TabView 默认 TabCloseRequested，Blink 已接 | TabView 焦点与内容区域范围、模态时框架默认事件是否与 Ctrl+W 一致待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-19 | Ctrl+A：普通列表 | `SelectAllFolderRows` → 权威 TabState 可见行；不按虚拟可见容器截断 | 地址/搜索/重命名框保留文本全选；搜索结果目前单选，不承诺多选结果 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
@@ -92,11 +99,12 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 
 | 测试编号 | 自有 fixture 上的操作与判据 | 已有依据 | 既有结果与未验项 |
 | --- | --- | --- | --- |
-| EXP-FOCUS-01 | 地址 TextBox 输入文本，Ctrl+A/C/X/V、Delete、Ctrl+Z/Y 只编辑文本；背后文件/选择/队列不变化 | B-VIEW #13：Ctrl+L 聚焦、Ctrl+A/Delete 清空文本，选中文件仍在、行序和 View 不变；未接触 Clipboard | 部分 PASS：仅地址 Ctrl+L/A/Delete；C/X/V/Z/Y NOT RUN |
+| EXP-FOCUS-01 | 地址 TextBox 输入文本，Ctrl+A/C/X/V、Delete、Ctrl+Z/Y 只编辑文本；背后文件/选择/队列不变化 | Release D-UI #05已验新AddressEditor的Ctrl+A/Delete保留文件字节/选择/行序/视图；B-VIEW/C-UI为历史 | 部分PASS（最终Release Ctrl+L/A/Delete）；C/X/V/Z/Y NOT RUN |
 | EXP-FOCUS-02 | 搜索框及高级盘/路径输入执行同样组合，Enter 只提交当前查询，IME 候选 Enter/Esc 不误提交/退出 | SearchPresentation 文本 handler；IME 未实测 | NOT RUN |
 | EXP-FOCUS-03 | F2 对话框只改主名、扩展名选择边界、Ctrl+A、粘贴、Delete、Enter/Esc、失焦；背后文件不受快捷键影响 | FolderNameDialog 当前全选为已知差距 | NOT RUN |
 | EXP-FOCUS-04 | 新建/冲突/永久删除确认/属性窗口中 Tab 顺序、默认按钮、Esc、Ctrl+T/W、Alt+F4；退出回到合理列表焦点 | IsOperationDialogOpen/ContentDialog；属性和冲突实际打开仅历史部分覆盖 | NOT RUN |
 | EXP-FOCUS-05 | 换 Tab/快速导航/视图重投影/菜单关闭后，焦点与权威选择一致，Enter/Ctrl+C 作用于当前行 | B-VIEW #03 选择/行序保留、#09 旧 top peer 换 Tab 不修改任一 Tab、#10 菜单 Esc 返回按钮；H-FOLDER/SEARCH 仍为历史 | 部分 PASS：所列子项；快速导航、列表 Enter/Ctrl+C 组合 NOT RUN |
+| EXP-FOCUS-06 | G03a同Tab自动刷新保留地址草稿/焦点；切Tab取消未提交文本；旧history/祖先peer不能导航新Tab；被动读取HelpText不改变菜单/焦点 | Release D-UI #07/#12/#13/#14已验被动读取、真实watcher、Tab和旧history peer；不用F5冒充自动刷新 | 部分PASS（最终Release所列子项）；真实IME和旧祖先peer专项UIA仍NOT RUN |
 
 ## 3. 鼠标、选择、剪贴板与拖放
 
@@ -179,7 +187,7 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 | EXP-MENU-09 | ThisPC 背景/其他虚拟页：不出现普通路径写入动作，按真实能力显示 | B-VIEW #12 仅验证 ThisPC 顶部三视图/Show，地址仍为虚拟 ThisPC；C-UI #13另实测顶部变更/Sort禁用，虚拟Location保持；完整背景菜单仍待验 | 部分PASS：G01 ThisPC View/Show及C-UI顶部能力禁用；完整背景菜单/其他虚拟页NOT RUN |
 | EXP-MENU-10 | 回收站根/内容菜单与恢复/清空 | 浏览页未实现；现存 recycle/restore fixture 只证明后端删除 | NOT RUN（DEFERRED） |
 | EXP-MENU-11 | UNC/SMB/远端：权限、断线、菜单/凭据/传输语义 | 本地变更限制见 EXP-OBJ-07；Provider 原型不能作为生产证据 | NOT RUN（PARTIAL/DEFERRED） |
-| EXP-MENU-12 | Tab/地址面包屑/编辑框/搜索框/列头特殊菜单；文本焦点不误操作文件 | 当前路径为 TextBox；Tab/列头/面包屑完整菜单未实现，原生 TextBox 菜单需实测 | NOT RUN（PARTIAL） |
+| EXP-MENU-12 | Tab/地址面包屑/编辑框/搜索框/列头特殊菜单；文本焦点不误操作文件 | Release D-UI已验G03a祖先左键/原生overflow/F4历史；不等于面包屑专属右键或下级目录菜单。Tab/列头完整菜单未实现，原生TextBox菜单另验 | PARTIAL；仅上述Release动作PASS，完整特殊菜单NOT RUN |
 | EXP-OP-01 | 同/跨卷文件、目录和混合 Copy/Move；核对字节、ADS、时间/属性、同卷文件 ID、目标独有项与源留存 | T-COPY/T-MERGE；C-UI #04/#05为自有同卷单文件COPY/MOVE和字节/来源核对；不是全部对象/跨卷/元数据矩阵 | 部分PASS：所列COPY/MOVE；ADS/跨卷/目录/完整元数据GUI仍NOT RUN |
 | EXP-OP-02 | 根及嵌套 Replace/Skip/KeepBoth/Cancel、类型冲突、目录 Merge；不能先删目标根 | T-MERGE；H-MERGE-UI #03–06 | NOT RUN |
 | EXP-OP-03 | 中途取消/失败/观察回调异常，保留已完成前缀、真实残留和未启动尾项；只按允许方式继续，不整树重放 | T-COPY/T-MERGE/T-DELETE；冲突关闭/窗口退出实际键盘组合待验 | NOT RUN |
@@ -207,12 +215,12 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 
 | 验收编号 | 要验证的事实 | 现有证据/方法 | 既有结果与未验项 |
 | --- | --- | --- | --- |
-| EXP-ENG-01 | Debug/Release真实构建与普通回归，单并发、记录输入/二进制摘要 | C-NATIVE当前两配置各1542/0/4、240输入；B-NATIVE保留G01历史1516/0/4 | PASS（G02构建/普通回归）；4权限SKIP保持；C-UI另有18项有限GUI PASS |
-| EXP-ENG-02 | zh/en/fallback键覆盖、command/Automation ID唯一、每个新可见项有实际动作 | C-NATIVE当前375键；B-NATIVE/B-VIEW为G01的369键和旧host实测；当前新主/次命令有C-UI实际动作范围，4个未点击排序叶仍待验 | 部分PASS：资源匹配；资源数不证明全应用ID唯一或中英UI均实测，en-US/全局唯一性专验NOT RUN |
-| EXP-ENG-03 | 无重复 accelerator；文本/模态优先；窗口/Tab/query 关闭后旧回调不能执行 | B-VIEW #09 旧 top peer、#10 键盘、#13 地址文本；T-TAB/T-SEARCH native 重跑，原 H-* 不冒充新 GUI | 部分 PASS：所列 View/地址子项；模态、查询、全部 accelerator 组合 NOT RUN |
+| EXP-ENG-01 | Debug/Release真实构建与普通回归，单并发、记录输入/二进制摘要 | D-NATIVE最终两配置各1565/0/4、246输入/378资源；同一Release D-UI/D-CMD/D-VIEW合计53项通过 | PASS（限定最终构建/原生/53项GUI）；旧Debug52仅preflight，4权限SKIP保持 |
+| EXP-ENG-02 | zh/en/fallback键覆盖、command/Automation ID唯一、每个新可见项有实际动作 | G03a为378资源；D-UI有新地址ID/实际动作；C-NATIVE为G02的375资源和历史命令检查，4个未点击排序叶仍待验 | 部分PASS：资源/本机zh-CN所列UI；不证明全应用ID唯一或en-US实机通过，完整专验NOT RUN |
+| EXP-ENG-03 | 无重复 accelerator；文本/模态优先；窗口/Tab/query 关闭后旧回调不能执行 | Release D-UI #05文本作用域、#14旧history peer、#16键盘历史；B-VIEW与T-TAB/T-SEARCH保留各自范围 | 部分PASS：所列Release地址子项；模态/真实IME/旧祖先peer/全部accelerator组合NOT RUN |
 | EXP-ENG-04 | 第三方菜单代码在 ShellMenuHost，Blink 主进程不加载相应扩展 DLL | host 源码架构与历史 helper PID；此轮未重新采模块快照，其他 property handler 不能据此泛化 | NOT RUN |
 | EXP-ENG-05 | 没有回收失败→永久删除、索引离线→全盘 DFS 等静默 fallback；错误不冒充成功 | DeleteOperation/SearchCoordinator 真实分支与 T-DELETE/T-SEARCH；有 fake 用例也须注明 | NOT RUN |
-| EXP-ENG-06 | 正常关闭、取消待机 Shell/文件任务、清理自有 fixture；回调不访问已关闭 UI，用户剪贴板不被测试误用 | B-VIEW #14/#15：exit0、无强杀、1015 字节 fixture/独占编译临时目录已清，无 Clipboard API；G01当时无待机Shell/文件任务；C-UI #17/#18新增正常exit0、无强杀、3152字节fixture和compiler-temp清理、clipboard_restored=true | 部分PASS：G01与G02正常退出/归属清理；传输/Shell待机取消组合NOT RUN |
+| EXP-ENG-06 | 正常关闭、取消待机Shell/文件任务、清理自有fixture；回调不访问已关闭UI，用户剪贴板不被测试误用 | D-UI #18–20、D-CMD/D-VIEW退出/清理通过；三套fixture各366/3152/1015字节，compiler-temp已清，未记录字节不虚构；D-CMD剪贴板恢复true | 部分PASS：上述清理及D-CLOSE真后台/唯一标签关闭；传输/Shell待机组合NOT RUN |
 
 ## 6. 现存代码与真实测试 ID 对照
 
@@ -220,6 +228,7 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 
 | 索引 | 业务入口 | 现存测试源码与真实 ID（节选） |
 | --- | --- | --- |
+| T-ADDR | [AddressBarModel](../src/Blink/src/AddressBarModel.cpp)、[AddressBarPresentation](../src/Blink/src/AddressBarPresentation.cpp)、main的Build/Sync/Begin/CancelAddress/PrepareWindowClose | [AddressBarTests](../tests/Blink.Phase1.Tests/src/AddressBarTests.cpp)：`address_breadcrumb_this_pc_preserves_virtual_target_and_localized_label`、`address_breadcrumb_long_path_retains_all_levels_for_native_overflow`、`address_history_pending_typed_location_never_enters_f4_choices`、`address_edit_same_owner_refresh_preserves_draft_and_updates_committed_truth`、`address_edit_tab_switch_discards_old_draft_even_when_committed_paths_match`；23项模型在最终两配置各1565/0/4中通过，纯模型不等于控件/IME/UNC实测 |
 | T-NAV | [NavigationModel](../src/Blink/src/NavigationModel.cpp)、BrowseController、FolderWatcher、FolderChangeState | [main.cpp](../tests/Blink.Phase1.Tests/src/main.cpp)：`navigation_older_intent_rejected`、`navigation_failed_back_preserves_history`、`navigation_refresh_preserves_history`、`navigation_up_root_reaches_this_pc`；[FolderNavigationTests](../tests/Blink.Phase1.Tests/src/FolderNavigationTests.cpp)：`folder_navigation_watch_start_failure_releases_browse_to_report_real_error` |
 | T-TAB | [TabState](../src/Blink/src/TabState.cpp)、[TabWindowState](../src/Blink/src/TabWindowState.cpp)、main TabView callbacks | main 测试：`tab_locations_are_isolated`、`tab_histories_are_isolated`、`tab_selections_are_isolated`、`tab_async_execution_state_is_isolated`、`closing_last_tab_requests_window_close`、`closed_tab_invalidates_async_state` |
 | T-ROW | RowIdentity、TabState 的 SelectedCommittedRows、main selection sync | main 测试：`row_identity_distinct_hardlink_names`、`copy_selection_capture_preserves_distinct_hardlink_names_in_committed_order`、`select_all_cannot_reuse_previous_folder_rows_in_this_pc`；这些不证明实际 Ctrl/Shift 手势 |
@@ -254,7 +263,7 @@ G02当前host为标准AppBarButton；以下旧候选的UIA类型与动作证据�
 | EXP-P0-VIEW-06 | 空目录/ThisPC/搜索/枚举中能力与旧菜单生命周期 | B-VIEW #09 保存旧 top peer，切另一 Tab 后 Invoke 返回但两 Tab 布局/路径均未变；#11 空目录三布局/Hidden 无旧行；#12 ThisPC 三布局/Show 保持虚拟位置；#14 自有窗口正常 exit0 | **部分 PASS：上述边界与切 Tab 旧 peer**；搜索页、枚举中 disabled 快照、导航/关闭后旧 top peer 的专项 GUI **NOT RUN** |
 | EXP-P0-VIEW-07 | 两配置构建/回归、资源/输入摘要，选择实际菜单回归与清理 | B-NATIVE 两配置各 1516 PASS/0 FAIL/4 权限 SKIP、235 输入/369 资源；B-VIEW #04 右键/顶部视图同步，#15 逐路径/字节确认后清理 fixture，compiler-temp 已清 | **PASS（本轮构建、普通回归、15 项有限 GUI）**；未把 H-FOLDER/H-SEARCH 的 39 项当作本轮重跑，完整原生/搜索菜单 GUI 仍仅历史证据 |
 
-后续快捷键、F2 主名初选、地址 Esc、文本/IME 焦点、外部剪贴板完成反馈、真实双向拖放、普通/搜索属性一致性分别列独立切片，不能通过这一次 View 菜单通过就关闭其验收项。完整 P0 日常行为门槛目前尚未达成。
+G01当时未处理的快捷键、F2主名初选、地址Esc、文本/IME焦点、外部剪贴板完成反馈、真实双向拖放、普通/搜索属性一致性分别列独立切片；当前G03a地址实现与待验范围见第7.2节，不能通过G01的View菜单结果关闭这些验收项。完整P0日常行为门槛目前尚未达成。
 
 ## 7.1 G02当前切片与正式18项检查
 
@@ -289,11 +298,55 @@ C-NATIVE新增共26项检查；其中23项命令栏测试见[ExplorerCommandBarT
 | EXP-P0-CMD-17 / #17 | 自有Blink正常exit0，无强杀 | PASS（C-UI #17，限所列子项） |
 | EXP-P0-CMD-18 / #18 | 按精确归属/路径/字节核对后清理自有fixture；剪贴板恢复与临时目录清理写实记录 | PASS（C-UI #18，限所列子项）；fixture3152字节已清，compiler-temp释放字节未记录，clipboard_restored=true |
 
-修正前13个子项PASS和私有Search3 PASS仅是定位历史；修正后完整C-UI 18/0/0才是本次最终GUI结果。这18项通过仍不代表完整P0完成。G01 Hidden/SYSTEM/跨Tab历史证据保留；#08单独View/Hidden子项不足以证明Search仍可用；本轮已在同一完整脚本取得#08→#14串联PASS，G01历史不被拿来代替该证据。地址Esc/Alt+D/F4、F2主名初选、完整焦点/IME、外部剪贴板完成回传、Shell扩展、系统回收站、全部主题/DPI/Narrator/24H2仍按原矩阵逐项处理。
+修正前13个子项PASS和私有Search3 PASS仅是定位历史；修正后完整C-UI 18/0/0才是G02最终GUI结果。这18项通过仍不代表完整P0完成。G01 Hidden/SYSTEM/跨Tab历史证据保留；#08单独View/Hidden子项不足以证明Search仍可用；G02已在同一完整脚本取得#08→#14串联PASS，G01历史不被拿来代替该证据。G03a地址Esc/Alt+D/F4另见第7.2节，不能用C-UI验证新地址host；F2主名初选、完整焦点/IME、外部剪贴板完成回传、Shell扩展、系统回收站、全部主题/DPI/Narrator/24H2仍按原矩阵逐项处理。
+
+## 7.2 G03a地址栏：最终Release正式20项检查
+
+实现状态为**IMPLEMENTED_VERIFIED（仅本机最终Release报告实际覆盖子项）**。当前落实编辑/面包屑、祖先/原生overflow、Ctrl+L/Alt+D/Enter/Esc/F4、真实历史及编辑中直接关闭；下级目录菜单、自动完成建议未做，完整G03/P0仍`PARTIAL`。地址草稿同Tab自动刷新保留，切Tab取消，不跨Tab或重启持久化；历史仅已commit current/最近back/forward，pending/失败/草稿不入选。
+
+最终WM_CLOSE修正后，两配置原生各1565/0/4，新增23项地址模型，246输入/378资源。下表为D-UI的**20 PASS/0 FAIL/0 SKIP（18功能+2收尾）**；同一Release另有D-CMD18/D-VIEW15，合计53项通过，候选SHA/环境/UTC见索引。旧Debug52项只preflight；D-CLOSE四场景另全PASS、exit0，独立记录不加到53。
+
+| G03a验收编号 / 脚本check | 操作与通过判据 | 当前结果 |
+| --- | --- | --- |
+| EXP-P0-ADDR-01 / #01 | ThisPC保持虚拟Location；被动地址host、原生breadcrumb和历史按钮可读，无伪造磁盘路径 | PASS（最终Release） |
+| EXP-P0-ADDR-02 / #02 | Ctrl+L进入编辑并全选，Delete只改草稿，Esc恢复ThisPC并回列表 | PASS（最终Release） |
+| EXP-P0-ADDR-03 / #03 | 中文/Unicode真实目录Enter提交，精确列表/字节正确，回到breadcrumb显示 | PASS（最终Release） |
+| EXP-P0-ADDR-04 / #04 | Alt+D全选；重复Ctrl+L保留最新草稿再全选；Esc恢复committed路径/列表/焦点 | PASS（最终Release） |
+| EXP-P0-ADDR-05 / #05 | 地址Ctrl+A/Delete只改文本，选择/视图/列表及自有文件字节保持 | PASS（最终Release） |
+| EXP-P0-ADDR-06 / #06 | 进入真实搜索页后编辑地址并Esc；恢复committed路径，实际可见SearchResults获得焦点，查询仍保留 | PASS（最终Release）；只验搜索UI/焦点，不要求命中或测试索引性能 |
+| EXP-P0-ADDR-07 / #07 | 按钮打开真实历史；读取host.HelpText不关菜单或重建leaf peer | PASS（最终Release） |
+| EXP-P0-ADDR-08 / #08 | F4打开真实MenuFlyout；选中已记录Location后精确导航 | PASS（最终Release） |
+| EXP-P0-ADDR-09 / #09 | 不存在路径失败后恢复committed地址/列表，路径未创建且不进入历史 | PASS（最终Release）；其他错误分支NOT RUN |
+| EXP-P0-ADDR-10 / #10 | 原生breadcrumb连续点击两个真实祖先，精确路径/列表/字节匹配 | PASS（最终Release） |
+| EXP-P0-ADDR-11 / #11 | 620宽真实原生“更多”打开折叠祖先，实际popup导航；验精确路径/两条行/字节/新breadcrumb/菜单关闭，恢复宽度后查Ready | PASS（最终Release）；入口ID空、BreadcrumbBarItem/Button |
+| EXP-P0-ADDR-12 / #12 | 写自有文件触发真实watcher刷新，编辑草稿/焦点保留；不用F5代替 | PASS（最终Release） |
+| EXP-P0-ADDR-13 / #13 | 切Tab取消旧未提交草稿；返回原Tab展示各自committed位置，不持久化草稿 | PASS（最终Release） |
+| EXP-P0-ADDR-14 / #14 | 菜单仍开着时切Tab，旧history菜单关闭；旧leaf Invoke不能改变新Tab | PASS（最终Release）；旧breadcrumb peer专项NOT RUN |
+| EXP-P0-ADDR-15 / #15 | 空目录显示精确路径，零行且不继承旧内容 | PASS（最终Release） |
+| EXP-P0-ADDR-16 / #16 | F4、Home、Down、Enter选择实际历史条目并导航 | PASS（最终Release） |
+| EXP-P0-ADDR-17 / #17 | history Esc不导航，焦点回地址/列表；临时ThisPC标签往返仍保持虚拟语义 | PASS（最终Release） |
+| EXP-P0-ADDR-18 / #18 | 保留未提交draft及真实AddressEditor键盘焦点，确认foreground为自有窗口，不发Esc/Enter，直接CloseMainWindow | PASS（最终Release）；只覆盖foreground，后台另待专项 |
+| EXP-P0-ADDR-19 / #19 | 自有Blink从编辑中正常关闭，exit0，无强杀 | PASS（最终Release） |
+| EXP-P0-ADDR-20 / #20 | 逐路径/UTF-8字节核对后清理自有fixture；compiler-temp已清、未记录的释放量不虚构 | PASS（最终Release）；fixture366字节已清，compiler-temp字节未记录 |
+
+本机Release实测`AddressBar`为`NamedContainerAutomationPeer / Group`，`AddressEditor`为`TextBox / Edit`，`AddressHistoryMenu`为`MenuFlyout / Menu`，历史叶为`MenuFlyoutItem / MenuItem`。host.HelpText显示committed或draft，#07已验读取不打断菜单。620宽原生overflow真实入口为`Microsoft.UI.Xaml.Controls.BreadcrumbBarItem / Button`、Name“更多”、ID空，popup叶也为BreadcrumbBarItem/Button；此身份仅属本机zh-CN，不套用G02的OverflowPopup或假定跨语言名称。
+
+最初preflight在原生overflow点击后因harness的Ready依赖CommandSort报超时：窄窗已将按钮收进原生More。改验精确路径、两条行、字节、新breadcrumb/旧菜单关闭，恢复原宽再查Ready后，旧Debug19项preflight通过；最终Release20项也覆盖该真实popup导航。早期`ui-address-bar-overflow-first-attempt.json`仅诊断，不当产品导航失败或最终结果。
+
+编辑中直接关闭曾有真实AV：初始/仅Closed退役补丁均复现；两份真实dump经StackWalk64得到64帧匹配，顶栈WinUIEdit/Xaml、未见自有关闭直接栈，不臆定内部源码根因。最终WM_CLOSE转交WinUI前先焦点交可见列表，再用helper缓存committed取消编辑/隐藏editor，不调ActiveState/Present、不重建crumb；程序Close前也Prepare，Closed只退役/shutdown。最终同镜像四场景如下，独立于53项GUI计数。早期C实际foreground、未覆盖后台的记录保留历史；最终C才通过伴随窗口明确COVERED，不倒写旧报告。
+
+| D-CLOSE场景 | 最终实际操作与通过判据 | 结果 |
+| --- | --- | --- |
+| A | 无键盘/焦点请求，直接正常关闭自有窗口 | PASS / exit0 |
+| B | 自有SUT前台、实际UIA焦点；Ctrl+L、Esc后正常关闭 | PASS / exit0 |
+| C | 先将自有SUT置前台准备，再只激活自有PS WinForms伴随窗口；严格核对前台PID/HWND及全局UIA焦点/runtimeId，后台Ctrl+L前后均为真后台，保留可见editor后WM_CLOSE | PASS / exit0；background_branch=COVERED；伴随窗口正常关闭/dispose |
+| D | 自有SUT前台保留editor，实际Ctrl+W关闭唯一Tab；tab_count=1，无WM_CLOSE fallback | PASS / exit0；programmatic_close_requested=true，close_requested=false |
+
+真实IME候选Enter/Esc、UNC、权限/断开、Narrator、全主题/DPI/语言/24H2、空白点击/普通失焦、旧breadcrumb peer专项及F3/F6仍保留NOT RUN或后续实现。D-UI/D-CMD/D-VIEW当前同一Release合计53项通过，D-CLOSE A/B/C/D另四项通过；不升级完整G03/P0。最终地址报告human_acceptance=NOT RUN、model_test_results=NOT RUN by this UI smoke；原生来自独立D-NATIVE，不能混成GUI检查数或默认发布完成。
 
 ## 8. 可复现执行约定与工作台归属
 
-以下为README的真实构建/普通回归入口。G01记录归B-NATIVE，G02两配置结果归C-NATIVE；本文更新代理没有另跑：
+以下为README的真实构建/普通回归入口。G01记录归B-NATIVE，G02历史结果归C-NATIVE；G03a最终两配置各1565/0/4归D-NATIVE，本文更新代理没有另跑：
 
 ```powershell
 .\build.ps1 -Configuration Debug
@@ -316,8 +369,16 @@ G02公开入口为[run-blink-command-bar-smoke.ps1](../scripts/run-blink-command
 .\scripts\run-blink-command-bar-smoke.ps1 -Configuration Release -Binary .\.build\explorer-command-bar\runtime\Release\Blink.exe
 ```
 
-正式报告固定归`.build/explorer-command-bar/integration/ui-command-bar-report.json`。本轮最终Release已完成18/0/0，后续重跑应保留新的候选与结果，不能将旧报告直接套到新字节。G02产物按既有`.build/explorer-command-bar`的integration/runtime/ui-fixtures分类；G01历史归`.build/explorer-ui-p0-view-menu`。实际日志/报告写明 PID/HWND、版本/DPI/语言、输入方式、数据归属、PASS/FAIL/SKIP、候选 SHA。编译保持单并发；未知耗时任务按 async-task-watcher 管理。不启动/结束用户已有窗口，不切换或绕过锁屏，不为环境缺项安装第三方程序。
+G02历史报告归`.build/explorer-command-bar/integration/ui-command-bar-report.json`；G03a最终同镜像重跑的命令18项、查看15项分别独立归当前`.build/explorer-address-bar/integration/ui-command-bar-compat-report.json`和`ui-view-compat-report.json`，均PASS，不套历史报告。G01历史归`.build/explorer-ui-p0-view-menu`；当前三套报告均记录同一CF1D... SHA及各自PID/HWND/环境/清理。编译单并发，未知耗时按async-task-watcher管理；不启动/结束用户窗口、不切换或绕过锁屏、不安装第三方程序。
+
+G03a入口为[run-blink-address-bar-smoke.ps1](../scripts/run-blink-address-bar-smoke.ps1)；最终Release20/0/0，旧Debug19/0/0仅preflight。按本机zh-CN已确认的overflow身份复现最终Release入口：
+
+```powershell
+.\scripts\run-blink-address-bar-smoke.ps1 -Configuration Release -Binary .\src\Blink\x64\Release\Blink.exe -NativeOverflowName '更多'
+```
+
+脚本的`NativeOverflowId/NativeOverflowName`只传自有窗口probe已确认的精确身份，其他语言/环境先探测，不猜名称。最终Release报告为`.build/explorer-address-bar/integration/ui-address-bar-report.json`，旧Debug preflight独立保留`ui-address-bar-debug-report.json`，两者不混算。fixture/compiler-temp各在integration独立子目录；最终Release正常exit0、无强杀、366字节fixture已删、compiler-temp已清但字节未记录，不套用给未运行候选。
 
 G01当时View脚本不使用剪贴板，也不提交文件变更命令；只生成并准确核对自有 fixture 路径/UTF-8 字节/属性，未知数据保留并报告，正常关闭后清理。其他含剪贴板的历史/后续检查仍应核对自有 Copy/Cut sequence/完整路径/intent；用户覆盖时不触发依赖动作，只在仍属测试时恢复可恢复内容，不把纯文本恢复称为富格式无损恢复。失败 attempt 只留简明根因/必要证据，不无限复制二进制/源码包。
 
-本文归属 `D:\Work\project\Blink_文件管理器\docs`（WIN）；纯文档，无启动命令。本次文档代理仅同步四份Explorer规范文档，不另建产物或重跑；主模型统一维护G02集成/验证与最新进度。G02真实Copy/Cut/Paste等操作已有C-UI限定证据；最终报告确认正常exit0、无强杀、剪贴板条件恢复、3152字节自有fixture和compiler-temp清理，未记录的compiler-temp释放字节不虚构。默认发布状态见[命令栏交接](EXPLORER_COMMAND_BAR_HANDOFF.md)，本文不据GUI通过推断默认EXE或窗口PID。
+本文归属 `D:\Work\project\Blink_文件管理器\docs`（WIN）；文档代理仅同步三份文档，不另建产物或运行构建/GUI。最终同镜像三套GUI53项通过，fixture分别366/3152/1015字节已清、compiler-temp已清但释放字节未记录；D-CMD剪贴板恢复true，D-CLOSE伴随窗口正常关闭/dispose。旧Debug52项和G01/G02历史各自保留，不合并计数。默认发布状态见相应交接，本文不先记发布成功，也不由PASS推断默认EXE或窗口PID。

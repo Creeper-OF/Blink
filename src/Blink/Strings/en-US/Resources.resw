@@ -455,4 +455,7 @@
   <data name="Command.ClearSelection" xml:space="preserve"><value>Clear selection</value></data>
   <data name="Command.InvertSelection" xml:space="preserve"><value>Invert selection</value></data>
   <data name="Status.InvertSelectionFailed" xml:space="preserve"><value>Unable to invert selection. Try again.</value></data>
+  <data name="AddressBar.Name" xml:space="preserve"><value>Address bar</value><comment>Address bar navigation.</comment></data>
+  <data name="AddressBar.Edit" xml:space="preserve"><value>Edit address</value><comment>Address bar navigation.</comment></data>
+  <data name="AddressBar.History" xml:space="preserve"><value>Recent locations</value><comment>Address bar navigation.</comment></data>
 </root>

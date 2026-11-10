@@ -53,6 +53,7 @@ namespace blink::app
             SearchPresentationCallbacks callbacks);
         void Update(const SearchSnapshot& snapshot, const SearchPresentationOptions& options, const Localization& localization);
         [[nodiscard]] std::optional<SearchPresentationSettings> DraftSettings(std::uint64_t tab_id) const;
+        void FocusResults();
         void Close() noexcept;
         void Suspend() noexcept;
     private:

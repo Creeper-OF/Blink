@@ -16,6 +16,11 @@
     <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <!-- A candidate build may stage this executable while the installed service
+       continues to use the ordinary output. The default build path is unchanged. -->
+  <PropertyGroup Condition="'$(BlinkIndexServiceOutputDirectory)' != ''">
+    <OutDir>$(BlinkIndexServiceOutputDirectory)</OutDir>
+  </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>

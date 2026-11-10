@@ -509,6 +509,10 @@ namespace blink::app
         }
         ui->volumes.Text(hstring(volumes)); ui->Buttons();
     }
+    void SearchPresentation::FocusResults()
+    {
+        if (ui_ && !ui_->closed && ui_->active) { ui_->list.Focus(FocusState::Keyboard); }
+    }
     void SearchPresentation::Close() noexcept
     {
         if (ui_) { ui_->closed = true; ui_->active = false; ui_->DismissContextMenu(); ++ui_->generation; ui_->callbacks = {}; ui_.reset(); }
