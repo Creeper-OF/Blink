@@ -12,6 +12,7 @@
 #include "FolderRelocationTests.h"
 #include "ExplorerCommandBarTests.h"
 #include "AddressBarTests.h"
+#include "FileNameSelectionTests.h"
 #include "CrossVolumeMoveTests.h"
 #include "FolderNavigationTests.h"
 #include "MoveOperationTests.h"
@@ -3419,6 +3420,7 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunDirectoryMoveMergeTests();
     passed &= RunExplorerCommandBarTests();
     passed &= RunAddressBarTests();
+    passed &= RunFileNameSelectionTests();
     passed &= RunDirectoryCopyOperationTests();
     passed &= RunDirectoryCopyConflictTests();
     passed &= RunDirectoryCopyCoordinatorTests();

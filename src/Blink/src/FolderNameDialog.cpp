@@ -2,6 +2,7 @@
 #include "Blink/App/FileOperations.h"
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
+#include <cstdint>
 
 namespace blink::app
 {
@@ -16,17 +17,24 @@ namespace blink::app
         std::wstring invalid_name;
         SubmitCallback submit;
         FailureCallback failed;
+        DismissedCallback dismissed;
+        FileNameSelectionMode selection_mode{ FileNameSelectionMode::WholeName };
         bool closed{};
     };
     FolderNameDialog::~FolderNameDialog() noexcept { Close(); }
+    void FolderNameDialog::SetDismissedCallback(DismissedCallback callback)
+    { dismissed_ = std::move(callback); }
     bool FolderNameDialog::IsOpen() const noexcept { return ui_ && !ui_->closed; }
     bool FolderNameDialog::Show(const XamlRoot& root, const Localization& localization,
         std::wstring parent, std::wstring name, std::wstring error,
-        SubmitCallback submit, FailureCallback failed, bool renaming, bool copying, bool directory_copy, bool moving)
+        SubmitCallback submit, FailureCallback failed, bool renaming, bool copying, bool directory_copy, bool moving,
+        FileNameSelectionMode selection_mode)
     {
         if (IsOpen()) { return false; }
         auto ui = std::make_shared<Ui>();
         ui->submit = std::move(submit); ui->failed = std::move(failed);
+        ui->selection_mode = selection_mode;
+        ui->dismissed = dismissed_;
         ui->invalid_name = localization.GetString(L"NewFolder.InvalidName");
         ui->dialog = ContentDialog(); ui->dialog.XamlRoot(root);
         ui->dialog.Title(box_value(hstring(localization.GetString(moving ? L"Move.Title" : copying ? L"Command.Copy" : renaming ? L"Command.Rename" : L"Command.NewFolder"))));
@@ -60,7 +68,14 @@ namespace blink::app
         });
         ui->dialog.Opened([weak](auto&&, auto&&) {
             if (const auto live = weak.lock(); live && !live->closed)
-            { (void)live->name.Focus(FocusState::Programmatic); live->name.SelectAll(); }
+            {
+                (void)live->name.Focus(FocusState::Programmatic);
+                const auto value = live->name.Text();
+                const auto selection = BuildFileNameSelection(
+                    std::wstring_view(value.c_str(), value.size()), live->selection_mode);
+                live->name.Select(static_cast<std::int32_t>(selection.start),
+                    static_cast<std::int32_t>(selection.length));
+            }
         });
         ui_ = ui; work_ = AwaitDialog(std::move(ui));
         return true;
@@ -84,6 +99,9 @@ namespace blink::app
                 catch (...) { if (ui->failed) { ui->failed(to_hresult()); } }
             }
         }
+        // ContentDialog has restored focus; its owner can now refresh command
+        // capabilities using IsOpen()==false, on both cancel and submit.
+        if (ui->dismissed) { ui->dismissed(); }
     }
     void FolderNameDialog::Close() noexcept
     {

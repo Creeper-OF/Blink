@@ -549,3 +549,12 @@ F4/历史按钮的数据来自 NavigationModel 的当前位置、最近后退和
 未提交草稿切换标签时取消；同一标签自动刷新保留编辑框最新文字。旧面包屑/历史回调捕获自己的目标与所属标签/展示代次。所有导航与失败反馈仍由原流程处理，不增加文件操作或索引管线。主模型集成，三个代理分模型、展示与脚本，构建单并发；实际验证及未覆盖边界见地址栏交接。
 
 本轮完整重建遇到在用索引服务锁住 root x64/Release 输出，补充可选 `BlinkIndexServiceOutputDirectory`，主界面从同一候选路径复制服务。缺省输出规则保留；候选构建复用该可选路径，不重启服务、不改服务业务、IPC或索引存储格式。当前每配置的一份有效增量缓存保留；全量编译已实测约25分钟，不把有效缓存当过期垃圾反复删除。
+
+
+## D-0040：文件重命名初始选区与操作管线分离 — 2026-11-10
+
+G05a只补文件主名默认选区及相关交互验证：FileNameSelection纯策略计算UTF-16范围，FolderNameDialog.Opened读取实际文本后Select；真实文件Rename使用FileStem，目录和NewFolder/Copy/Move preset维持WholeName。默认只保留最后后缀，用户Ctrl+A可改完整名称，不增加扩展名确认或无用本地防护。
+
+搜索F2仍沿既有先定位父目录再rename的语义；ContentDialog回焦须实测，不凭无手写代码追加通用焦点框架。主窗提前关闭先取消现有名称对话框，再移交焦点并关闭宿主。成功改名后新行选择与区域焦点环保持独立后续，不用只按fileID匹配硬链。单并发构建与独立模型/脚本/只读审查代理分工，真实结果见[重命名选区交接](docs/EXPLORER_RENAME_SELECTION_HANDOFF.md)。
+
+G05a真实窗口进一步确认两个原有完成时序缺口：取消后New/Sort状态未重算；顶部命令入口取消可能把焦点还给导航Pane。FolderNameDialog在实际ShowAsync结束且closed=true后调用owner完成通知，按当前上下文重算命令能力，并在无其它对话框时将焦点交回可见文件surface。外部Close/切tab已将Ui.closed置true，晚到Await不会触发完成通知；不增加新的文件引擎或按fileID猜新Row选择。测试注入显式采用SendMessageTimeoutW，Unicode路线与真实IME验收分开。

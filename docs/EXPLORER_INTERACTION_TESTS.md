@@ -4,6 +4,9 @@
 
 **最终WM_CLOSE修正后，两配置原生各1565 PASS / 0 FAIL / 4既有权限SKIP（23项新增地址模型），246输入/378资源；同一最终Release地址20/命令18/查看15，合计53 PASS / 0 FAIL / 0 SKIP。独立关闭A/B/C/D四项均PASS、exit0，C真后台、D实际Ctrl+W关闭唯一Tab且无WM_CLOSE fallback；另列不加入53。旧Debug52项仅preflight，完整G03/P0仍`PARTIAL`。** 本文更新代理只读源码、报告与主模型结果，没有另行构建/GUI；不从验证通过推断默认发布成功。H/B/C为各自历史，D为本轮G03a，完整环境/人工矩阵仍按未测保留。
 
+
+G05a重命名主名选区更新：两配置原生各1578 PASS / 0 FAIL / 4既有符号链接权限SKIP（13项新增选择模型），249输入/378资源。同一最终Release名称对话框GUI已15 PASS / 0 FAIL / 0 SKIP，仅升级报告实际子项；完整G05/P0与未覆盖焦点/输入环境矩阵仍为`PARTIAL`。
+
 ## 1. 状态、环境与证据
 
 实现状态沿用任务书：`IMPLEMENTED_VERIFIED`、`IMPLEMENTED_NEEDS_MANUAL`、`PARTIAL`、`DEFERRED`、`UNSUPPORTED_BY_DESIGN`、`OS_DEPENDENT`。它们描述指定能力，不代表整个场景通过。执行状态另列 `PASS`、`HISTORICAL PASS`、`OBSERVED`、`NOT RUN`、`SKIP`；没有执行结果时不得填 PASS。
@@ -72,14 +75,14 @@ B-VIEW 的输入仅自有 PID/HWND InputSite 键盘消息及 WinUI UIA，未使�
 | EXP-KEY-12 | Enter、Ctrl+Enter：搜索列表 | Enter 打开；Ctrl+Enter 打开父目录并选中原命中项 | 只作用于结果列表；历史 H-SEARCH-UI #11 覆盖 Ctrl+Enter | IMPLEMENTED_VERIFIED（限定历史）/ NOT RUN |
 | EXP-KEY-13 | Esc：地址 | G03a取消草稿、恢复committed地址并回到当前普通/搜索列表；原生历史菜单先按自身取消语义关闭 | Release D-UI #02/#04/#06/#17已验普通/真实SearchResults回焦和菜单取消；composition/LostFocus/完整焦点组合仍待验 | IMPLEMENTED_VERIFIED（最终Release所列子项）；真实IME等NOT RUN |
 | EXP-KEY-14 | Esc：搜索 | 搜索框/结果列表离开搜索 | 菜单、模态内 Esc 应先关闭当前界面；IME 候选取消优先级待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
-| EXP-KEY-15 | Esc、Enter：菜单/名称对话框 | MenuFlyout/ContentDialog 标准取消/默认按钮；名称 Primary 启用取决于合法性 | B-VIEW #10 验证顶部菜单 Space、Home/Down/Right、Enter、两级 Esc 并返回 FolderViewMode；名称对话框/IME 未验 | IMPLEMENTED_NEEDS_MANUAL / 顶部菜单 PASS；名称/IME NOT RUN |
+| EXP-KEY-15 | Esc、Enter：菜单/名称对话框 | MenuFlyout/ContentDialog 标准取消/默认按钮；名称 Primary 启用取决于合法性 | B-VIEW #10 验证顶部菜单 Space、Home/Down/Right、Enter、两级 Esc 并返回 FolderViewMode；名称对话框由G05a完整15项Release限定已验，真实IME未验 | IMPLEMENTED_NEEDS_MANUAL / 顶部菜单 PASS；G05a名称所列子项PASS、IME NOT RUN |
 | EXP-KEY-16 | Ctrl+T、Ctrl+W | 窗口新建/关闭活动标签；关闭最后标签请求关窗口 | D-CLOSE D已验实际Ctrl+W关唯一Tab、正常exit0且无WM_CLOSE fallback；D-UI/D-VIEW有限多Tab动作通过；全部模态/焦点组合另验 | IMPLEMENTED_VERIFIED（上述实际子项）；完整模态/焦点NOT RUN |
 | EXP-KEY-17 | Ctrl+Tab、Ctrl+Shift+Tab | TabView **默认**相邻标签选择；SelectionChanged 已接业务状态 | 不能凭 main 无手写绑定认定未实现；从地址/列表等 TabView 内容树之外焦点调用的范围未核验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-18 | Ctrl+F4 | TabView 默认 TabCloseRequested，Blink 已接 | TabView 焦点与内容区域范围、模态时框架默认事件是否与 Ctrl+W 一致待验 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-19 | Ctrl+A：普通列表 | `SelectAllFolderRows` → 权威 TabState 可见行；不按虚拟可见容器截断 | 地址/搜索/重命名框保留文本全选；搜索结果目前单选，不承诺多选结果 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-20 | Ctrl+单击、Shift+单击、Shift+方向键 | 普通列表 `SelectionMode::Extended`；SelectionChanged 同步权威选择 | 由 WinUI 控件提供，含硬链接别名的模型测试不代替实际手势 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-21 | Home/End、PageUp/PageDown、方向键 | ListView/GridView/TreeView 标准键盘行为 | 焦点在 TextBox 时编辑文本；快速滚动/虚拟化后的选择需实机 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
-| EXP-KEY-22 | F2 | 普通列表/搜索结果共用名称对话框；历史 H-SEARCH-UI #12、H-FOLDER-UI #10 | **当前 Opened 调用 SelectAll，文件扩展名也选中**；与任务书“主名初选”存在明确差距，不是 inline rename | PARTIAL / NOT RUN |
+| EXP-KEY-22 | F2 | G05a普通文件初选主名，目录全选；搜索先定位父目录，再共用名称对话框 | Opened从实际Text调用Select；Ctrl+A可全名编辑；不是inline rename，新名行定位选择未实现 | PARTIAL（G05a报告所列子项最终Release PASS） |
 | EXP-KEY-23 | Ctrl+C、Ctrl+X | 普通选择/已验证搜索命中发布 CF_HDROP+Preferred DropEffect | TextBox 中必须文本复制/剪切；对话框不得把背后列表当源 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-24 | Ctrl+V | 普通列表粘贴当前目录；搜索列表粘贴命中项的**所在目录**（目录命中也取父目录） | TextBox 中为文本粘贴；不能因存在文件剪贴板而提交文件队列 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-25 | Ctrl+Shift+N | 普通列表新建文件夹对话框；搜索结果未接此创建命令 | 不在地址/重命名文本框中触发背后创建 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
@@ -263,7 +266,7 @@ G02当前host为标准AppBarButton；以下旧候选的UIA类型与动作证据�
 | EXP-P0-VIEW-06 | 空目录/ThisPC/搜索/枚举中能力与旧菜单生命周期 | B-VIEW #09 保存旧 top peer，切另一 Tab 后 Invoke 返回但两 Tab 布局/路径均未变；#11 空目录三布局/Hidden 无旧行；#12 ThisPC 三布局/Show 保持虚拟位置；#14 自有窗口正常 exit0 | **部分 PASS：上述边界与切 Tab 旧 peer**；搜索页、枚举中 disabled 快照、导航/关闭后旧 top peer 的专项 GUI **NOT RUN** |
 | EXP-P0-VIEW-07 | 两配置构建/回归、资源/输入摘要，选择实际菜单回归与清理 | B-NATIVE 两配置各 1516 PASS/0 FAIL/4 权限 SKIP、235 输入/369 资源；B-VIEW #04 右键/顶部视图同步，#15 逐路径/字节确认后清理 fixture，compiler-temp 已清 | **PASS（本轮构建、普通回归、15 项有限 GUI）**；未把 H-FOLDER/H-SEARCH 的 39 项当作本轮重跑，完整原生/搜索菜单 GUI 仍仅历史证据 |
 
-G01当时未处理的快捷键、F2主名初选、地址Esc、文本/IME焦点、外部剪贴板完成反馈、真实双向拖放、普通/搜索属性一致性分别列独立切片；当前G03a地址实现与待验范围见第7.2节，不能通过G01的View菜单结果关闭这些验收项。完整P0日常行为门槛目前尚未达成。
+G01当时未处理的快捷键、F2主名初选、地址Esc、文本/IME焦点、外部剪贴板完成反馈、真实双向拖放、普通/搜索属性一致性分别列独立切片；当前G03a地址实现与待验范围见第7.2节，G05a主名选区实现/验证见第7.3节，不能通过G01的View菜单结果关闭这些验收项。完整P0日常行为门槛目前尚未达成。
 
 ## 7.1 G02当前切片与正式18项检查
 
@@ -343,6 +346,37 @@ C-NATIVE新增共26项检查；其中23项命令栏测试见[ExplorerCommandBarT
 | D | 自有SUT前台保留editor，实际Ctrl+W关闭唯一Tab；tab_count=1，无WM_CLOSE fallback | PASS / exit0；programmatic_close_requested=true，close_requested=false |
 
 真实IME候选Enter/Esc、UNC、权限/断开、Narrator、全主题/DPI/语言/24H2、空白点击/普通失焦、旧breadcrumb peer专项及F3/F6仍保留NOT RUN或后续实现。D-UI/D-CMD/D-VIEW当前同一Release合计53项通过，D-CLOSE A/B/C/D另四项通过；不升级完整G03/P0。最终地址报告human_acceptance=NOT RUN、model_test_results=NOT RUN by this UI smoke；原生来自独立D-NATIVE，不能混成GUI检查数或默认发布完成。
+
+## 7.3 G05a名称初选：最终Release正式15项检查
+
+本片两配置原生各1578 PASS / 0 FAIL / 4既有符号链接权限SKIP，249输入/378资源，新增13项`FileNameSelection`模型；不代替GUI。策略语义为最后后缀前的主名，`.config.json`→`.config`、`archive.tar.gz`→`archive.tar`；无后缀/单前导点/目录为全名，Unicode按UTF-16 code units选取。NewFolder/Copy/Move仍WholeName，Ctrl+A可显式选全/编辑后缀，不新增确认。模型空串/尾点不代表可创建这些名称，真实IME未测。
+
+证据E-RENAME：[`ui-rename-selection-report.json`](../.build/explorer-rename-selection/integration/ui-rename-selection-report.json)，由`scripts/run-blink-rename-selection-smoke.ps1`实际执行；同一最终Release已15 PASS / 0 FAIL / 0 SKIP，SHA256 `ef4986100848f3656dcaa0f2d8a645a96e9a40b09f44c5e86c51f16abb67434c`，PID29940正常exit0、无force，425字节夹具已按归属清理。实际UTC为2026-11-10 16:20:41–16:23:53（本地2026-11-11 00:20:41–00:23:53）；zh-CN/x64/普通用户、窗口DPI96，ActualTheme未采集、IME未测试。以下仅对应该报告实际动作，不混用早期Debug候选或先推断默认发布。所有数据为自有GUID文件；同一次序列共13项功能+2项收尾，退出与归属清理分别计数。
+
+| 检查 | 实际断言/验证目的 | 本轮结果 |
+| --- | --- | --- |
+| RENAME-01 | 初始导航到自有目录，真实目录项/入口就绪 | PASS（最终Release E-RENAME） |
+| RENAME-02 | F2主名初选，替换草稿后Esc保持原文件、回列表且New/Sort能力重算 | PASS（最终Release E-RENAME） |
+| RENAME-03 | 替换主名后Enter，最终后缀/字节/文件身份保持 | PASS（最终Release E-RENAME） |
+| RENAME-04 | 多点文件仅排除最后一个后缀 | PASS（最终Release E-RENAME） |
+| RENAME-05 | 无后缀及单前导点文件全名初选 | PASS（最终Release E-RENAME） |
+| RENAME-06 | Unicode/emoji主名替换与实际提交不破坏UTF-16范围 | PASS（最终Release E-RENAME） |
+| RENAME-07 | 含点目录全选，改名保持子项字节与身份 | PASS（最终Release E-RENAME） |
+| RENAME-08 | Ctrl+A显式全名替换，包括扩展名 | PASS（最终Release E-RENAME） |
+| RENAME-09 | Delete只改变选中文本，原文件/身份/列表不删 | PASS（最终Release E-RENAME） |
+| RENAME-10 | 顶部Rename入口初选一致，取消后回当前文件列表而非侧栏 | PASS（最终Release E-RENAME） |
+| RENAME-11 | NewFolder保持默认全选，只创建自有新目录 | PASS（最终Release E-RENAME） |
+| RENAME-12 | 真实索引搜索F2先定位父目录，再共享Rename及取消回FolderEntries | PASS（最终Release E-RENAME） |
+| RENAME-13 | 保留实际名称编辑器与未提交草稿，正常关闭主窗口 | PASS（最终Release E-RENAME） |
+| RENAME-14 | 自有窗口退出0，不force；非零退出独立FAIL | PASS（最终Release E-RENAME） |
+| RENAME-15 | 精确归属、身份及UTF-8字节核对后清理 | PASS（最终Release E-RENAME） |
+
+搜索F2沿原验证/定位父目录管线，不要求Esc返回已离开的SearchResults。共享Dismissed完成通知现重算命令能力，且在没有其它操作对话框时恢复当前可见文件/搜索列表焦点；实际FocusedElement已由E-RENAME #02/#10/#12限定证明，不以回调代码代验或推断完整焦点环。宿主关闭前先Hide名称对话框再移交列表焦点，编辑中关闭已由#13/#14实测exit0，不能将其外推为所有原生编辑器或后台关闭场景均已验证。成功rename后的新RowIdentity定位/选中未实现，回到列表不等同保留新名行选择；完整G05/P0、F3/F6循环、IME及平台/主题/DPI矩阵继续待续。
+
+2026-11-11实机问题修正补记：名称对话框取消后，顶部New/Sort曾保留模态期间的禁用状态；共享`Dismissed`通知在`ShowAsync`完成、`closed=true`之后统一调用`SyncCommandBarState`，从真实当前能力重算，不按入口硬设启用。另发现从工具栏Rename取消后焦点落到侧栏；同一完成回调在没有其它操作对话框时，把焦点交给当前实际可见的`SearchResults`或`FolderEntries`，不再只依赖ContentDialog返回旧焦点。搜索F2已导航父目录，故其取消后当前列表仍是`FolderEntries`。上述修正已在完整15项Release报告的实际取消/能力/焦点场景中通过；该结果不代表完整焦点环或其它环境均已验收。成功重命名后新`RowIdentity`的定位/选择映射仍未实现，列表回焦不等同新名项继续选中。
+
+
+发布核验已完成：原agent默认窗口PID10988正常exit0，候选发布的四项关键产物SHA与测试版本一致；新默认窗口PID7108可见并位于前台。主模型最终复核249项原生源码/11项保留产物、两配置1578/0/4、378资源及同一Release15项GUI均通过。此发布记录与测试PID29940分别记录，不把新开窗口当作再跑完整GUI或全部环境验收。
 
 ## 8. 可复现执行约定与工作台归属
 

@@ -6,6 +6,9 @@
 
 本文更新代理只核对源码、主模型提供的验证记录和既有参考资料，没有另行构建或运行GUI。G01受控GUI为15 PASS/0 FAIL/0 SKIP，另有独立的Explorer查看/显示参考观察；二者环境采样与边界保留于第7节。G02原生结果与最终18项GUI结果单独记录，不能外推为整套界面验收。
 
+
+G05a重命名主名选区更新：两配置原生各1578 PASS / 0 FAIL / 4既有符号链接权限SKIP（13项新增选择模型），249输入/378资源。同一最终Release名称对话框GUI已15 PASS / 0 FAIL / 0 SKIP，仅升级报告实际子项；完整G05/P0与未覆盖焦点/输入环境矩阵仍为`PARTIAL`。
+
 ## 1. 基线、证据与状态口径
 
 最新事实按 `PROGRESS.md` 和源码判断，不沿用历史计划中的旧 TODO。当前基线已有目录 Copy/Move Merge、普通目录与搜索的共同菜单外观、路径复制和独立系统扩展承载；这些不再列为缺失。
@@ -130,7 +133,7 @@ flowchart TD
 
 ## 4. 区域能力与实际差距
 
-| 区域 | 阶段A事实及G01/G02/G03a更新 | 与目标任务书的差距 |
+| 区域 | 阶段A事实及G01/G02/G03a/G05a更新 | 与目标任务书的差距 |
 | --- | --- | --- |
 | 标题栏 | WinUI TitleBar、Tab同排、系统caption和Mica已接入；空白拖动有历史证据；`IMPLEMENTED_NEEDS_MANUAL`用于完整窗口矩阵 | Snap、多显示器移入移出、双击/resize、激活态、高对比度、全部DPI未完成本次统一验证 |
 | 标签 | 新建、切换、关闭、当前标题与后台取消有模型/回归；`PARTIAL` | 未见模型级重排API或相应同步、标签右键命令、拖出新窗口；Tab默认行为不能直接当完整功能交付。未实现持久滚动位置/完整会话恢复 |
@@ -140,13 +143,13 @@ flowchart TD
 | 左侧位置与树 | 已有用户目录/桌面/下载/文档/ThisPC/可访问固定与可移动卷；异步Lazy Load、单一纵向滚动；`PARTIAL` | “主文件夹”是实际用户目录，不是Explorer Home聚合页；无固定/取消固定、图片/音乐/视频、网络发现或导航节点专属右键。光驱/网络映射盘未由当前ThisPC枚举纳入 |
 | 文件区 | Details/List/Grid；Extended选择，双击/Enter、排序、隐藏策略、异步增量投影；`IMPLEMENTED_VERIFIED`限已记录功能 | 当前图标只分文件/目录glyph；无系统类型图标、缩略图、快捷方式箭头、覆盖状态；List为纵向列表，不冒称Explorer全部视图 |
 | 详细信息列 | 名称/类型/大小/修改四列Button排序；`PARTIAL` | 没有列宽拖拽、重排、显隐、动态属性列或列头专属菜单；分组未实现 |
-| 选择/重命名 | 模型选择和原队列重命名已实现；`PARTIAL` | 标准控件提供部分键鼠操作，但框选、复选框、全部键鼠组合仍待验证；F2当前ContentDialog统一SelectAll，包含扩展名，不是主文件名选区 |
+| 选择/重命名 | 原队列和ContentDialog重命名保留；G05a文件默认选主名、目录/新建/复制/移动名称保持全选；Release所列15项`IMPLEMENTED_VERIFIED`，整组`PARTIAL` | 不是inline rename。改名后新RowIdentity定位/选择、完整焦点/IME、框选和复选框仍待续；Ctrl+A仍可显式编辑扩展名，不新增扩展名确认 |
 | 详情/预览 | 无详情侧栏或预览面板；`DEFERRED` | 不提供无效“预览/详情”开关；格式解码及第三方预览隔离应独立切片 |
 | 状态栏 | 浏览加载/空/错误、选中数量、索引状态与操作状态已接；`PARTIAL` | 不显示选中总大小或完整传输速度/剩余量；未实现暂停，不增加装饰按钮 |
 | 属性 | 普通目录为Blink只读统计ContentDialog；搜索可调用完整系统属性；`PARTIAL` | 两入口已有实测但并非属性编辑器；驱动器、所有特殊对象/原生页签矩阵仍需独立验证 |
 | 外部剪贴板/拖放 | CF_HDROP、Copy/Move、修饰键、异步准备及实际队列已有回归；`PARTIAL` | 外部clipboard完成反馈和剪切淡化外观仍待补；Alt/链接拖放、右键拖放、FileDescriptor/FileContents虚拟文件未提供 |
 
-源码定位：ThisPC入口 `Location.cpp:54/91/114`；地址 `AddressBarModel.h/.cpp`、`AddressBarPresentation.h/.cpp`与main的`BuildAddressBar/SyncAddressBar`；工具条 `BuildFolderViewCommands`；模板 `FolderViewPresentation.cpp:9/29/43`；类型图标 `FolderViewFormatting.cpp:237`；状态 `FormatBrowseActivity`；F2选区 `FolderNameDialog.cpp:61`；拖放能力 `FileDragDropModel.cpp:62`。更多对象/菜单差异以菜单矩阵为准。
+源码定位：ThisPC入口 `Location.cpp:54/91/114`；地址 `AddressBarModel.h/.cpp`、`AddressBarPresentation.h/.cpp`与main的`BuildAddressBar/SyncAddressBar`；工具条 `BuildFolderViewCommands`；模板 `FolderViewPresentation.cpp:9/29/43`；类型图标 `FolderViewFormatting.cpp:237`；状态 `FormatBrowseActivity`；F2选区 `FileNameSelection.h::BuildFileNameSelection`、`FolderNameDialog::Show/Opened`；拖放能力 `FileDragDropModel.cpp:62`。更多对象/菜单差异以菜单矩阵为准。
 
 ## 5. 焦点与快捷键规范
 
@@ -163,11 +166,11 @@ flowchart TD
 | 搜索Ctrl+F / Ctrl+E；Enter/Esc | `main.cpp:856/927`；焦点搜索全选，提交/离开；高级路径/卷输入支持Enter提交 | 已有范围GUI；IME与全部文本编辑组合待验 |
 | 顶部查看Space/方向键/Enter/Esc | 本轮受控InputSite消息走实际WinUI菜单；Space打开，Home/Down/Right进入Show，Enter切Hidden；Esc/Esc取消，焦点回`FolderViewMode` | `IMPLEMENTED_VERIFIED`限本轮GUI第10项；全部实物键盘、主题/DPI和IME组合仍NOT RUN |
 | 文件区Ctrl+A / Enter | `main.cpp:3445`；ScopeOwner为列表，选择权威模型全部项/打开焦点项 | 已实现，地址/对话框不借用该列表动作 |
-| 文件区Ctrl+C/X/V、F2、Alt+Enter、Ctrl+Shift+N | `main.cpp:3451/3468/3499` → 唯一ExecuteFolderCommand | 已实现；当前名称对话框SelectAll含扩展名，列明确P0缺口 |
+| 文件区Ctrl+C/X/V、F2、Alt+Enter、Ctrl+Shift+N | `main.cpp:3451/3468/3499` → 唯一ExecuteFolderCommand | 已实现；G05a普通文件Rename初选主名，目录全选；本机最终Release选区/Enter/Esc/文本编辑所列子项已PASS，完整输入环境仍待验 |
 | 文件区Delete / Shift+Delete | `main.cpp:3472` PreviewKeyDown保留Shift，Ctrl/Alt修饰不落删除；永久删除走确认 | 功能已验；不会给文本编辑框新绑同名全局删除 |
 | 文件区App键 / Shift+F10 | `main.cpp:3509`附近 → ShowKeyboardFolderContextMenu；鼠标ContextRequested识别命中行/背景 | 已接；菜单边缘方向、回焦与多DPI待验 |
 | 搜索结果Enter / Ctrl+Enter / Alt+Enter | `SearchPresentation.cpp:390`；打开/定位/属性，各自有当前selection与query gate | 已有历史GUI；单选，不冒称搜索多选 |
-| 搜索结果C/X/V、F2、Delete、Shift+Delete、App键/Shift+F10 | 同文件区语义，但携带SearchContextSelection，Paste明确到结果父目录 | 已验基本动作；不得落入背后browse selection |
+| 搜索结果C/X/V、F2、Delete、Shift+Delete、App键/Shift+F10 | 同文件区语义，但携带SearchContextSelection，Paste明确到结果父目录 | 已有基本动作历史；Rename先验证命中、导航父目录并定位，再调用普通重命名；G05a搜索F2取消回焦应为当前FolderEntries，不假定仍在SearchResults |
 | TextBox Ctrl+A/C/X/V、Delete、Undo/Redo | 保留标准文本编辑；文件区accelerator设置ScopeOwner，不覆盖文本 | 本轮GUI第13项已验地址Ctrl+A/Delete仅改文本且保留文件/选择/视图；其余编辑快捷键、Narrator、IME和系统输入法完整组合NOT RUN |
 | 列表Ctrl/Shift选择、方向/Home/End/PageUp/PageDown；Tab/Shift+Tab | 标准ListView/GridView/TreeView行为，选择变化写回TabState | 没有全套实物键盘、框选、触摸证据；`IMPLEMENTED_NEEDS_MANUAL` |
 | 文件操作Ctrl+Z/Y、空格预览、F11、Ctrl+Shift+数字视图 | 没有当前Blink文件操作/预览命令 | `DEFERRED`；文本框自己的编辑Undo不属于文件操作Undo |
@@ -213,7 +216,7 @@ G03a最终Release报告为Windows 11 25H2/build26200.9711、zh-CN、非管理员
 
 ## 8. G01历史已交付切片：顶部“查看 → 显示”
 
-历史交付状态：**IMPLEMENTED_VERIFIED（限定G01候选及下列动作）**。G02已更换按钮host，本节结果不自动证明当前AppBarButton嵌入方式、完整命令栏或新增动作。`e497600`先提交阶段A只读规范，之后才实施本切片；没有把多个P0或底层重构合并推进。G01当时未实施地址焦点闭环和F2选区；G03a地址进展另见第8.2节，F2仍留后续。
+历史交付状态：**IMPLEMENTED_VERIFIED（限定G01候选及下列动作）**。G02已更换按钮host，本节结果不自动证明当前AppBarButton嵌入方式、完整命令栏或新增动作。`e497600`先提交阶段A只读规范，之后才实施本切片；没有把多个P0或底层重构合并推进。G01当时未实施地址焦点闭环和F2选区；G03a地址进展另见第8.2节，G05a主名选区本轮实现与待验另见第8.3节。
 
 | 项目 | 实际交付与证据 |
 | --- | --- |
@@ -265,6 +268,32 @@ G01当时的代码入口为`main.cpp:2882 BuildFolderViewCommands`、`:3270 Popu
 | 关闭修复边界 | 初始/仅退役补丁仍有editor直接关闭AV；两份真实dump经StackWalk64得到64帧匹配，顶栈WinUIEdit/Xaml、未见自有关闭直接栈，不宣称已还原WinUI内部根因。最终A/B/C/D均PASS/exit0；C先准备自有SUT前台，再只激活自有PS WinForms伴随窗口，以前台PID/HWND和全局UIA focus/runtimeId确认Ctrl+L前后都真后台（COVERED）；D实际Ctrl+W关闭唯一Tab，无WM_CLOSE fallback。伴随窗口正常关闭/dispose |
 | 退出与清理 | 最终Release自有进程正常exit0、无强杀；366字节精确fixture已删除，compiler-temp已清但释放字节未记录；未使用系统剪贴板。旧Debug清理另属旧报告，不能合并计算 |
 | 后续 | 下级目录菜单、自动完成建议、完整G03/P0、F3/F6/Shift+F6、全部主题/DPI/语言/IME/Narrator/UNC矩阵继续待做或待验 |
+
+## 8.3 G05a当前切片：重命名主文件名初选
+
+状态：**IMPLEMENTED_VERIFIED（限本机最终Release报告15项），完整G05/P0仍PARTIAL**。只调整共享名称对话框初始选区与宿主关闭准备，不改rename文件引擎、搜索动作管线或名称合法性规则，不引入扩展名修改确认。
+
+`FileNameSelection.h`以纯字符串计算UTF-16 code-unit范围；`FolderNameDialog.Opened`先聚焦，再读取当时实际Text并调用Select。`ShowFileNameDialog`只在`rename_source && !rename_source->is_directory`时传FileStem；目录及NewFolder/Copy/Move沿默认WholeName，不把名称含点推断为文件类型。
+
+| 输入/上下文 | 初始选区 | 边界 |
+| --- | --- | --- |
+| 普通文件`report.txt` | `report` | 只排除最后一个后缀；类型来自已提交FileEntry |
+| 多点文件`archive.tar.gz`、`.config.json` | `archive.tar`、`.config` | 不把全部点后部分一起剥除 |
+| 无扩展名、单独前导点文件`.gitignore` | 完整名称 | 前导点本身不视为可排除的后缀 |
+| 含点目录、NewFolder/Copy/Move名称 | 完整名称 | 这些上下文保持WholeName |
+| Unicode/emoji | 同样按末尾点选主名 | Windows wstring与TextBox均按UTF-16计数，不截断surrogate pair |
+| 空串/尾点模型输入 | 全名范围 | 不改变原名称合法性校验，不据纯模型承诺可创建尾点名称 |
+
+2026-11-11实机问题修正补记：名称对话框取消后，顶部New/Sort曾保留模态期间的禁用状态；共享`Dismissed`通知在`ShowAsync`完成、`closed=true`之后统一调用`SyncCommandBarState`，从真实当前能力重算，不按入口硬设启用。另发现从工具栏Rename取消后焦点落到侧栏；同一完成回调在没有其它操作对话框时，把焦点交给当前实际可见的`SearchResults`或`FolderEntries`，不再只依赖ContentDialog返回旧焦点。搜索F2已导航父目录，故其取消后当前列表仍是`FolderEntries`。上述修正已在完整15项Release报告的实际取消/能力/焦点场景中通过；该结果不代表完整焦点环或其它环境均已验收。成功重命名后新`RowIdentity`的定位/选择映射仍未实现，列表回焦不等同新名项继续选中。
+
+搜索F2保留现有语义：ValidateSearchResult核对文件与父目录身份/类型，NavigateSearchForCommand定位父目录，TryCompleteSearchFolderCommand再调用共享Rename；不是在SearchResults原地编辑。取消后的实际列表是FolderEntries。Dialog仍使用原生ContentDialog Enter/Esc与文本Ctrl+A/Delete；完成通知重算命令能力并恢复当前可见列表焦点；真实IME、候选选择不以静态代码或字符串测试代验。
+
+关闭准备中，在既有WM_CLOSE/程序关闭路径移交列表焦点之前先关闭名称对话框，使closed门控抑制晚到提交；活跃名称编辑器关窗已在本轮#13/#14真实GUI中正常exit0，不将代码审查单独当运行证据。成功rename后的刷新仍按包含name的RowIdentity保留选择，新名行定位/选中未在本片实现，不能以回到列表焦点冒称已保留新项选择。
+
+本片原生为两配置各1578/0/4、249输入/378资源，新增13项纯模型。实际GUI来源为[`ui-rename-selection-report.json`](../.build/explorer-rename-selection/integration/ui-rename-selection-report.json)：同一最终Release 15 PASS / 0 FAIL / 0 SKIP（13功能+正常退出/归属清理），SHA256 `ef4986100848f3656dcaa0f2d8a645a96e9a40b09f44c5e86c51f16abb67434c`，自有PID29940正常exit0、无force，425字节夹具核验后已清理。实测zh-CN/x64/普通用户、窗口DPI96，ActualTheme未采集、IME未测试；默认新版发布另有下述独立核验，不由GUI通过单独推断。F3/F6区域循环、成功后新行选择、真正IME及全部主题/DPI/平台矩阵继续后续，完整G05/P0不标完。
+
+
+发布核验已完成：原agent默认窗口PID10988正常exit0，候选发布的四项关键产物SHA与测试版本一致；新默认窗口PID7108可见并位于前台。主模型最终复核249项原生源码/11项保留产物、两配置1578/0/4、378资源及同一Release15项GUI均通过。此发布记录与测试PID29940分别记录，不把新开窗口当作再跑完整GUI或全部环境验收。
 
 ## 9. 官方参考与适用限制
 

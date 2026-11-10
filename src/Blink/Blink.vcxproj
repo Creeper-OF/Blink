@@ -122,6 +122,7 @@ copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(
     <ClInclude Include="include\Blink\App\FileOperationCoordinator.h" />
     <ClInclude Include="include\Blink\App\FileCopyBatch.h" />
     <ClInclude Include="include\Blink\App\FolderNameDialog.h" />
+    <ClInclude Include="include\Blink\App\FileNameSelection.h" />
     <ClInclude Include="include\Blink\App\FileActivationController.h" />
     <ClInclude Include="include\Blink\App\FileActivation.h" />
     <ClInclude Include="include\Blink\App\NavigationModel.h" />

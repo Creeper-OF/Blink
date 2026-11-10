@@ -85,6 +85,9 @@
     <ClInclude Include="..\..\src\Blink\include\Blink\App\ExplorerCommandBarModel.h" />
     <ClCompile Include="src\AddressBarTests.cpp" />
     <ClInclude Include="src\AddressBarTests.h" />
+    <ClCompile Include="src\FileNameSelectionTests.cpp" />
+    <ClInclude Include="src\FileNameSelectionTests.h" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\FileNameSelection.h" />
     <ClCompile Include="..\..\src\Blink\src\AddressBarModel.cpp" />
     <ClInclude Include="..\..\src\Blink\include\Blink\App\AddressBarModel.h" />
     <ClInclude Include="src\FileDragDropTests.h" />

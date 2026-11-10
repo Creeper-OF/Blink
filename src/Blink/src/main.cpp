@@ -805,6 +805,21 @@ struct App : AppT<App>
 
     void BuildUi()
     {
+        const auto name_dialog_weak = get_weak();
+        folder_name_dialog_.SetDismissedCallback([name_dialog_weak] {
+            if (auto app = name_dialog_weak.get(); app && !app->window_style_closed_)
+            {
+                app->SyncCommandBarState();
+                // File naming belongs to the visible file surface even when
+                // the command came from the toolbar rather than the list.
+                if (!app->IsOperationDialogOpen())
+                {
+                    if (app->search_surface_ && app->search_surface_.Visibility() == Visibility::Visible)
+                    { app->search_presentation_.FocusResults(); }
+                    else if (app->entries_) { (void)app->entries_.Focus(FocusState::Keyboard); }
+                }
+            }
+        });
         startup_.Stage("BuildUi.root.begin");
         root_ = Grid();
         // Window-wide shortcuts must also work when focus is in the titlebar tabs.
@@ -1641,7 +1656,9 @@ struct App : AppT<App>
                 }, [weak](HRESULT) {
                     if (auto app = weak.get(); app && !app->window_style_closed_)
                     { app->status_.Text(hstring(app->localization_.GetString(L"NewFolder.DialogFailed"))); }
-                }, rename_source.has_value());
+                }, rename_source.has_value(), false, false, false,
+                rename_source && !rename_source->is_directory ?
+                    blink::app::FileNameSelectionMode::FileStem : blink::app::FileNameSelectionMode::WholeName);
         }
         catch (...) { status_.Text(hstring(localization_.GetString(L"NewFolder.DialogFailed"))); }
     }
@@ -7119,6 +7136,8 @@ struct App : AppT<App>
         if (window_style_closed_) { return; }
         try
         {
+            // Cancel a modal name edit before its focus host is destroyed.
+            folder_name_dialog_.Close();
             if (search_surface_ && search_surface_.Visibility() == Visibility::Visible)
             { search_presentation_.FocusResults(); }
             else if (entries_) { (void)entries_.Focus(FocusState::Programmatic); }
