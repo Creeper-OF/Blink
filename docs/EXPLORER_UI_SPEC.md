@@ -7,7 +7,7 @@
 本文更新代理只核对源码、主模型提供的验证记录和既有参考资料，没有另行构建或运行GUI。G01受控GUI为15 PASS/0 FAIL/0 SKIP，另有独立的Explorer查看/显示参考观察；二者环境采样与边界保留于第7节。G02原生结果与最终18项GUI结果单独记录，不能外推为整套界面验收。
 
 
-G05a重命名主名选区更新：两配置原生各1578 PASS / 0 FAIL / 4既有符号链接权限SKIP（13项新增选择模型），249输入/378资源。同一最终Release名称对话框GUI已15 PASS / 0 FAIL / 0 SKIP，仅升级报告实际子项；完整G05/P0与未覆盖焦点/输入环境矩阵仍为`PARTIAL`。
+G05b重命名后选择更新：按真实文件身份和精确新名称选中并滚动到新行。两配置原生各1583 PASS / 0 FAIL / 4既有符号链接权限SKIP，249输入/378资源。同一最终Release 17项GUI全PASS，包含G05a名称输入、取消与关闭的相关回归；完整G05/P0与未覆盖焦点/输入环境矩阵仍为`PARTIAL`。
 
 ## 1. 基线、证据与状态口径
 
@@ -143,7 +143,7 @@ flowchart TD
 | 左侧位置与树 | 已有用户目录/桌面/下载/文档/ThisPC/可访问固定与可移动卷；异步Lazy Load、单一纵向滚动；`PARTIAL` | “主文件夹”是实际用户目录，不是Explorer Home聚合页；无固定/取消固定、图片/音乐/视频、网络发现或导航节点专属右键。光驱/网络映射盘未由当前ThisPC枚举纳入 |
 | 文件区 | Details/List/Grid；Extended选择，双击/Enter、排序、隐藏策略、异步增量投影；`IMPLEMENTED_VERIFIED`限已记录功能 | 当前图标只分文件/目录glyph；无系统类型图标、缩略图、快捷方式箭头、覆盖状态；List为纵向列表，不冒称Explorer全部视图 |
 | 详细信息列 | 名称/类型/大小/修改四列Button排序；`PARTIAL` | 没有列宽拖拽、重排、显隐、动态属性列或列头专属菜单；分组未实现 |
-| 选择/重命名 | 原队列和ContentDialog重命名保留；G05a文件默认选主名、目录/新建/复制/移动名称保持全选；Release所列15项`IMPLEMENTED_VERIFIED`，整组`PARTIAL` | 不是inline rename。改名后新RowIdentity定位/选择、完整焦点/IME、框选和复选框仍待续；Ctrl+A仍可显式编辑扩展名，不新增扩展名确认 |
+| 选择/重命名 | 原队列和ContentDialog重命名保留；G05a文件默认选主名、目录/新建/复制/移动名称保持全选；G05b完成后按精确新名称选中并滚动到该项，整组`PARTIAL` | 不是inline rename。完整焦点/IME、框选和复选框仍待续；Ctrl+A仍可显式编辑扩展名，不新增扩展名确认 |
 | 详情/预览 | 无详情侧栏或预览面板；`DEFERRED` | 不提供无效“预览/详情”开关；格式解码及第三方预览隔离应独立切片 |
 | 状态栏 | 浏览加载/空/错误、选中数量、索引状态与操作状态已接；`PARTIAL` | 不显示选中总大小或完整传输速度/剩余量；未实现暂停，不增加装饰按钮 |
 | 属性 | 普通目录为Blink只读统计ContentDialog；搜索可调用完整系统属性；`PARTIAL` | 两入口已有实测但并非属性编辑器；驱动器、所有特殊对象/原生页签矩阵仍需独立验证 |
@@ -284,7 +284,7 @@ G01当时的代码入口为`main.cpp:2882 BuildFolderViewCommands`、`:3270 Popu
 | Unicode/emoji | 同样按末尾点选主名 | Windows wstring与TextBox均按UTF-16计数，不截断surrogate pair |
 | 空串/尾点模型输入 | 全名范围 | 不改变原名称合法性校验，不据纯模型承诺可创建尾点名称 |
 
-2026-11-11实机问题修正补记：名称对话框取消后，顶部New/Sort曾保留模态期间的禁用状态；共享`Dismissed`通知在`ShowAsync`完成、`closed=true`之后统一调用`SyncCommandBarState`，从真实当前能力重算，不按入口硬设启用。另发现从工具栏Rename取消后焦点落到侧栏；同一完成回调在没有其它操作对话框时，把焦点交给当前实际可见的`SearchResults`或`FolderEntries`，不再只依赖ContentDialog返回旧焦点。搜索F2已导航父目录，故其取消后当前列表仍是`FolderEntries`。上述修正已在完整15项Release报告的实际取消/能力/焦点场景中通过；该结果不代表完整焦点环或其它环境均已验收。成功重命名后新`RowIdentity`的定位/选择映射仍未实现，列表回焦不等同新名项继续选中。
+2026-11-11实机问题修正补记：名称对话框取消后，顶部New/Sort曾保留模态期间的禁用状态；共享`Dismissed`通知在`ShowAsync`完成、`closed=true`之后统一调用`SyncCommandBarState`，从真实当前能力重算，不按入口硬设启用。另发现从工具栏Rename取消后焦点落到侧栏；同一完成回调在没有其它操作对话框时，把焦点交给当前实际可见的`SearchResults`或`FolderEntries`，不再只依赖ContentDialog返回旧焦点。搜索F2已导航父目录，故其取消后当前列表仍是`FolderEntries`。上述修正已在完整15项Release报告的实际取消/能力/焦点场景中通过；该结果不代表完整焦点环或其它环境均已验收。此G05a回焦结果不包含新名项继续选中；该行为由G05b另行验证。
 
 搜索F2保留现有语义：ValidateSearchResult核对文件与父目录身份/类型，NavigateSearchForCommand定位父目录，TryCompleteSearchFolderCommand再调用共享Rename；不是在SearchResults原地编辑。取消后的实际列表是FolderEntries。Dialog仍使用原生ContentDialog Enter/Esc与文本Ctrl+A/Delete；完成通知重算命令能力并恢复当前可见列表焦点；真实IME、候选选择不以静态代码或字符串测试代验。
 

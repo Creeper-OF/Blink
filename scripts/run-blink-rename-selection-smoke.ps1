@@ -5,7 +5,7 @@ param([ValidateSet('Debug','Release')][string]$Configuration='Release',[string]$
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $project=Split-Path -Parent $PSScriptRoot
-$integration=Join-Path $project '.build\explorer-rename-selection\integration'
+$integration=Join-Path $project '.build\explorer-rename-reveal\integration'
 $fixtureParent=Join-Path $integration 'ui-fixtures';New-Item -ItemType Directory -Path $integration -Force|Out-Null
 $reportPath=Join-Path $integration 'ui-rename-selection-report.json'
 if(-not $Binary){$Binary=Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe')}
@@ -14,15 +14,19 @@ $guid=[Guid]::NewGuid().ToString('N');$token=$guid.Substring(0,8);$fixture=Join-
 $plain='file-'+$token+'.txt';$renamed='renamed-'+$token+'.txt';$full='all-'+$token+'.log'
 $multi='archive-'+$token+'.tar.gz';$bare='README-'+$token;$dot='.env-'+$token
 $unicode='资料-😀-'+$token+'.txt';$unicodeAfter='新名-😀-'+$token+'.txt';$searchName='search-'+$token+'.txt'
+$searchAfter='search-renamed-'+$token+'.txt';$large=Join-Path $fixture 'large'
+$largeFirst='a-first-'+$token+'.txt';$largeSibling='b-link-'+$token+'.txt';$largeAfter='z-last-'+$token+'.txt';$largeCase='Z-LAST-'+$token+'.txt'
 $directoryName='folder-'+$token+'.v1';$directoryAfterName='folder-'+$token+'.v2';$directory=Join-Path $source $directoryName;$directoryAfter=Join-Path $source $directoryAfterName
-$child='child-'+$token+'.txt';$created=Join-Path $source ('new-'+$token);$allowedDirectories=@($fixture,$source,$directory,$directoryAfter,$created)
+$child='child-'+$token+'.txt';$created=Join-Path $source ('new-'+$token);$allowedDirectories=@($fixture,$source,$directory,$directoryAfter,$created,$large)
 $allowedFiles=@{};foreach($name in @($plain,$renamed,$full)){$allowedFiles[(Join-Path $source $name)]='Blink rename '+$guid+' FILE'}
 foreach($name in @($multi,$bare,$dot,$unicode,$unicodeAfter,$searchName)){$allowedFiles[(Join-Path $source $name)]='Blink rename '+$guid+' '+$(if($name -eq $unicodeAfter){$unicode}else{$name})}
 foreach($path in @($directory,$directoryAfter)){$allowedFiles[(Join-Path $path $child)]='Blink rename '+$guid+' CHILD'}
+$allowedFiles[(Join-Path $source $searchAfter)]=$allowedFiles[(Join-Path $source $searchName)]
+foreach($name in @($largeFirst,$largeSibling,$largeAfter,$largeCase)){$allowedFiles[(Join-Path $large $name)]='Blink rename '+$guid+' HARD LINK'}
 $initialFiles=@((Join-Path $source $plain),(Join-Path $source $multi),(Join-Path $source $bare),(Join-Path $source $dot),(Join-Path $source $unicode),(Join-Path $source $searchName),(Join-Path $directory $child))
 $compilerTemp=Join-Path $integration ('compiler-temp\'+$guid);$oldTemp=$env:TEMP;$oldTmp=$env:TMP;$tempChanged=$false;$fixtureCreated=$false;$process=$null;$script:windowCache=$null;$script:currentStep='preflight';$script:lastTextInput=$null;$script:lastExpectedEditorValue=$null
 $checks=[Collections.Generic.List[object]]::new();$notes=[Collections.Generic.List[string]]::new()
-$report=[ordered]@{status='RUNNING';passed=$false;started_utc=[DateTime]::UtcNow.ToString('o');ended_utc=$null;configuration=$Configuration;binary=$Binary;binary_sha256=$null;process_id=$null;process_exited=$false;exit_code=$null;exit_code_hex=$null;forced_termination=$false;before_close_alive=$null;close_requested=$false;close_request_utc=$null;close_request_result=$null;process_exit_observed_utc=$null;checks=@();current_step='preflight';failure=$null;notes=@();environment=$null;window_dpi=$null;desktop_preflight=$null;fixture=$fixture;fixture_removed=$false;fixture_retained=$false;fixture_bytes_removed=0;fixture_ownership_failures=@();compiler_temp_removed=$false;selection_evidence=@();text_inputs=@();editor_value_checks=@();rename_effects=@();focus_evidence=@();row_focus_evidence=@();search_evidence=$null;dialog_close_evidence=$null;last_ui_snapshot=$null;human_acceptance='NOT RUN';model_tests='NOT RUN by UI smoke';input_mode='Owned PID/HWND UIA and InputSite keyboard/WM_CHAR only';not_run=@('real IME composition/candidates','UNC/network','full Windows/theme/DPI/multi-monitor/Narrator matrix','inline rename and multi-selection rename','rename-success selection of new RowIdentity')}
+$report=[ordered]@{status='RUNNING';passed=$false;started_utc=[DateTime]::UtcNow.ToString('o');ended_utc=$null;configuration=$Configuration;binary=$Binary;binary_sha256=$null;process_id=$null;process_exited=$false;exit_code=$null;exit_code_hex=$null;forced_termination=$false;before_close_alive=$null;close_requested=$false;close_request_utc=$null;close_request_result=$null;process_exit_observed_utc=$null;checks=@();current_step='preflight';failure=$null;notes=@();environment=$null;window_dpi=$null;desktop_preflight=$null;fixture=$fixture;fixture_removed=$false;fixture_retained=$false;fixture_bytes_removed=0;fixture_ownership_failures=@();compiler_temp_removed=$false;selection_evidence=@();text_inputs=@();editor_value_checks=@();rename_effects=@();focus_evidence=@();row_focus_evidence=@();search_evidence=$null;large_folder_evidence=$null;dialog_close_evidence=$null;last_ui_snapshot=$null;human_acceptance='NOT RUN';model_tests='NOT RUN by UI smoke';input_mode='Owned PID/HWND UIA and InputSite keyboard/WM_CHAR only';not_run=@('real IME composition/candidates','UNC/network','full Windows/theme/DPI/multi-monitor/Narrator matrix','inline rename and multi-selection rename','user selection change or tab switch during a pending rename')}
 function Save-Report{$report.current_step=$script:currentStep;$report.checks=@($checks.ToArray());$report.notes=@($notes.ToArray());[IO.File]::WriteAllText($reportPath,($report|ConvertTo-Json -Depth 12),[Text.UTF8Encoding]::new($true))}
 function Record([string]$Label,[string]$Status='PASS',[string]$Detail=''){$checks.Add([pscustomobject]@{name=$Label;status=$Status;detail=$Detail;utc=[DateTime]::UtcNow.ToString('o')});Save-Report}
 function Check([string]$Label,[scriptblock]$Body){$script:currentStep=$Label;Save-Report;try{$null=&$Body;Record $Label}catch{Record $Label 'FAIL' ($_.Exception.ToString()+"`n"+$_.ScriptStackTrace);throw}}
@@ -71,7 +75,7 @@ function Capture-State([string]$Why){
 function Wait-Ui([string]$Why,[scriptblock]$Predicate,[int]$Seconds=$StepTimeoutSeconds){$watch=[Diagnostics.Stopwatch]::StartNew();$last='';do{try{if(&$Predicate){return}}catch{$last=$_.Exception.Message};if($process -and $process.WaitForExit(100)){throw ('Owned Blink exited while '+$Why+'; '+$process.ExitCode)}}while($watch.Elapsed.TotalSeconds -lt $Seconds);try{$null=Capture-State $Why}catch{};throw ('Timed out: '+$Why+'; '+$last)}
 function Require-Desktop{$d=[BlinkRenameUiNative]::DesktopState();$report.desktop_preflight=$d;if(-not $d.InputReady){throw ('GUI precondition not met: '+$d.Reason)}}
 function Require-OwnedFocus([string]$Id){$a=Owned-Id $Id;if(-not (Visible $a) -or -not $a.Current.IsEnabled){throw ('Owned focus anchor unavailable '+$Id)};$a.SetFocus();Wait-Ui 'actual owned foreground and focused region' {$d=[BlinkRenameUiNative]::DesktopState();$f=[Windows.Automation.AutomationElement]::FocusedElement;$d.InputReady -and $d.ForegroundPid -eq $process.Id -and $f -and $f.Current.ProcessId -eq $process.Id -and $f.Current.HasKeyboardFocus -and (Focus-In $Id)};$report.focus_evidence+=@(Focus-Evidence $Id);Save-Report}
-function Key([uint32]$Code,[int]$Modifiers=0){Require-Desktop;[BlinkRenameUiNative]::Key($process.Id,$Code,$Modifiers)}
+function Key([uint32]$Code,[int]$Modifiers=0){Require-Desktop;if($report.desktop_preflight.ForegroundPid -ne $process.Id){throw 'Owned test window lost foreground before keyboard input'};[BlinkRenameUiNative]::Key($process.Id,$Code,$Modifiers)}
 function Type-Text([string]$Text,[string]$Id='RenameName'){
  if(-not (Focus-In $Id) -or -not (Owned-Id $Id).Current.HasKeyboardFocus){throw 'Actual owned editor focus required'}
  $before=Value (Owned-Id $Id);$inputUnits=Utf16-Evidence $Text
@@ -116,7 +120,16 @@ function Select-Row([string]$Name,[string]$ListId='FolderEntries'){
  return $row
 }
 function Ready{return (Visible (Entries)) -and (By-Id 'CommandNew').Current.IsEnabled -and (By-Id 'CommandSort').Current.IsEnabled}
-function Navigate-Source{Require-OwnedFocus 'AddressHistoryButton';Key 0x4C 1;Wait-Ui 'AddressEditor revealed' {$null -ne (By-Id 'AddressEditor')};$e=By-Id 'AddressEditor';$e.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($source);$e.SetFocus();Key 13;Wait-Ui 'exact owned directory and listing committed' {(By-Id 'AddressBar').Current.HelpText -ieq $source -and (Ready) -and @(Row-Names) -ccontains $searchName}}
+function Navigate-Fixture([string]$Path,[string]$ExpectedRow){
+ if($Path -notin $allowedDirectories){throw 'Navigation outside GUID fixture'}
+ Require-OwnedFocus 'AddressHistoryButton';Key 0x4C 1
+ Wait-Ui 'AddressEditor revealed' {$null -ne (By-Id 'AddressEditor')}
+ Require-OwnedFocus 'AddressEditor'
+ $e=By-Id 'AddressEditor';$e.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($Path)
+ Assert-EditorValue 'AddressEditor' $Path
+ Key 13
+ Wait-Ui 'exact owned directory and listing committed' {(By-Id 'AddressBar').Current.HelpText -ieq $Path -and (Ready) -and @(Row-Names) -ccontains $ExpectedRow}
+}
 function Dialog([string]$Id){$e=Owned-Id $Id;if(-not $e){return $null};$windowId=(Window).GetRuntimeId()-join ',';$p=[Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($e);for($i=0;$p -and $i -lt 14;$i++){if($p.Current.ProcessId -ne $process.Id -or ($p.GetRuntimeId()-join ',') -ceq $windowId){break};if((Visible $p) -and (Find-In $p 'PrimaryButton') -and (Find-In $p 'CloseButton')){return $p};$p=[Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($p)};return $null}
 function Selection-Evidence([string]$Id,[string]$Expected,[string]$Why){$e=Owned-Id $Id;$pattern=$null;$texts=@();$supported=$e.TryGetCurrentPattern([Windows.Automation.TextPattern]::Pattern,[ref]$pattern);if($supported){$texts=@($pattern.GetSelection()|ForEach-Object{$_.GetText(-1)})};$same=$supported -and $texts.Count -eq 1 -and $texts[0] -ceq $Expected;$report.selection_evidence+=@([pscustomobject]@{why=$Why;editor=(Peer $e);value=(Value $e);text_pattern_supported=$supported;selected_text=$texts;expected=$Expected;comparison=$(if($supported){$same}else{$null});fallback='If unsupported, this same check must type replacement text and verify exact editor value'});Save-Report;if($supported -and -not $same){throw ('Native selection mismatch '+$Why+'; actual='+($texts-join '|')+'; expected='+$Expected)}}
 function Assert-EditorValue([string]$Id,[string]$Expected){
@@ -131,7 +144,22 @@ function Cancel-Rename([string]$Name){Key 27;Wait-Ui 'Escape cancels and returns
 function Identity([string]$Path){if(-not $allowedFiles.ContainsKey($Path) -and $Path -notin $allowedDirectories){throw 'Identity outside GUID whitelist'};return [BlinkRenameUiNative]::Identity($Path)}
 function Expected-Bytes([string]$Path){if(-not $allowedFiles.ContainsKey($Path)){throw 'Unowned expected-byte lookup'};return [Convert]::ToBase64String([Text.UTF8Encoding]::new($false).GetBytes([string]$allowedFiles[$Path]))}
 function Verify-Bytes([string]$Path){if(-not $allowedFiles.ContainsKey($Path) -or [Convert]::ToBase64String([IO.File]::ReadAllBytes($Path)) -cne (Expected-Bytes $Path)){throw ('Owned UTF8 bytes changed '+$Path)}}
-function Commit-Rename([string]$Old,[string]$New,[string]$InitialIdentity){Key 13;Wait-Ui 'rename committed with old name absent and exact new row' {-not (Owned-Id 'RenameName') -and -not (Test-Path -LiteralPath $Old) -and (Test-Path -LiteralPath $New) -and (Ready) -and @(Row-Names) -ccontains [IO.Path]::GetFileName($New)};if((Identity $New) -cne $InitialIdentity){throw 'Owned rename changed identity'};if($allowedFiles.ContainsKey($New)){Verify-Bytes $New};$report.rename_effects+=@([pscustomobject]@{old=$Old;new=$New;same_identity=$true;bytes_verified=$allowedFiles.ContainsKey($New)});Save-Report}
+function Commit-Rename([string]$Old,[string]$New,[string]$InitialIdentity,[switch]$UsePrimaryButton){
+ $newName=[IO.Path]::GetFileName($New);$oldName=[IO.Path]::GetFileName($Old)
+ if($UsePrimaryButton){Require-Desktop;Act (Find-In (Dialog 'RenameName') 'PrimaryButton')}else{Key 13}
+ # Do not select, focus, or scroll a row in the harness after submission.
+ Wait-Ui 'rename committed and exact new row automatically selected and visible' {
+  -not (Owned-Id 'RenameName') -and (Test-Path -LiteralPath $New) -and (Ready) -and
+   (Same-Names @(Selected-Names) @($newName)) -and @(Row-Names) -ccontains $newName
+ }
+ if($Old -ieq $New){
+  $names=@(Get-ChildItem -LiteralPath ([IO.Path]::GetDirectoryName($New)) -Force -Name)
+  if($names -ccontains $oldName -or $names -cnotcontains $newName){throw 'Exact on-disk case did not change'}
+ }elseif(Test-Path -LiteralPath $Old){throw 'Old name still exists'}
+ if((Identity $New) -cne $InitialIdentity){throw 'Owned rename changed identity'}
+ if($allowedFiles.ContainsKey($New)){Verify-Bytes $New}
+ $report.rename_effects+=@([pscustomobject]@{old=$Old;new=$New;same_identity=$true;bytes_verified=$allowedFiles.ContainsKey($New);selected=@(Selected-Names);new_row_visible=(@(Row-Names) -ccontains $newName);selection_applied_by_harness=$false;submitted_by=$(if($UsePrimaryButton){'owned PrimaryButton'}else{'Enter'})});Save-Report
+}
 function Ownership-Failures{$bad=[Collections.Generic.List[string]]::new();$pending=[Collections.Generic.Stack[string]]::new();$r=Get-Item -LiteralPath $fixture -Force;if(-not $r.PSIsContainer -or ($r.Attributes -band [IO.FileAttributes]::ReparsePoint)){return @('Fixture root ownership/type changed')};$pending.Push($fixture);while($pending.Count){foreach($item in @(Get-ChildItem -LiteralPath $pending.Pop() -Force)){if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){$bad.Add('Reparse '+$item.FullName);continue};if($item.PSIsContainer){if($item.FullName -notin $allowedDirectories){$bad.Add('Unknown directory '+$item.FullName)}else{$pending.Push($item.FullName)}}elseif(-not $allowedFiles.ContainsKey($item.FullName)){$bad.Add('Unknown file '+$item.FullName)}else{try{Verify-Bytes $item.FullName}catch{$bad.Add($_.Exception.Message)}}}};return @($bad.ToArray())}
 try{
  New-Item -ItemType Directory -Path $compilerTemp -Force|Out-Null;$env:TEMP=$compilerTemp;$env:TMP=$compilerTemp;$tempChanged=$true
@@ -217,6 +245,8 @@ public static class BlinkRenameUiNative {
     public static int[] WindowSize(int pid) { Own(OwnedWindow,pid);WindowRect rect;if(!GetWindowRect(OwnedWindow,out rect))throw new Win32Exception();return new int[]{rect.Right-rect.Left,rect.Bottom-rect.Top}; }
     public static void Resize(int pid,int width,int height) { Own(OwnedWindow,pid);if(width<420||height<300)throw new ArgumentOutOfRangeException();if(!SetWindowPos(OwnedWindow,IntPtr.Zero,0,0,width,height,0x16))throw new Win32Exception(); }
 
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true,ExactSpelling=true)]static extern bool CreateHardLinkW(string newName,string existingName,IntPtr security);
+    public static void HardLink(string newName,string existingName){if(!CreateHardLinkW(newName,existingName,IntPtr.Zero))throw new Win32Exception(Marshal.GetLastWin32Error());}
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string p,uint a,uint s,IntPtr z,uint c,uint f,IntPtr t);
     [DllImport("kernel32.dll",SetLastError=true)]static extern bool GetFileInformationByHandleEx(Microsoft.Win32.SafeHandles.SafeFileHandle f,int k,byte[] b,uint n);
     public static string Identity(string path){using(var f=CreateFileW(path,0x80,7,IntPtr.Zero,3,0x02000000,IntPtr.Zero)){if(f.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error());var b=new byte[24];if(!GetFileInformationByHandleEx(f,18,b,24))throw new Win32Exception(Marshal.GetLastWin32Error());return Convert.ToBase64String(b);}}
@@ -231,7 +261,7 @@ public static class BlinkRenameUiNative {
  $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;if(-not $process.Start()){throw 'Owned launch failed'};$report.process_id=$process.Id;$ownedProcessHandle=$process.Handle;Save-Report
  Wait-Ui 'new owned Blink window' {$null -ne (Window)};[BlinkRenameUiNative]::OwnedWindow=$process.MainWindowHandle;$report.window_dpi=[BlinkRenameUiNative]::GetDpiForWindow($process.MainWindowHandle)
 
- Check '01 navigate to the exact GUID fixture and verify real directory contents' {Navigate-Source;foreach($path in $initialFiles){Verify-Bytes $path};$null=Capture-State 'owned listing ready'}
+ Check '01 navigate to the exact GUID fixture and verify real directory contents' {Navigate-Fixture $source $searchName;foreach($path in $initialFiles){Verify-Bytes $path};$null=Capture-State 'owned listing ready'}
  Check '02 F2 selects only a file stem and Escape leaves its source unchanged' {Open-Rename $plain ('file-'+$token);Type-Text ('cancel-'+$token);Assert-EditorValue 'RenameName' ('cancel-'+$token+'.txt');Cancel-Rename $plain;Verify-Bytes (Join-Path $source $plain)}
  Check '03 typed replacement and Enter preserve the final extension bytes and identity' {$old=Join-Path $source $plain;$id=Identity $old;Open-Rename $plain ('file-'+$token);Type-Text ('renamed-'+$token);Assert-EditorValue 'RenameName' $renamed;Commit-Rename $old (Join-Path $source $renamed) $id}
  Check '04 a multi-dot filename excludes only its final suffix' {Open-Rename $multi ('archive-'+$token+'.tar');Type-Text ('probe-'+$token);Assert-EditorValue 'RenameName' ('probe-'+$token+'.gz');Cancel-Rename $multi;Verify-Bytes (Join-Path $source $multi)}
@@ -242,14 +272,34 @@ public static class BlinkRenameUiNative {
  Check '09 Delete modifies the selected editor text and never deletes the file' {$rows=@(Row-Names);$id=Identity (Join-Path $source $multi);Open-Rename $multi ('archive-'+$token+'.tar');Key 0x2E;Assert-EditorValue 'RenameName' '.gz';if(-not(Test-Path -LiteralPath (Join-Path $source $multi)) -or -not(Same-Names @(Row-Names) $rows)){throw 'Text Delete changed source filesystem/listing'};Cancel-Rename $multi;Verify-Bytes (Join-Path $source $multi);if((Identity (Join-Path $source $multi)) -cne $id){throw 'Text Delete changed identity'}}
  Check '10 the top Rename command uses the same initial selection as F2' {Open-Rename $full ('all-'+$token) 'Command';Type-Text ('menu-'+$token);Assert-EditorValue 'RenameName' ('menu-'+$token+'.log');Cancel-Rename $full;Verify-Bytes (Join-Path $source $full)}
  Check '11 New Folder retains whole-name selection and creates only its owned directory' {Act (By-Id 'CommandNew');Wait-Ui 'real New folder menu leaf' {$null -ne (Owned-Id 'TopNewFolder')};Act (Owned-Id 'TopNewFolder');Wait-Ui 'NewFolderName actual editor focus' {$e=Owned-Id 'NewFolderName';$e -and (Focus-In 'NewFolderName') -and $e.Current.HasKeyboardFocus};$text=Value (Owned-Id 'NewFolderName');if(-not $text){throw 'New folder default name is empty'};Selection-Evidence 'NewFolderName' $text 'new folder default';Type-Text ([IO.Path]::GetFileName($created)) 'NewFolderName';Assert-EditorValue 'NewFolderName' ([IO.Path]::GetFileName($created));Key 13;Wait-Ui 'new owned folder committed' {-not(Owned-Id 'NewFolderName') -and (Test-Path -LiteralPath $created -PathType Container) -and (Ready) -and @(Row-Names) -ccontains [IO.Path]::GetFileName($created)}}
- Check '12 real indexed search F2 locates the parent then opens shared Rename' {
+ Check '12 real indexed search F2 locates the parent and selects the committed new name' {
   Require-OwnedFocus 'SearchQuery';$q=By-Id 'SearchQuery';$q.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($searchName);Key 13
   Wait-Ui 'real exact indexed result, no injected rows' {$rows=@(Rows 'SearchResults'|Where-Object{$_.Current.Name -ceq $searchName});$rows.Count -eq 1} ([Math]::Max(60,$StepTimeoutSeconds))
   $null=Select-Row $searchName 'SearchResults';$report.search_evidence=[pscustomobject]@{query=$searchName;real_exact_result=$true;parent=$source;index_performance='NOT TESTED';pipeline='existing F2 locates parent before ordinary Rename'};Save-Report;Key 0x71
   Wait-Ui 'search F2 parent/list and shared RenameName' {(By-Id 'AddressBar').Current.HelpText -ieq $source -and (Visible(Entries)) -and -not(By-Id 'SearchResults') -and (Owned-Id 'RenameName') -and (Value(Owned-Id 'RenameName')) -ceq $searchName -and (Focus-In 'RenameName')}
-  Selection-Evidence 'RenameName' ('search-'+$token) 'real search F2';Type-Text ('search-cancel-'+$token);Assert-EditorValue 'RenameName' ('search-cancel-'+$token+'.txt');Cancel-Rename $searchName;Verify-Bytes (Join-Path $source $searchName)
+  $old=Join-Path $source $searchName;$id=Identity $old
+  Selection-Evidence 'RenameName' ('search-'+$token) 'real search F2';Type-Text ('search-renamed-'+$token);Assert-EditorValue 'RenameName' $searchAfter;Commit-Rename $old (Join-Path $source $searchAfter) $id
  }
- Check '13 retain the live Rename editor and unsubmitted draft for normal close' {Open-Rename $full ('all-'+$token);Type-Text ('unsubmitted-'+$token);Assert-EditorValue 'RenameName' ('unsubmitted-'+$token+'.log');$report.dialog_close_evidence=[pscustomobject]@{editor=(Peer(Owned-Id 'RenameName'));value=(Value(Owned-Id 'RenameName'));actual_focus=(Focus-Evidence 'rename draft before close');escape_sent=$false;enter_sent=$false;source_exists=(Test-Path -LiteralPath (Join-Path $source $full));draft_name=('unsubmitted-'+$token+'.log')};Verify-Bytes (Join-Path $source $full);Save-Report}
+ Check '13 rename in a batched folder selects and reveals the new link at the end' {
+  New-Item -ItemType Directory -Path $large|Out-Null
+  $utf8=[Text.UTF8Encoding]::new($false)
+  for($i=0;$i -lt 270;$i++){$p=Join-Path $large ('middle-{0:D3}.txt' -f $i);$allowedFiles[$p]='Blink rename '+$guid+' '+$i;[IO.File]::WriteAllText($p,$allowedFiles[$p],$utf8)}
+  $firstPath=Join-Path $large $largeFirst;$siblingPath=Join-Path $large $largeSibling;$newPath=Join-Path $large $largeAfter
+  [IO.File]::WriteAllText($firstPath,$allowedFiles[$firstPath],$utf8);[BlinkRenameUiNative]::HardLink($siblingPath,$firstPath)
+  $id=Identity $firstPath;if((Identity $siblingPath) -cne $id){throw 'Real hard-link fixture identities differ'}
+  Navigate-Fixture $large $largeFirst
+  if(@(Row-Names) -ccontains 'middle-269.txt'){throw 'Last filler row must be outside the initial viewport'}
+  $report.large_folder_evidence=[ordered]@{entry_count=@(Get-ChildItem -LiteralPath $large -File).Count;initial_visible_rows=@(Row-Names);sibling_identity=$id;exact_new_row_visible=$false;sibling_still_present=$false}
+  Open-Rename $largeFirst ('a-first-'+$token);Type-Text ('z-last-'+$token);Assert-EditorValue 'RenameName' $largeAfter
+  Commit-Rename $firstPath $newPath $id -UsePrimaryButton
+  Verify-Bytes $siblingPath;if((Identity $siblingPath) -cne $id){throw 'Renaming one link changed the sibling'}
+  $report.large_folder_evidence.exact_new_row_visible=@(Row-Names) -ccontains $largeAfter;$report.large_folder_evidence.sibling_still_present=$true;Save-Report
+ }
+ Check '14 a case-only rename selects the exact spelling on disk' {
+  $old=Join-Path $large $largeAfter;$id=Identity $old
+  Open-Rename $largeAfter ('z-last-'+$token);Type-Text ('Z-LAST-'+$token);Assert-EditorValue 'RenameName' $largeCase;Commit-Rename $old (Join-Path $large $largeCase) $id -UsePrimaryButton
+ }
+ Check '15 retain the live Rename editor and unsubmitted draft for normal close' {Open-Rename $largeCase ('Z-LAST-'+$token);Type-Text ('unsubmitted-'+$token);Assert-EditorValue 'RenameName' ('unsubmitted-'+$token+'.txt');$report.dialog_close_evidence=[pscustomobject]@{editor=(Peer(Owned-Id 'RenameName'));value=(Value(Owned-Id 'RenameName'));actual_focus=(Focus-Evidence 'rename draft before close');escape_sent=$false;enter_sent=$false;source_exists=(Test-Path -LiteralPath (Join-Path $large $largeCase));draft_name=('unsubmitted-'+$token+'.txt')};Verify-Bytes (Join-Path $large $largeCase);Save-Report}
  $report.status='PASS'
 }catch{$report.status='FAIL';$report.failure=$_.Exception.ToString()+"`n"+$_.ScriptStackTrace;try{$null=Capture-State 'unexpected failure'}catch{}}
 finally{
@@ -257,12 +307,12 @@ finally{
   $process.Refresh();$report.before_close_alive=-not $process.HasExited
   if(-not $process.HasExited){$report.close_requested=$true;$report.close_request_utc=[DateTime]::UtcNow.ToString('o');$report.close_request_result=$process.CloseMainWindow();if(-not $report.close_request_result -or -not $process.WaitForExit(10000)){throw ('Owned process still running; no force termination. PID '+$process.Id)}}
   $process.Refresh();$report.process_exited=$process.HasExited;if($process.HasExited){$report.process_exit_observed_utc=[DateTime]::UtcNow.ToString('o');$report.exit_code=$process.ExitCode;$report.exit_code_hex=('0x{0:X8}' -f [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$process.ExitCode),0));if($process.ExitCode -ne 0){throw ('Owned Blink abnormal exit '+$report.exit_code_hex)}}
-  if($report.status -eq 'PASS'){Record '14 owned Blink closes with live name dialog and exits zero without force'}
- }catch{$report.status='FAIL';$report.failure=(@($report.failure,$_.Exception.ToString())|Where-Object{$_})-join "`n";Record '14 owned process normal close failed' 'FAIL' $_.Exception.Message}}
+  if($report.status -eq 'PASS'){Record '16 owned Blink closes with live name dialog and exits zero without force'}
+ }catch{$report.status='FAIL';$report.failure=(@($report.failure,$_.Exception.ToString())|Where-Object{$_})-join "`n";Record '16 owned process normal close failed' 'FAIL' $_.Exception.Message}}
  if($fixtureCreated){try{
   if($process -and -not $process.HasExited){throw 'Owned process still running; fixture retained'};$report.fixture_ownership_failures=@(Ownership-Failures);if($report.fixture_ownership_failures.Count){throw ('Changed/foreign fixture; nothing deleted: '+($report.fixture_ownership_failures-join '; '))}
-  $report.fixture_bytes_removed=(Get-ChildItem -LiteralPath $fixture -Force -Recurse -File|Measure-Object Length -Sum).Sum;Remove-Item -LiteralPath $fixture -Recurse -Force;$report.fixture_removed=-not(Test-Path -LiteralPath $fixture);if(-not $report.fixture_removed){throw 'Owned fixture remains'};if($report.status -eq 'PASS'){Record '15 exact owned paths identity and UTF8 bytes verified before cleanup'}
- }catch{$report.fixture_retained=Test-Path -LiteralPath $fixture;$report.status='FAIL';$report.failure=(@($report.failure,$_.Exception.ToString())|Where-Object{$_})-join "`n";Record '15 changed or in-use fixture preserved' 'FAIL' $_.Exception.Message}}
+  $report.fixture_bytes_removed=(Get-ChildItem -LiteralPath $fixture -Force -Recurse -File|Measure-Object Length -Sum).Sum;Remove-Item -LiteralPath $fixture -Recurse -Force;$report.fixture_removed=-not(Test-Path -LiteralPath $fixture);if(-not $report.fixture_removed){throw 'Owned fixture remains'};if($report.status -eq 'PASS'){Record '17 exact owned paths identity and UTF8 bytes verified before cleanup'}
+ }catch{$report.fixture_retained=Test-Path -LiteralPath $fixture;$report.status='FAIL';$report.failure=(@($report.failure,$_.Exception.ToString())|Where-Object{$_})-join "`n";Record '17 changed or in-use fixture preserved' 'FAIL' $_.Exception.Message}}
  if($tempChanged){$env:TEMP=$oldTemp;$env:TMP=$oldTmp};if(Test-Path -LiteralPath $compilerTemp){try{Remove-Item -LiteralPath $compilerTemp -Recurse -Force;$report.compiler_temp_removed=-not(Test-Path -LiteralPath $compilerTemp)}catch{$report.status='FAIL';$notes.Add('Owned compiler temp cleanup: '+$_.Exception.Message)}}
  $report.passed=$report.status -eq 'PASS';$report.ended_utc=[DateTime]::UtcNow.ToString('o');Save-Report;Write-Output ('UI RENAME SELECTION '+$report.status+': '+@($checks|Where-Object{$_.status -eq 'PASS'}).Count+' PASS / '+@($checks|Where-Object{$_.status -eq 'FAIL'}).Count+' FAIL');Write-Output ('Report: '+$reportPath)
 }

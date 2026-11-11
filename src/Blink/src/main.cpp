@@ -639,6 +639,13 @@ struct App : AppT<App>
         bool user_intent_still_expand{};
     };
 
+    struct RenameSelection
+    {
+        blink::app::FileOperationOrigin origin;
+        blink::app::RowIdentity row;
+        std::uint64_t selection_generation{};
+    };
+
     struct TabUiState
     {
         blink::app::TabId id{};
@@ -658,6 +665,8 @@ struct App : AppT<App>
         std::uint64_t this_pc_generation{};
         DispatcherQueueTimer folder_change_timer{ nullptr };
         std::optional<blink::core::FileIdentity> operation_refresh_identity;
+        std::optional<RenameSelection> select_after_rename;
+        std::optional<RenameSelection> reveal_after_rename;
     };
 
     [[nodiscard]] TabUiState& EnsureTabUi(const blink::app::TabId id)
@@ -1208,6 +1217,9 @@ struct App : AppT<App>
     bool IsFileOperationOriginCurrent(const FileOperationOrigin& origin) const
     { return blink::app::IsFileOperationOriginCurrent(origin, ActiveTab(), window_style_closed_); }
 
+    bool IsRenameSelectionCurrent(const RenameSelection& selection) const
+    { return selection.selection_generation == folder_selection_generation_ && IsFileOperationOriginCurrent(selection.origin); }
+
     std::wstring FileOperationErrorText(const DWORD error, const bool renaming = false, const bool copying = false) const
     {
         if (copying && error == ERROR_NOT_SUPPORTED) { return localization_.GetString(L"Copy.Unsupported"); }
@@ -1671,8 +1683,9 @@ struct App : AppT<App>
         if (rename_source && !ActiveState().SelectedCommittedRow(blink::app::MakeRowIdentity(*rename_source)))
         { status_.Text(hstring(localization_.GetString(L"Operation.TargetChanged"))); return; }
         const auto weak = get_weak(); const auto dispatcher = dispatcher_;
-        const auto publish = [weak, dispatcher](blink::app::FileOperationSnapshot snapshot) {
-                (void)dispatcher.TryEnqueue([weak, snapshot = std::move(snapshot)] {
+        const auto selection_generation = folder_selection_generation_;
+        const auto publish = [weak, dispatcher, origin, selection_generation](blink::app::FileOperationSnapshot snapshot) {
+                (void)dispatcher.TryEnqueue([weak, origin, selection_generation, snapshot = std::move(snapshot)] {
                     if (auto app = weak.get(); app && !app->window_style_closed_)
                     {
                         if (blink::app::FileOperationIsTerminal(snapshot.stage)) { app->RestoreOperationWatches(snapshot.operation_id); }
@@ -1680,6 +1693,14 @@ struct App : AppT<App>
                         {
                             if (const auto relocation = blink::app::CompletedFolderRelocation(snapshot))
                             { app->FollowFolderRelocation(*relocation); }
+                            // The operation supplies the exact new link name.
+                            // Keep a later user selection or tab departure.
+                            if (snapshot.kind == blink::app::FileOperationKind::Rename && snapshot.rename_source &&
+                                selection_generation == app->folder_selection_generation_ && app->IsFileOperationOriginCurrent(origin))
+                            {
+                                if (auto* ui = app->FindTabUi(origin.tab_id))
+                                { ui->select_after_rename = RenameSelection{ origin, { snapshot.rename_source->identity, snapshot.request.name }, selection_generation }; }
+                            }
                             app->RefreshAfterFileOperation(snapshot.request.parent_identity);
                         }
                         if (app->file_operations_.Snapshot().operation_id == snapshot.operation_id) { app->RenderFileOperationStatus(); }
@@ -5675,11 +5696,13 @@ struct App : AppT<App>
         {
             if (!snapshot.committed_location.IsFolder() ||
                 tab->state->CommittedDirectoryIdentity() != *tab_ui->operation_refresh_identity)
-            { tab_ui->operation_refresh_identity.reset(); }
+            { tab_ui->operation_refresh_identity.reset(); tab_ui->select_after_rename.reset(); }
             else if (!snapshot.has_pending && !tab_ui->presentation_in_progress)
             {
                 tab_ui->operation_refresh_identity.reset();
-                if (const auto request = tab->state->Refresh()) { StartNavigation(id, *request, true); return; }
+                auto rename = std::exchange(tab_ui->select_after_rename, std::nullopt);
+                if (const auto request = tab->state->Refresh())
+                { StartNavigation(id, *request, true, {}, {}, std::move(rename)); return; }
             }
         }
         const auto token = tab->folder_changes.Token();
@@ -6403,16 +6426,21 @@ struct App : AppT<App>
         const blink::app::NavigationRequest& request,
         const bool automatic_refresh = false,
         std::optional<blink::core::FileIdentity> expected_root = {},
-        std::optional<blink::app::RowIdentity> locate = {})
+        std::optional<blink::app::RowIdentity> locate = {},
+        std::optional<RenameSelection> rename = {})
     {
         if (pending_search_folder_command_ && pending_search_folder_command_->tab_id == tab_id &&
             pending_search_folder_command_->token != request.token) { pending_search_folder_command_.reset(); }
+        if (auto* ui = FindTabUi(tab_id))
+        {
+            ui->reveal_after_rename.reset();
+            if (!automatic_refresh) { ui->operation_refresh_identity.reset(); ui->select_after_rename.reset(); }
+        }
         if (auto* tab = FindTab(tab_id))
         {
             tab->OnNavigation(automatic_refresh);
             if (!automatic_refresh)
             {
-                if (const auto ui = FindTabUi(tab_id)) { ui->operation_refresh_identity.reset(); }
                 if (tab_id == tab_window_state_.ActiveTabId()) { CloseOperationDialogs(); }
                 search_requests_.RemoveTab(tab_id);
                 tab->search_navigation_identity = expected_root;
@@ -6440,7 +6468,7 @@ struct App : AppT<App>
             StartThisPCNavigation(tab_id, request);
             return;
         }
-        StartFolderNavigation(tab_id, request, automatic_refresh);
+        StartFolderNavigation(tab_id, request, automatic_refresh, std::move(rename));
     }
 
     void StartThisPCNavigation(
@@ -6564,7 +6592,8 @@ struct App : AppT<App>
     void StartFolderNavigation(
         const blink::app::TabId tab_id,
         blink::app::NavigationRequest request,
-        const bool automatic_refresh)
+        const bool automatic_refresh,
+        std::optional<RenameSelection> rename)
     {
         auto* tab = FindTab(tab_id);
         auto* tab_ui = FindTabUi(tab_id);
@@ -6604,7 +6633,8 @@ struct App : AppT<App>
             std::optional<blink::core::FileIdentity>{};
         tab->browse_controller->Browse(
             requested_path,
-            [dispatcher, state, weak_app, tab_id, timing, automatic_refresh, expected_root, request = std::move(request)](
+            [dispatcher, state, weak_app, tab_id, timing, automatic_refresh, expected_root,
+                request = std::move(request), rename = std::move(rename)](
                 blink::app::BrowseResult result) mutable {
                 // Second worker-side check before queueing a UI callback.
                 if (!state->IsCurrent(result.generation, result.requested_path))
@@ -6622,7 +6652,8 @@ struct App : AppT<App>
                 try
                 {
                     queued = dispatcher.TryEnqueue(
-                        [state, weak_app, tab_id, timing, automatic_refresh, request, result = std::move(result)]() mutable {
+                        [state, weak_app, tab_id, timing, automatic_refresh, request,
+                            result = std::move(result), rename = std::move(rename)]() mutable {
                             const auto ui_begin = BrowseClock::now();
                             timing->ui_begin = ui_begin;
                             timing->generation = result.generation;
@@ -6703,9 +6734,10 @@ struct App : AppT<App>
 
                             app->startup_.Stage("commit.begin");
                             const auto commit_start = BrowseClock::now();
+                            const auto* select_after_refresh = rename && app->IsRenameSelectionCurrent(*rename) ? &rename->row : nullptr;
                             const auto commit = tab->state->CommitBrowse(
                                 request,
-                                std::move(result.listing));
+                                std::move(result.listing), select_after_refresh);
                             timing->commit_browse_ms =
                                 ElapsedMilliseconds(commit_start, BrowseClock::now());
                             app->startup_.Stage("commit.end");
@@ -6751,6 +6783,8 @@ struct App : AppT<App>
                             }
 
                             app->startup_.Stage("browse.finalize.restore.begin");
+                            if (select_after_refresh && tab->state->IsRowSelected(*select_after_refresh))
+                            { tab_ui->reveal_after_rename = std::move(rename); }
                             if (tab_id != app->tab_window_state_.ActiveTabId()) { app->UpdateTabLabel(tab_id); }
                             if (tab->locate_after_browse && tab->locate_navigation_token == request.token)
                             {
@@ -7583,6 +7617,9 @@ struct App : AppT<App>
         const auto selection_restore_start = BrowseClock::now();
         startup_.Stage("render.selection-restore.begin");
         const auto* tab = FindTab(tab_id);
+        const auto rename = std::exchange(tab_ui.reveal_after_rename, std::nullopt);
+        const bool reveal = rename && IsRenameSelectionCurrent(*rename);
+        IInspectable reveal_item{ nullptr };
         for (std::size_t index = 0; tab && index < tab_ui.row_models.size(); ++index)
         {
             const auto& row_identity = tab_ui.row_models[index].row_identity;
@@ -7590,10 +7627,12 @@ struct App : AppT<App>
                 tab_ui.row_items_source && index < tab_ui.row_items_source.Size() &&
                 tab_id == tab_window_state_.ActiveTabId())
             {
-                entries_.SelectedItems().Append(
-                    tab_ui.row_items_source.GetAt(static_cast<std::uint32_t>(index)));
+                const auto item = tab_ui.row_items_source.GetAt(static_cast<std::uint32_t>(index));
+                entries_.SelectedItems().Append(item);
+                if (reveal && row_identity == rename->row) { reveal_item = item; }
             }
         }
+        if (reveal_item) { entries_.ScrollIntoView(reveal_item); }
         startup_.Stage("render.selection-restore.end");
         if (timing)
         {

@@ -134,9 +134,12 @@ namespace blink::app
         // CommitBrowse accepts only a successful listing. It prepares all
         // allocating work before NavigationModel::Commit, then swaps the
         // committed listing/selection without an observable intermediate page.
+        // A completed rename may select its exact new row on a same-directory
+        // refresh. An absent or filtered row leaves normal selection intact.
         [[nodiscard]] CommitBrowseResult CommitBrowse(
             const NavigationRequest& request,
-            blink::core::DirectoryListing listing);
+            blink::core::DirectoryListing listing,
+            const RowIdentity* select_after_refresh = nullptr);
 
         // ThisPC has no DirectoryListing. Its content is committed through a
         // separate value model while sharing the same navigation/history gate.

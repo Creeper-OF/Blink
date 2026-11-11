@@ -951,6 +951,7 @@ namespace
         const auto hard_link_a = TestEntry(L"hard-link-a.txt", hard_link_identity, 41);
         const auto hard_link_b = TestEntry(L"hard-link-b.txt", hard_link_identity, 41);
         auto hard_link_listing = Listing(path_a);
+        hard_link_listing.directory_identity = TestIdentity(41);
         hard_link_listing.entries = { hard_link_a, hard_link_b };
         TabState hard_link_tab;
         const auto hard_link_navigation = hard_link_tab.Navigate(path_a);
@@ -978,6 +979,51 @@ namespace
                 !hard_link_tab.IsRowSelected(blink::app::MakeRowIdentity(hard_link_a)) &&
                 !hard_link_tab.IsRowSelected(blink::app::MakeRowIdentity(hard_link_b)),
             "tab_rejects_ghost_hard_link_row_without_identity_alias");
+
+        const auto renamed_entry = TestEntry(L"hard-link-z.txt", hard_link_identity, 41);
+        const auto renamed_row = blink::app::MakeRowIdentity(renamed_entry);
+        const auto sibling_row = blink::app::MakeRowIdentity(hard_link_a);
+        auto renamed_listing = hard_link_listing;
+        renamed_listing.entries[1] = renamed_entry;
+        for (const bool watcher_first : { false, true })
+        {
+            TabState rename_tab;
+            const auto rename_navigation = rename_tab.Navigate(path_a);
+            bool ready = rename_navigation && CommitSucceeded(rename_tab.CommitBrowse(*rename_navigation, hard_link_listing)) &&
+                rename_tab.SelectEntry(hard_link_b);
+            if (watcher_first && ready)
+            {
+                const auto watcher = rename_tab.Refresh();
+                ready = watcher && CommitSucceeded(rename_tab.CommitBrowse(*watcher, renamed_listing)) &&
+                    rename_tab.Snapshot().selection.empty();
+            }
+            const auto rename_refresh = rename_tab.Refresh();
+            const bool committed = rename_refresh && CommitSucceeded(rename_tab.CommitBrowse(*rename_refresh, renamed_listing, &renamed_row));
+            const auto page = rename_tab.Snapshot();
+            passed &= Check(ready && committed && page.selection == std::vector{ renamed_row } &&
+                    page.focused_item == renamed_row && !rename_tab.IsRowSelected(sibling_row),
+                watcher_first ? "rename_refresh_restores_after_watcher_drops_old_row" : "rename_refresh_selects_new_link_not_same_file_sibling");
+        }
+
+        const auto retains_sibling = [&](blink::core::DirectoryListing listing) {
+            TabState rename_tab;
+            const auto rename_navigation = rename_tab.Navigate(path_a);
+            if (!rename_navigation || !CommitSucceeded(rename_tab.CommitBrowse(*rename_navigation, hard_link_listing)) ||
+                !rename_tab.SelectEntry(hard_link_a)) { return false; }
+            const auto rename_refresh = rename_tab.Refresh();
+            if (!rename_refresh || !CommitSucceeded(rename_tab.CommitBrowse(*rename_refresh, std::move(listing), &renamed_row))) { return false; }
+            const auto page = rename_tab.Snapshot();
+            return page.selection == std::vector{ sibling_row } && page.focused_item == sibling_row;
+        };
+        auto replacement = renamed_listing;
+        replacement.entries[1].identity = TestIdentity(42);
+        passed &= Check(retains_sibling(std::move(replacement)), "rename_refresh_does_not_select_a_replacement_with_the_same_name");
+        auto hidden = renamed_listing;
+        hidden.entries[1].attributes |= FILE_ATTRIBUTE_HIDDEN;
+        passed &= Check(retains_sibling(std::move(hidden)), "rename_refresh_leaves_selection_when_destination_is_filtered");
+        auto different_parent = renamed_listing;
+        different_parent.directory_identity = TestIdentity(43);
+        passed &= Check(retains_sibling(std::move(different_parent)), "rename_refresh_does_not_select_in_a_replacement_directory");
 
         auto invalid_listing = Listing(path_a);
         invalid_listing.entries = {

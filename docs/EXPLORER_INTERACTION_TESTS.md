@@ -371,12 +371,18 @@ C-NATIVE新增共26项检查；其中23项命令栏测试见[ExplorerCommandBarT
 | RENAME-14 | 自有窗口退出0，不force；非零退出独立FAIL | PASS（最终Release E-RENAME） |
 | RENAME-15 | 精确归属、身份及UTF-8字节核对后清理 | PASS（最终Release E-RENAME） |
 
-搜索F2沿原验证/定位父目录管线，不要求Esc返回已离开的SearchResults。共享Dismissed完成通知现重算命令能力，且在没有其它操作对话框时恢复当前可见文件/搜索列表焦点；实际FocusedElement已由E-RENAME #02/#10/#12限定证明，不以回调代码代验或推断完整焦点环。宿主关闭前先Hide名称对话框再移交列表焦点，编辑中关闭已由#13/#14实测exit0，不能将其外推为所有原生编辑器或后台关闭场景均已验证。成功rename后的新RowIdentity定位/选中未实现，回到列表不等同保留新名行选择；完整G05/P0、F3/F6循环、IME及平台/主题/DPI矩阵继续待续。
+搜索F2沿原验证/定位父目录管线，不要求Esc返回已离开的SearchResults。共享Dismissed完成通知现重算命令能力，且在没有其它操作对话框时恢复当前可见文件/搜索列表焦点；实际FocusedElement已由E-RENAME #02/#10/#12限定证明，不以回调代码代验或推断完整焦点环。宿主关闭前先Hide名称对话框再移交列表焦点，编辑中关闭已由#13/#14实测exit0，不能将其外推为所有原生编辑器或后台关闭场景均已验证。G05a只验证列表回焦；成功后精确新行的选择/可见性另见G05b；完整G05/P0、F3/F6循环、IME及平台/主题/DPI矩阵继续待续。
 
-2026-11-11实机问题修正补记：名称对话框取消后，顶部New/Sort曾保留模态期间的禁用状态；共享`Dismissed`通知在`ShowAsync`完成、`closed=true`之后统一调用`SyncCommandBarState`，从真实当前能力重算，不按入口硬设启用。另发现从工具栏Rename取消后焦点落到侧栏；同一完成回调在没有其它操作对话框时，把焦点交给当前实际可见的`SearchResults`或`FolderEntries`，不再只依赖ContentDialog返回旧焦点。搜索F2已导航父目录，故其取消后当前列表仍是`FolderEntries`。上述修正已在完整15项Release报告的实际取消/能力/焦点场景中通过；该结果不代表完整焦点环或其它环境均已验收。成功重命名后新`RowIdentity`的定位/选择映射仍未实现，列表回焦不等同新名项继续选中。
+2026-11-11实机问题修正补记：名称对话框取消后，顶部New/Sort曾保留模态期间的禁用状态；共享`Dismissed`通知在`ShowAsync`完成、`closed=true`之后统一调用`SyncCommandBarState`，从真实当前能力重算，不按入口硬设启用。另发现从工具栏Rename取消后焦点落到侧栏；同一完成回调在没有其它操作对话框时，把焦点交给当前实际可见的`SearchResults`或`FolderEntries`，不再只依赖ContentDialog返回旧焦点。搜索F2已导航父目录，故其取消后当前列表仍是`FolderEntries`。上述修正已在完整15项Release报告的实际取消/能力/焦点场景中通过；该结果不代表完整焦点环或其它环境均已验收。此G05a回焦结果不包含新名项继续选中；该行为由G05b另行验证。
 
 
 发布核验已完成：原agent默认窗口PID10988正常exit0，候选发布的四项关键产物SHA与测试版本一致；新默认窗口PID7108可见并位于前台。主模型最终复核249项原生源码/11项保留产物、两配置1578/0/4、378资源及同一Release15项GUI均通过。此发布记录与测试PID29940分别记录，不把新开窗口当作再跑完整GUI或全部环境验收。
+
+### G05b 改名后选中与滚动
+
+最终Release同一候选的[窗口报告](../.build/explorer-rename-reveal/integration/ui-rename-selection-report.json)17 PASS / 0 FAIL，测试进程exit0、自有夹具已清。七次提交均读取到真实新行选中与可见：普通文件、中文和emoji、含点目录、Ctrl+A改全名、真实搜索F2定位父目录、272项分批目录中同身份的硬链接改名、仅改大小写。大目录场景从列表首屏改到排序末尾，脚本提交后不选中或滚动；另核对未改的硬链接和子项身份/字节。
+
+双配置各1583 PASS / 0 FAIL / 4既有权限SKIP；新增五项覆盖精确链接、监听先刷新、同名替换、隐藏与目录身份变化。动态切标签或另选发生在待完成改名中的组合、真实IME/UNC、完整主题/DPI/多屏/读屏及F3/F6区域焦点不计入通过。G05a历史15项仍保留各自镜像和报告；当前脚本`run-blink-rename-selection-smoke.ps1`验证G05b，默认指向当前Release。
 
 ## 8. 可复现执行约定与工作台归属
 

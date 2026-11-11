@@ -56,7 +56,8 @@ namespace blink::app
 
     CommitBrowseResult TabState::CommitBrowse(
         const NavigationRequest& request,
-        blink::core::DirectoryListing listing)
+        blink::core::DirectoryListing listing,
+        const RowIdentity* select_after_refresh)
     {
         try
         {
@@ -101,7 +102,17 @@ namespace blink::app
 
             std::vector<RowIdentity> next_selection;
             std::unordered_set<RowIdentity, RowIdentityHash> next_selection_lookup;
-            if (preserve_selection)
+            std::optional<RowIdentity> next_focused;
+            const auto requested_row = select_after_refresh && request.action == NavigationAction::Refresh &&
+                listing.directory_identity.valid && listing.directory_identity == committed_listing_.directory_identity
+                ? next_rows_lookup.find(*select_after_refresh) : next_rows_lookup.end();
+            if (requested_row != next_rows_lookup.end() && visibility_policy_.Includes(requested_row->second))
+            {
+                next_selection.push_back(requested_row->first);
+                next_selection_lookup.insert(requested_row->first);
+                next_focused = requested_row->first;
+            }
+            else if (preserve_selection)
             {
                 next_selection.reserve(selection_.size());
                 for (const auto& row : selection_)
@@ -114,16 +125,11 @@ namespace blink::app
                         next_selection_lookup.insert(row);
                     }
                 }
-            }
-
-            std::optional<RowIdentity> next_focused;
-            const auto focused = focused_item_ ? next_rows_lookup.find(*focused_item_) :
-                next_rows_lookup.end();
-            if (focused_item_.has_value() && focused_item_->file_identity.valid &&
-                focused != next_rows_lookup.end() && visibility_policy_.Includes(focused->second) &&
-                preserve_selection)
-            {
-                next_focused = focused_item_;
+                const auto focused = focused_item_ ? next_rows_lookup.find(*focused_item_) : next_rows_lookup.end();
+                if (focused != next_rows_lookup.end() && visibility_policy_.Includes(focused->second))
+                {
+                    next_focused = focused_item_;
+                }
             }
 
             listing.path = request.target.FolderPath();
@@ -141,7 +147,7 @@ namespace blink::app
             committed_rows_lookup_.swap(next_rows_lookup);
             selection_.swap(next_selection);
             selection_lookup_.swap(next_selection_lookup);
-            focused_item_ = next_focused;
+            focused_item_.swap(next_focused);
             visible_item_count_ = next_visible_count;
             folder_state_ = visible_item_count_ == 0 ? FolderState::Empty : FolderState::Ready;
             latest_browse_error_ = ERROR_SUCCESS;
