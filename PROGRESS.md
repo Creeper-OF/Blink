@@ -1,5 +1,14 @@
 # Blink Progress
 
+## 代码审计与开发流程调整 — 2026-11-12
+
+- 用户要求先整体审计，当前优先级为功能实现、响应效率、日常易用性；体积后续优化。按批集中实现→代码稳定统一构建→每功能独立脚本→只重测受影响项；全应用流程脚本在批次稳定后再做。约定已写入AGENTS、维护规则及验证指南。
+- 三模块只读审计确认仍沿本地模型/唯一操作队列/MFT-USN-BLK5及只读IPC主线；没有转去RaiDrive、远端抢跑或新防护平台。发现Busy盘串行等待拖住健康盘首屏、可见性在limit后过滤、重复scope metadata、非ASCII折叠待修，以及main约9310行的模块化债务；后续先搜索响应，再补其它菜单。未把静态分析当实机性能测量，具体源码与边界见审计报告。
+- G06c侧栏NewFolder/Rename/Delete和独立快捷键已有实现，双配置单并发各1648 PASS/0 FAIL/4既有权限SKIP，249输入/388中英fallback资源。Release构建15分58秒/原生33秒，Debug构建15分13秒/原生54秒；编译为主要耗时，不是原生回归数量。
+- 窗口未完整通过：一次5/1是脚本错误假设目录名标题（真实改名/ID/bytes已完成），一次0/1是Chrome抢到前台；两SUT正常exit0、夹具已清，证据分档且不拼成功数。当前脚本提供NewFolder7/Rename8/Delete5独立入口及原All14兼容流；本轮仅AST验证拆分，未运行新入口。默认G06b和正式索引服务6848保持不变，不冒充G06c已发布。
+- 修正旧验证入口和台账：两旧脚本在任何副作用前退出，不再误跑“复制未开放”及不能恢复图片的旧流；三份维护脚本只记录外部PID/角色；C06按实际已接菜单/待验更新，历史失效证据链接改交接摘要与原路径溯源，不恢复旧构建。
+- 工作台保留当前有效配置缓存、依赖及唯一待验候选；本次清理可核算29405字节、6份过期生成模板、20文件/78目录和2测试链接，未发现需淘汰的额外完整旧构建；不为清理再删有效缓存重编。正式索引、用户资料、配置和源码不清。当前原始事实归.build/maintenance/code-audit，详见[代码审计](docs/DEVELOPMENT_AUDIT.md)、[工作台规则](docs/WORKSPACE_MAINTENANCE.md)、[功能验证](docs/VALIDATION_GUIDE.md)。
+
 ## G06b 导航目录剪贴板与树刷新交付 — 2026-11-11
 
 - 导航目录/quick/ThisPC普通目录目标有Cut/Copy/Paste，根仅有适用Paste、虚拟ThisPC无传输动作，Search/pending/busy沿原owner/队列限制。worker只捕获点中目录而非列表选中项，CF_HDROP/effect与实际source IDs进入原缓存；Paste解析独立目标identity，COPY/MOVE沿原唯一队列并保留move_submitted。

@@ -1,5 +1,7 @@
 # Explorer UI 事实基线与交互规范
 
+2026-11-12审计说明：本文包含G01/G03a/G04a等历史结构快照；当前地址补全、导航菜单和G06c开发状态以PROGRESS、差距台账及[最新审计](DEVELOPMENT_AUDIT.md)为准，不能将历史“未做”当作当前待办。
+
 审计日期：2026-11-08；G02实现更新：2026-11-09；G03a实现更新：2026-11-10（最终同一Release限定GUI53项已验）。阶段A源码基线：`7135a14`；只读规范提交：`e497600`。最终WM_CLOSE修正后Debug/Release构建与原生回归各1565 PASS/0 FAIL/4既有权限SKIP，246输入/378资源；同一Release地址20/命令18/查看15，合计53 PASS/0 FAIL/0 SKIP。独立关闭A/B/C/D四项均exit0，C真后台、D无WM_CLOSE fallback。旧Debug52项仅preflight，不混入最终Release；完整G03/P0仍`PARTIAL`，默认版发布状态按交接记录，不由验证结果推断。
 
 本规范依据用户提供的《Blink × Windows 11 文件资源管理器：完整 UI、菜单与交互兼容任务书》完整 316 行，以及实际窗口、导航、列表、搜索、菜单、状态和对话框源码编制。任务书要求的目标环境是 Windows 11 24H2 x64；这不等于本文件已在该版本完成整套界面验收。
@@ -15,8 +17,8 @@ G04a区域焦点更新：F3共享搜索入口，F6/Shift+F6显式正反切换六
 
 | 证据 | 可支持的结论 | 不能外推的结论 |
 | --- | --- | --- |
-| G03a最终两配置`tests-debug.log/tests-release.log`及[地址20项](../.build/explorer-address-bar/integration/ui-address-bar-report.json)、[命令18项](../.build/explorer-address-bar/integration/ui-command-bar-compat-report.json)、[查看15项](../.build/explorer-address-bar/integration/ui-view-compat-report.json)；246输入/378资源 | 两配置各1565/0/4，新增23项地址模型；同一Release `CF1D8A2B...` 三套GUI合计53/0/0，含编辑中直接关闭及命令/查看兼容重跑 | 旧Debug52项仅preflight，不代替当前53项；下级目录菜单、自动完成、完整G03/P0及完整人工/环境矩阵不外推 |
-| [最终关闭专项](../.build/explorer-address-bar/integration/window-close-probe/fixed/probe-report.json) | 同一Release A/B/C/D四项均PASS、exit0；C通过自有WinForms伴随窗口确认Ctrl+L前后都为真后台，D实际Ctrl+W关闭唯一Tab且无WM_CLOSE fallback | 独立四项不加入53的计数；只验证这些实际焦点/关闭路径，不泛化真实IME、全部失焦或环境矩阵 |
+| G03a最终两配置`tests-debug.log/tests-release.log`及[地址20项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-address-bar-report.json；旧目录已清理 -->、[命令18项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-command-bar-compat-report.json；旧目录已清理 -->、[查看15项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-view-compat-report.json；旧目录已清理 -->；246输入/378资源 | 两配置各1565/0/4，新增23项地址模型；同一Release `CF1D8A2B...` 三套GUI合计53/0/0，含编辑中直接关闭及命令/查看兼容重跑 | 旧Debug52项仅preflight，不代替当前53项；下级目录菜单、自动完成、完整G03/P0及完整人工/环境矩阵不外推 |
+| [最终关闭专项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/window-close-probe/fixed/probe-report.json；旧目录已清理 --> | 同一Release A/B/C/D四项均PASS、exit0；C通过自有WinForms伴随窗口确认Ctrl+L前后都为真后台，D实际Ctrl+W关闭唯一Tab且无WM_CLOSE fallback | 独立四项不加入53的计数；只验证这些实际焦点/关闭路径，不泛化真实IME、全部失焦或环境矩阵 |
 | [G02命令栏交接](EXPLORER_COMMAND_BAR_HANDOFF.md)；`.build/explorer-command-bar/integration/tests-debug.log`、`tests-release.log` | 当前240冻结输入哈希匹配/375资源；Hidden/Search修正后Debug、Release完整构建均成功，普通回归各1542 PASS/0 FAIL/4符号链接权限1314 SKIP；26项新增检查（23项命令栏策略/选择模型、3项搜索生命周期） | 原生策略测试不是按钮操作、菜单键盘、动态溢出或完整GUI验收；修正后Release同一完整脚本18 PASS/0 FAIL/0 SKIP，#08 Hidden→#14真实索引/PasteParent已串联通过；不代表未点击排序叶、整P0或完整环境矩阵 |
 | [首个P0交接](EXPLORER_VIEW_MENU_HANDOFF.md)；`.build/explorer-ui-p0-view-menu/integration/native-validation.json`及`ui-view-menu-report.json` | 首个P0最终235输入/369资源；Debug、Release各1516 PASS/0 FAIL/4权限SKIP；受控GUI 15 PASS/0 FAIL/0 SKIP | 限View/Show及其集成；该G01旧候选当时已发布并打开，证据见该历史轮次published-runtime/default-runtime-opened记录，不作为本轮发布或当前窗口事实 |
 | 阶段A历史：`PROGRESS.md`的目录移动合并段；[Slice21交接](PHASE1D_SLICE21_HANDOFF.md)；`.build/phase1d-slice21/integration/native-validation.json` | 235 冻结输入、368 中英/fallback 资源；Debug/Release 各 1516 PASS、0 FAIL、4 权限 SKIP；构建并发 1 | 不是整个 Explorer UI、全部设备或全部主题认证 |
@@ -137,10 +139,10 @@ flowchart TD
 | --- | --- | --- |
 | 标题栏 | WinUI TitleBar、Tab同排、系统caption和Mica已接入；空白拖动有历史证据；`IMPLEMENTED_NEEDS_MANUAL`用于完整窗口矩阵 | Snap、多显示器移入移出、双击/resize、激活态、高对比度、全部DPI未完成本次统一验证 |
 | 标签 | 新建、切换、关闭、当前标题与后台取消有模型/回归；`PARTIAL` | 未见模型级重排API或相应同步、标签右键命令、拖出新窗口；Tab默认行为不能直接当完整功能交付。未实现持久滚动位置/完整会话恢复 |
-| 地址/导航 | G03a编辑/面包屑、祖先/overflow、键盘/历史及编辑中关闭等D-UI子项`IMPLEMENTED_VERIFIED`；同镜像地址20/命令18/查看15通过，关闭A/B/C/D均exit0；完整G03仍`PARTIAL` | 下级目录菜单、自动完成未做。空白点击/完整错误分支、UNC、真实IME及全部环境仍须专项，不将路径模型测试当网络兼容 |
+| 地址/导航 | G03a编辑/面包屑、祖先/overflow、键盘/历史及编辑中关闭等D-UI子项`IMPLEMENTED_VERIFIED`；同镜像地址20/命令18/查看15通过，关闭A/B/C/D均exit0；完整G03仍`PARTIAL` | 逐级下级菜单和目录自动完成已在G03b/G03c接入；实际鼠标/完整错误分支、UNC、真实IME及全部环境仍须专项，不将路径模型测试当网络兼容 |
 | 搜索 | 当前整盘/全盘默认范围、指定多盘/目录/递归、四名称模式、明确有效范围；已有19项历史GUI；`IMPLEMENTED_VERIFIED`限这些流程 | 顶部placeholder是固定资源，不随当前目录格式化；无预览、内容全文或拼音承诺；同卷Busy/首屏量化仍待做 |
 | 顶部命令组织 | G02标准CommandBar已接入：8个主按钮、New/Sort/View菜单、原生More与7个次级动作、动态overflow；24条实际覆盖入口已限定验证，另4个未点击排序叶`IMPLEMENTED_NEEDS_MANUAL`；双配置原生及18项GUI通过 | Share、快捷方式/ShellNew、分组及未来面板未接入；不放空按钮。640宽原生溢出、上下文及More键盘已有本轮结果；Sort Name/Modified/Type/Ascending和其余环境分支仍待验证 |
-| 左侧位置与树 | 已有用户目录/桌面/下载/文档/ThisPC/可访问固定与可移动卷；异步Lazy Load、单一纵向滚动；`PARTIAL` | “主文件夹”是实际用户目录，不是Explorer Home聚合页；无固定/取消固定、图片/音乐/视频、网络发现或导航节点专属右键。光驱/网络映射盘未由当前ThisPC枚举纳入 |
+| 左侧位置与树 | 已有用户目录/桌面/下载/文档/ThisPC/可访问固定与可移动卷；异步Lazy Load、单一纵向滚动；`PARTIAL` | “主文件夹”是实际用户目录，不是Explorer Home聚合页；固定/取消固定、图片/音乐/视频和网络发现未完；导航目标菜单已在G06a/b接入，G06c目录新建/改名/删除源码待分功能验证。光驱/网络映射盘未由当前ThisPC枚举纳入 |
 | 文件区 | Details/List/Grid；Extended选择，双击/Enter、排序、隐藏策略、异步增量投影；`IMPLEMENTED_VERIFIED`限已记录功能 | 当前图标只分文件/目录glyph；无系统类型图标、缩略图、快捷方式箭头、覆盖状态；List为纵向列表，不冒称Explorer全部视图 |
 | 详细信息列 | 名称/类型/大小/修改四列Button排序；`PARTIAL` | 没有列宽拖拽、重排、显隐、动态属性列或列头专属菜单；分组未实现 |
 | 选择/重命名 | 原队列和ContentDialog重命名保留；G05a文件默认选主名、目录/新建/复制/移动名称保持全选；G05b完成后按精确新名称选中并滚动到该项，整组`PARTIAL` | 不是inline rename。完整焦点/IME、框选和复选框仍待续；Ctrl+A仍可显式编辑扩展名，不新增扩展名确认 |
@@ -262,8 +264,8 @@ G01当时的代码入口为`main.cpp:2882 BuildFolderViewCommands`、`:3270 Popu
 | 真实历史 | F4或尾部按钮打开标准MenuFlyout；只读取当前Tab的已commit current、最近back/forward，去重并限制数量。pending/失败/未提交文本不成为条目；空历史只进入编辑，不伪造提示命令 |
 | 草稿与异步刷新 | 地址草稿为当前owner的临时展示状态；同Tab自动刷新保留编辑文本及焦点，切Tab取消未提交草稿，返回原Tab显示其committed路径；不承诺跨Tab草稿或跨重启持久化 |
 | 回调与输入 | 菜单/祖先目标按Location值捕获，owner/revision失效旧peer；显式关闭和切Tab关闭旧菜单，普通history Closed不提前丢掉当次Click。TextCompositionStarted/Ended守住IME期间Enter/Esc，但真实IME仍待人工验证 |
-| 已取得证据 | `AddressBarTests.cpp`的23项模型在最终两配置各1565/0/4中通过；[Release地址GUI报告](../.build/explorer-address-bar/integration/ui-address-bar-report.json)为20/0/0，2026-11-10 12:33:45–12:40:38 UTC。含重复Ctrl+L保留草稿、真实SearchResults页Esc回焦；后者只验证可见搜索UI/焦点，不证明索引性能或要求命中 |
-| 同镜像兼容 | 最终[命令18项](../.build/explorer-address-bar/integration/ui-command-bar-compat-report.json)与[查看15项](../.build/explorer-address-bar/integration/ui-view-compat-report.json)均PASS，三套均记录同一CF1D... SHA，GUI总53项；不把旧Debug52项混算，也不把独立关闭probe加入53 |
+| 已取得证据 | `AddressBarTests.cpp`的23项模型在最终两配置各1565/0/4中通过；[Release地址GUI报告（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-address-bar-report.json；旧目录已清理 -->为20/0/0，2026-11-10 12:33:45–12:40:38 UTC。含重复Ctrl+L保留草稿、真实SearchResults页Esc回焦；后者只验证可见搜索UI/焦点，不证明索引性能或要求命中 |
+| 同镜像兼容 | 最终[命令18项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-command-bar-compat-report.json；旧目录已清理 -->与[查看15项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-view-compat-report.json；旧目录已清理 -->均PASS，三套均记录同一CF1D... SHA，GUI总53项；不把旧Debug52项混算，也不把独立关闭probe加入53 |
 | 原生overflow | 本机620宽“更多”入口实际为`Microsoft.UI.Xaml.Controls.BreadcrumbBarItem`、Button role、ID空；打开真实popup并导航折叠祖先。最初harness用已溢出隐藏的CommandSort判断Ready造成假阴性；改验精确路径、两条行、字节、新breadcrumb/菜单关闭，再恢复宽度检查Ready后旧Debug19项preflight通过；最终Release20项也覆盖真实popup导航，不是产品导航失败修复 |
 | 编辑中关闭 | #18保留未提交draft和实际AddressEditor焦点，不发Esc/Enter，直接正常关闭；#19确认exit0。顶层WM_CLOSE转交WinUI前先焦点交可见列表，再用缓存committed取消编辑/隐藏editor，不重建crumb；程序Close前也准备，Closed只退役shutdown |
 | 关闭修复边界 | 初始/仅退役补丁仍有editor直接关闭AV；两份真实dump经StackWalk64得到64帧匹配，顶栈WinUIEdit/Xaml、未见自有关闭直接栈，不宣称已还原WinUI内部根因。最终A/B/C/D均PASS/exit0；C先准备自有SUT前台，再只激活自有PS WinForms伴随窗口，以前台PID/HWND和全局UIA focus/runtimeId确认Ctrl+L前后都真后台（COVERED）；D实际Ctrl+W关闭唯一Tab，无WM_CLOSE fallback。伴随窗口正常关闭/dispose |
@@ -291,7 +293,7 @@ G01当时的代码入口为`main.cpp:2882 BuildFolderViewCommands`、`:3270 Popu
 
 关闭准备中，在既有WM_CLOSE/程序关闭路径移交列表焦点之前先关闭名称对话框，使closed门控抑制晚到提交；活跃名称编辑器关窗已在本轮#13/#14真实GUI中正常exit0，不将代码审查单独当运行证据。成功rename后的刷新仍按包含name的RowIdentity保留选择，新名行定位/选中未在本片实现，不能以回到列表焦点冒称已保留新项选择。
 
-本片原生为两配置各1578/0/4、249输入/378资源，新增13项纯模型。实际GUI来源为[`ui-rename-selection-report.json`](../.build/explorer-rename-selection/integration/ui-rename-selection-report.json)：同一最终Release 15 PASS / 0 FAIL / 0 SKIP（13功能+正常退出/归属清理），SHA256 `ef4986100848f3656dcaa0f2d8a645a96e9a40b09f44c5e86c51f16abb67434c`，自有PID29940正常exit0、无force，425字节夹具核验后已清理。实测zh-CN/x64/普通用户、窗口DPI96，ActualTheme未采集、IME未测试；默认新版发布另有下述独立核验，不由GUI通过单独推断。F3/F6区域循环、成功后新行选择、真正IME及全部主题/DPI/平台矩阵继续后续，完整G05/P0不标完。
+本片原生为两配置各1578/0/4、249输入/378资源，新增13项纯模型。实际GUI来源为[`ui-rename-selection-report.json`（历史摘要）](EXPLORER_RENAME_SELECTION_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-rename-selection/integration/ui-rename-selection-report.json；旧目录已清理 -->：同一最终Release 15 PASS / 0 FAIL / 0 SKIP（13功能+正常退出/归属清理），SHA256 `ef4986100848f3656dcaa0f2d8a645a96e9a40b09f44c5e86c51f16abb67434c`，自有PID29940正常exit0、无force，425字节夹具核验后已清理。实测zh-CN/x64/普通用户、窗口DPI96，ActualTheme未采集、IME未测试；默认新版发布另有下述独立核验，不由GUI通过单独推断。F3/F6区域循环、成功后新行选择、真正IME及全部主题/DPI/平台矩阵继续后续，完整G05/P0不标完。
 
 
 发布核验已完成：原agent默认窗口PID10988正常exit0，候选发布的四项关键产物SHA与测试版本一致；新默认窗口PID7108可见并位于前台。主模型最终复核249项原生源码/11项保留产物、两配置1578/0/4、378资源及同一Release15项GUI均通过。此发布记录与测试PID29940分别记录，不把新开窗口当作再跑完整GUI或全部环境验收。

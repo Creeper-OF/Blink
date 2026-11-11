@@ -823,20 +823,27 @@ struct App : AppT<App>
     void BuildUi()
     {
         const auto name_dialog_weak = get_weak();
-        folder_name_dialog_.SetDismissedCallback([name_dialog_weak] {
+        const auto dialog_dismissed = [name_dialog_weak] {
             if (auto app = name_dialog_weak.get(); app && !app->window_style_closed_)
             {
                 app->SyncCommandBarState();
-                // File naming belongs to the visible file surface even when
-                // the command came from the toolbar rather than the list.
+                const auto return_focus = app->dialog_return_focus_.get();
+                const auto return_area = app->dialog_return_area_.get();
+                app->dialog_return_focus_ = {}; app->dialog_return_area_ = {};
+                // Sidebar dialogs return to their captured target; file-list
+                // and toolbar dialogs return to the visible file surface.
                 if (!app->IsOperationDialogOpen())
                 {
+                    if (return_focus && return_focus.Focus(FocusState::Keyboard)) { return; }
+                    if (return_area && return_area.Focus(FocusState::Keyboard)) { return; }
                     if (app->search_surface_ && app->search_surface_.Visibility() == Visibility::Visible)
                     { app->search_presentation_.FocusResults(); }
                     else if (app->entries_) { (void)app->entries_.Focus(FocusState::Keyboard); }
                 }
             }
-        });
+        };
+        folder_name_dialog_.SetDismissedCallback(dialog_dismissed);
+        delete_confirmation_.SetDismissedCallback(dialog_dismissed);
         startup_.Stage("BuildUi.root.begin");
         root_ = Grid();
         // Window-wide shortcuts must also work when focus is in the titlebar tabs.
@@ -1233,6 +1240,7 @@ struct App : AppT<App>
 
     void CloseOperationDialogs() noexcept
     {
+        CancelTargetOperationWork();
         DismissCommandBarMenus();
         address_bar_.HideMenus();
         if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
@@ -1292,6 +1300,8 @@ struct App : AppT<App>
             if (auto app = weak.get(); app && !app->window_style_closed_)
             {
                 if (app->file_drag_drop_.Preparing()) { app->file_drag_drop_.CancelPreparation(); }
+                else if (app->target_operation_pending_ && app->target_operation_cancellation_)
+                { app->target_operation_cancellation_->store(true); }
                 else if (app->clipboard_work_pending_ && app->clipboard_cancellation_)
                 { app->clipboard_cancellation_->store(true); }
                 else { app->file_operations_.Cancel(); }
@@ -1331,7 +1341,7 @@ struct App : AppT<App>
         });
         operation_skip_.Click([weak](auto&&, auto&&) {
             if (auto app = weak.get(); app && !app->window_style_closed_ && app->ActiveTab())
-            { app->ResumeDelete(blink::app::CaptureFileOperationOrigin(*app->ActiveTab()), app->file_operations_.Snapshot().operation_id,
+            { app->ResumeDelete(app->CurrentOperationOrigin(), app->file_operations_.Snapshot().operation_id,
                 blink::app::DeleteRetryAction::Skip); }
         });
         operation_panel_.Children().Append(operation_text_);
@@ -1363,12 +1373,22 @@ struct App : AppT<App>
             operation_retry_.Visibility(Visibility::Collapsed);
             return;
         }
+        if (target_operation_pending_)
+        {
+            const bool cancelling = target_operation_cancellation_ && target_operation_cancellation_->load();
+            const auto text = localization_.GetString(cancelling ? L"Operation.TargetCancelling" : L"Operation.TargetPreparing");
+            operation_panel_.Visibility(Visibility::Visible);
+            operation_text_.Text(hstring(text)); ToolTipService::SetToolTip(operation_text_, box_value(hstring(text)));
+            operation_cancel_.Visibility(Visibility::Visible); operation_cancel_.IsEnabled(!cancelling);
+            operation_retry_.Visibility(Visibility::Collapsed); return;
+        }
         using Stage = blink::app::FileOperationStage;
         const auto snapshot = file_operations_.Snapshot();
         if (directory_tree_changes_ && (directory_tree_changes_->operation_id != snapshot.operation_id ||
             (blink::app::FileOperationIsTerminal(snapshot.stage) &&
              (!snapshot.copy_batch || !snapshot.copy_batch->resumable) &&
-             (!snapshot.move_batch || !snapshot.move_batch->resumable)))) { FlushDirectoryTreeChanges(); }
+             (!snapshot.move_batch || !snapshot.move_batch->resumable) &&
+             (!snapshot.delete_batch || !snapshot.delete_batch->resumable)))) { FlushDirectoryTreeChanges(); }
         operation_panel_.Visibility(snapshot.operation_id ? Visibility::Visible : Visibility::Collapsed);
         if (!snapshot.operation_id) { return; }
         if (snapshot.kind == blink::app::FileOperationKind::Delete) { RenderDeleteStatus(snapshot); return; }
@@ -1565,7 +1585,7 @@ struct App : AppT<App>
         operation_cancel_.IsEnabled(value.stage != Stage::Cancelling);
         const auto* tab = ActiveTab();
         const bool retryable = value.stage == Stage::Failed && value.delete_batch && value.delete_batch->resumable && tab &&
-            !tab->search_visible && tab->state->CommittedDirectoryIdentity() == value.request.parent_identity;
+            !tab->search_visible && OperationTargetVisible(value.request.parent_identity);
         operation_retry_.Content(winrt::box_value(hstring(localization_.GetString(L"Delete.Retry"))));
         operation_retry_.Visibility(retryable ? Visibility::Visible : Visibility::Collapsed);
         operation_skip_.Visibility(retryable ? Visibility::Visible : Visibility::Collapsed);
@@ -1619,12 +1639,19 @@ struct App : AppT<App>
     {
         if (!IsFileOperationOriginCurrent(origin))
         { status_.Text(hstring(localization_.GetString(L"Status.CommandStale"))); return; }
-        if (file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ ||
+        if (file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || target_operation_pending_ ||
             copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen()) { return; }
         for (auto& request : requests)
         { if (request.parent_identity != origin.identity) { return; } request.parent = origin.location.FolderPath(); }
+        DirectoryTreeRefreshRequest changes;
+        for (const auto& request : requests)
+        {
+            if (request.source.is_directory && !request.skip)
+            { AddDirectoryTreeChange(changes, request.parent, request.source.name, request.parent, request.source.name, true); }
+        }
         auto prerequisites = PrepareOperationWatches(DeleteWatchSources(requests));
         const auto id = file_operations_.DeleteEntries(std::move(requests), DeletePublication(), std::move(prerequisites));
+        RememberOperationOrigin(origin, id); RememberDirectoryTreeChanges(std::move(changes), id);
         operation_watch_id_ = id; if (!id) { RestoreOperationWatches(0); }
         RenderFileOperationStatus();
     }
@@ -1655,8 +1682,17 @@ struct App : AppT<App>
         std::vector<blink::app::DeleteRequest> requests;
         if (FAILED(blink::app::CaptureDeleteRequests(*tab->state, mode, requests)))
         { status_.Text(hstring(localization_.GetString(L"Delete.CaptureFailed"))); return; }
+        ConfirmDeletes(origin, std::move(requests), mode);
+    }
+
+    void ConfirmDeletes(const FileOperationOrigin& origin, std::vector<blink::app::DeleteRequest> requests,
+        const blink::app::DeleteMode mode)
+    {
+        if (!IsFileOperationOriginCurrent(origin) || requests.empty() || FileDropBusy()) { return; }
         if (mode == blink::app::DeleteMode::Recycle) { StartDeletes(origin, std::move(requests)); return; }
         const auto weak = get_weak();
+        dialog_return_focus_ = origin.owner_location ? operation_return_focus_ : winrt::weak_ref<Control>{};
+        dialog_return_area_ = origin.owner_location ? operation_return_area_ : winrt::weak_ref<Control>{};
         try
         {
             std::vector<std::wstring> names; names.reserve(requests.size());
@@ -1689,6 +1725,9 @@ struct App : AppT<App>
         }
         auto prerequisites = PrepareOperationWatches(DeleteWatchSources(remaining));
         const auto next = file_operations_.ResumeDeleteBatch(id, action, DeletePublication(), std::move(prerequisites), origin.location.FolderPath());
+        RememberOperationOrigin(origin, next);
+        if (next && directory_tree_changes_ && directory_tree_changes_->operation_id == id)
+        { directory_tree_changes_->operation_id = next; }
         operation_watch_id_ = next; if (!next) { RestoreOperationWatches(0); }
         RenderFileOperationStatus();
     }
@@ -1697,9 +1736,11 @@ struct App : AppT<App>
         std::optional<blink::core::FileEntry> rename_source = {})
     {
         if (!IsFileOperationOriginCurrent(origin)) { status_.Text(hstring(localization_.GetString(L"Status.CommandStale"))); return; }
-        if (file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen())
+        if (file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || target_operation_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen())
         { status_.Text(hstring(localization_.Format(L"Status.CommandBusy", localization_.GetString(L"Command.NewFolder")))); return; }
         const auto weak = get_weak();
+        dialog_return_focus_ = origin.owner_location ? operation_return_focus_ : winrt::weak_ref<Control>{};
+        dialog_return_area_ = origin.owner_location ? operation_return_area_ : winrt::weak_ref<Control>{};
         try
         {
             (void)folder_name_dialog_.Show(root_.XamlRoot(), localization_, rename_source ?
@@ -1721,7 +1762,7 @@ struct App : AppT<App>
     {
         if (!IsFileOperationOriginCurrent(origin)) { status_.Text(hstring(localization_.GetString(L"Status.CommandStale"))); return; }
         if (file_operations_.IsBusy() || file_operations_.HasPendingBatch()) { return; }
-        if (rename_source && !ActiveState().SelectedCommittedRow(blink::app::MakeRowIdentity(*rename_source)))
+        if (!origin.owner_location && rename_source && !ActiveState().SelectedCommittedRow(blink::app::MakeRowIdentity(*rename_source)))
         { status_.Text(hstring(localization_.GetString(L"Operation.TargetChanged"))); return; }
         const auto weak = get_weak(); const auto dispatcher = dispatcher_;
         const auto selection_generation = folder_selection_generation_;
@@ -1736,7 +1777,7 @@ struct App : AppT<App>
                             { app->FollowFolderRelocation(*relocation); }
                             // The operation supplies the exact new link name.
                             // Keep a later user selection or tab departure.
-                            if (snapshot.kind == blink::app::FileOperationKind::Rename && snapshot.rename_source &&
+                            if (!origin.owner_location && snapshot.kind == blink::app::FileOperationKind::Rename && snapshot.rename_source &&
                                 selection_generation == app->folder_selection_generation_ && app->IsFileOperationOriginCurrent(origin))
                             {
                                 if (auto* ui = app->FindTabUi(origin.tab_id))
@@ -1748,12 +1789,17 @@ struct App : AppT<App>
                     }
                 });
             };
+        DirectoryTreeRefreshRequest changes;
+        if (!rename_source || rename_source->is_directory)
+        { AddDirectoryTreeChange(changes, origin.location.FolderPath(), rename_source ? rename_source->name : name,
+            origin.location.FolderPath(), name, rename_source.has_value()); }
         auto prerequisites = PrepareOperationWatches(rename_source && rename_source->is_directory ?
             std::vector<blink::app::Location>{ blink::app::Location::Folder(blink::core::JoinPath(origin.location.FolderPath(), rename_source->name)) } :
             std::vector<blink::app::Location>{});
         const auto id = rename_source ? file_operations_.Rename({ origin.location.FolderPath(), origin.identity,
                 *rename_source, std::move(name) }, publish, std::move(prerequisites)) :
             file_operations_.CreateFolder({ origin.location.FolderPath(), origin.identity, std::move(name) }, publish);
+        RememberOperationOrigin(origin, id); RememberDirectoryTreeChanges(std::move(changes), id);
         operation_watch_id_ = id;
         if (!id) { RestoreOperationWatches(0); }
         if (!id) { status_.Text(hstring(localization_.Format(L"Status.CommandBusy", localization_.GetString(
@@ -1762,7 +1808,7 @@ struct App : AppT<App>
     }
 
     bool FileDropBusy() const
-    { return window_style_closed_ || file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || IsOperationDialogOpen(); }
+    { return window_style_closed_ || file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || target_operation_pending_ || IsOperationDialogOpen(); }
 
     std::optional<FileOperationOrigin> FileAreaDropTarget(const IInspectable& element) const
     {
@@ -1812,16 +1858,22 @@ struct App : AppT<App>
     FileOperationOrigin CurrentOperationOrigin() const
     {
         const auto value = file_operations_.Snapshot();
-        if (drop_retry_origin_ && (value.kind == blink::app::FileOperationKind::Copy || value.kind == blink::app::FileOperationKind::Move) &&
-            value.request.parent_identity == drop_retry_origin_->identity && IsFileOperationOriginCurrent(*drop_retry_origin_)) { return *drop_retry_origin_; }
+        if (operation_origin_ && operation_origin_id_ == value.operation_id &&
+            value.request.parent_identity == operation_origin_->identity && IsFileOperationOriginCurrent(*operation_origin_)) { return *operation_origin_; }
         return ActiveTab() ? blink::app::CaptureFileOperationOrigin(*ActiveTab()) : FileOperationOrigin{};
+    }
+    void RememberOperationOrigin(const FileOperationOrigin& origin, const std::uint64_t id)
+    {
+        if (!id) { return; }
+        operation_origin_id_ = id;
+        operation_origin_ = origin.owner_location ? std::optional<FileOperationOrigin>{ origin } : std::nullopt;
+        if (!origin.owner_location) { operation_return_focus_ = {}; operation_return_area_ = {}; }
     }
     bool OperationTargetVisible(const blink::core::FileIdentity& identity) const
     { const auto origin = CurrentOperationOrigin(); return identity.valid && identity == origin.identity && IsFileOperationOriginCurrent(origin); }
     std::uint64_t SubmitFileDrop(const FileOperationOrigin& origin, const blink::app::ClipboardCopySources& sources, const DWORD effect)
     {
         if (FileDropBusy() || !IsFileOperationOriginCurrent(origin)) { return 0; }
-        drop_retry_origin_ = origin;
         if (effect == DROPEFFECT_MOVE)
         {
             std::vector<blink::app::MoveRequest> moves;
@@ -2180,7 +2232,6 @@ struct App : AppT<App>
                                 const auto prepared = blink::app::PrepareMoveDestination(requests,
                                     origin.location.FolderPath(), origin.identity, moves);
                                 if (prepared) { app->ShowClipboardCopyError(prepared); return; }
-                                if (origin.owner_location) { app->drop_retry_origin_ = origin; }
                                 if (app->StartMoves(origin, std::move(moves)))
                                 {
                                     // Keep the original sequence/IDs even for external
@@ -2330,7 +2381,7 @@ struct App : AppT<App>
         if (!waiting || (directory_merge_dialog_operation_id_ == operation_id &&
             directory_merge_dialog_conflict_id_ == current.directory_conflict_id)) { return; }
         const auto conflict_id = current.directory_conflict_id;
-        if (!IsFileOperationOriginCurrent(origin) || IsOperationDialogOpen() || clipboard_work_pending_)
+        if (!IsFileOperationOriginCurrent(origin) || IsOperationDialogOpen() || clipboard_work_pending_ || target_operation_pending_)
         {
             (void)file_operations_.ResolveDirectoryConflict(operation_id, conflict_id, blink::app::FileCopyConflictPolicy::Cancel);
             return;
@@ -2423,7 +2474,7 @@ struct App : AppT<App>
         { status_.Text(hstring(localization_.GetString(L"Status.CommandStale"))); return; }
         if (request.destination_parent_identity != origin.identity)
         { status_.Text(hstring(localization_.GetString(L"Copy.TargetChanged"))); return; }
-        if (file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || IsOperationDialogOpen())
+        if (file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || target_operation_pending_ || IsOperationDialogOpen())
         { status_.Text(hstring(localization_.GetString(L"Status.CommandBusy"))); return; }
         request.destination_parent = origin.location.FolderPath();
         if (retry) { directory_copy_history_.Observe(file_operations_.Snapshot()); }
@@ -2431,6 +2482,7 @@ struct App : AppT<App>
         AddDirectoryTreeChange(changes, request.source_parent, request.source.name, origin.location.FolderPath(),
             request.destination_name, false);
         const auto id = file_operations_.CopyDirectory(std::move(request), DirectoryCopyPublication(origin));
+        RememberOperationOrigin(origin, id);
         RememberDirectoryTreeChanges(std::move(changes), id);
         if (!id) { status_.Text(hstring(localization_.GetString(L"Status.CommandBusy"))); }
         else if (!retry) { directory_copy_history_.Reset(); }
@@ -2441,7 +2493,7 @@ struct App : AppT<App>
         const std::uint64_t operation_id)
     {
         if (!IsFileOperationOriginCurrent(origin) || file_operations_.IsBusy() || file_operations_.HasPendingBatch() ||
-            clipboard_work_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen()) { return; }
+            clipboard_work_pending_ || target_operation_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen()) { return; }
         const auto current = file_operations_.Snapshot();
         if (current.operation_id != operation_id || current.kind != blink::app::FileOperationKind::DirectoryCopy ||
             current.stage != blink::app::FileOperationStage::Failed || !current.directory_copy_result ||
@@ -2477,7 +2529,7 @@ struct App : AppT<App>
         const std::uint64_t operation_id)
     {
         if (!IsFileOperationOriginCurrent(origin) || file_operations_.IsBusy() || file_operations_.HasPendingBatch() ||
-            clipboard_work_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen()) { return; }
+            clipboard_work_pending_ || target_operation_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen()) { return; }
         const auto current = file_operations_.Snapshot();
         if (current.operation_id != operation_id || current.kind != blink::app::FileOperationKind::DirectoryCopy ||
             (current.stage != blink::app::FileOperationStage::Failed && current.stage != blink::app::FileOperationStage::Cancelled) ||
@@ -2740,6 +2792,7 @@ struct App : AppT<App>
         }
         auto prerequisites = PrepareOperationWatches(MoveWatchSources(requests));
         const auto id = file_operations_.MoveEntries(std::move(requests), MovePublication(origin), std::move(prerequisites));
+        RememberOperationOrigin(origin, id);
         RememberDirectoryTreeChanges(std::move(changes), id);
         operation_watch_id_ = id;
         if (!id) { RestoreOperationWatches(0); }
@@ -2768,6 +2821,7 @@ struct App : AppT<App>
             std::vector<blink::app::Location>{} : MoveWatchSources(remaining));
         const auto id = file_operations_.ResumeMoveBatch(operation_id, policy, std::move(name), MovePublication(origin), origin.location.FolderPath(),
             std::move(prerequisites));
+        RememberOperationOrigin(origin, id);
         AdvanceTransferOperation(operation_id, id, file_operations_.Snapshot());
         operation_watch_id_ = id;
         if (!id) { RestoreOperationWatches(0); }
@@ -2777,7 +2831,7 @@ struct App : AppT<App>
 
     void ShowMoveConflictDialog(const FileOperationOrigin& origin, blink::app::MoveRequest request, const std::uint64_t operation_id)
     {
-        if (!IsFileOperationOriginCurrent(origin) || IsOperationDialogOpen() || clipboard_work_pending_ || file_operations_.IsBusy() ||
+        if (!IsFileOperationOriginCurrent(origin) || IsOperationDialogOpen() || clipboard_work_pending_ || target_operation_pending_ || file_operations_.IsBusy() ||
             request.destination_parent_identity != origin.identity) { return; }
         const auto value = file_operations_.Snapshot();
         if (value.operation_id != operation_id || !blink::app::MoveQueueHasRootConflict(value)) { return; }
@@ -2802,7 +2856,7 @@ struct App : AppT<App>
 
     void ShowMoveNameDialog(const FileOperationOrigin& origin, blink::app::MoveRequest request, const std::uint64_t operation_id)
     {
-        if (!IsFileOperationOriginCurrent(origin) || file_operations_.IsBusy() || clipboard_work_pending_ || IsOperationDialogOpen() ||
+        if (!IsFileOperationOriginCurrent(origin) || file_operations_.IsBusy() || clipboard_work_pending_ || target_operation_pending_ || IsOperationDialogOpen() ||
             copy_conflict_wait_operation_id_ != 0 || request.destination_parent_identity != origin.identity) { return; }
         const auto value = file_operations_.Snapshot();
         if (value.operation_id != operation_id || !value.move_batch || !value.move_batch->resumable ||
@@ -2833,6 +2887,7 @@ struct App : AppT<App>
             request.destination_parent = origin.location.FolderPath();
         }
         const auto id = file_operations_.CopyBatch(std::move(requests), FileCopyPublication(origin));
+        RememberOperationOrigin(origin, id);
         if (!id) { status_.Text(hstring(localization_.Format(L"Status.CommandBusy", localization_.GetString(L"Command.Paste")))); }
         RenderFileOperationStatus();
     }
@@ -2857,6 +2912,7 @@ struct App : AppT<App>
             }, item);
         }
         const auto id = file_operations_.CopyItems(std::move(requests), FileCopyPublication(origin));
+        RememberOperationOrigin(origin, id);
         RememberDirectoryTreeChanges(std::move(changes), id);
         if (!id) { status_.Text(hstring(localization_.Format(L"Status.CommandBusy", localization_.GetString(L"Command.Paste")))); }
         RenderFileOperationStatus(); return id;
@@ -2875,6 +2931,7 @@ struct App : AppT<App>
             const auto policy = new_name ? blink::app::FileCopyConflictPolicy::Fail : request.conflict_policy;
             const auto id = file_operations_.ResumeCopyBatch(operation_id, policy, std::move(new_name),
                 FileCopyPublication(origin), origin.location.FolderPath());
+            RememberOperationOrigin(origin, id);
             AdvanceTransferOperation(operation_id, id, file_operations_.Snapshot());
             if (!id) { status_.Text(hstring(localization_.Format(L"Status.CommandBusy", localization_.GetString(L"Command.Paste")))); }
             RenderFileOperationStatus();
@@ -2900,7 +2957,7 @@ struct App : AppT<App>
     void ShowCopyConflictDialog(const FileOperationOrigin& origin, blink::app::FileCopyRequest request,
         const std::uint64_t operation_id)
     {
-        if (!IsFileOperationOriginCurrent(origin) || IsOperationDialogOpen() || clipboard_work_pending_) { return; }
+        if (!IsFileOperationOriginCurrent(origin) || IsOperationDialogOpen() || clipboard_work_pending_ || target_operation_pending_) { return; }
         if (request.destination_parent_identity != origin.identity) { return; }
         request.destination_parent = origin.location.FolderPath();
         const auto snapshot = file_operations_.Snapshot();
@@ -2953,7 +3010,7 @@ struct App : AppT<App>
     void ShowCopyNameDialog(const FileOperationOrigin& origin, blink::app::FileCopyRequest request, std::wstring error,
         const std::uint64_t operation_id)
     {
-        if (!IsFileOperationOriginCurrent(origin) || file_operations_.IsBusy() || clipboard_work_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen()) { return; }
+        if (!IsFileOperationOriginCurrent(origin) || file_operations_.IsBusy() || clipboard_work_pending_ || target_operation_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen()) { return; }
         if (request.destination_parent_identity != origin.identity) { return; }
         request.destination_parent = origin.location.FolderPath();
         const auto weak = get_weak();
@@ -3133,6 +3190,103 @@ struct App : AppT<App>
         target_properties_action_ = nullptr;
     }
 
+    enum class DirectoryTargetAction { NewFolder, Rename, Delete };
+
+    void CancelTargetOperationWork() noexcept
+    {
+        ++target_operation_request_;
+        if (target_operation_cancellation_) { target_operation_cancellation_->store(true); }
+        if (target_operation_work_) { try { target_operation_work_.Cancel(); } catch (...) {} }
+        target_operation_work_ = nullptr; target_operation_pending_ = false;
+        dialog_return_focus_ = {}; dialog_return_area_ = {};
+    }
+
+    void BeginTargetDirectoryOperation(const TargetMenuContext& context, const DirectoryTargetAction action,
+        const blink::app::DeleteMode mode = blink::app::DeleteMode::Recycle)
+    {
+        if (!context.target.IsFolder() || !CanTransferTargetDirectory()) { return; }
+        const auto parent = context.target.Up();
+        if (action != DirectoryTargetAction::NewFolder && (!parent || !parent->IsFolder())) { return; }
+        const auto owner = blink::app::CaptureFileOperationOrigin(*ActiveTab());
+        auto origin = blink::app::FileDropOrigin(owner, context.target);
+        Control focus{ nullptr }, area{ nullptr };
+        if (context.node_id)
+        {
+            if (const auto it = navigation_tree_ui_nodes_.find(*context.node_id); it != navigation_tree_ui_nodes_.end())
+            { focus = navigation_tree_.ContainerFromNode(it->second).try_as<Control>(); }
+            area = navigation_tree_;
+        }
+        else if (context.quick_index)
+        {
+            focus = navigation_quick_list_.ContainerFromIndex(static_cast<std::int32_t>(*context.quick_index)).try_as<Control>();
+            area = navigation_quick_list_;
+        }
+        else { focus = entries_; area = entries_; }
+        const auto return_focus = focus ? winrt::make_weak(focus) : winrt::weak_ref<Control>{};
+        const auto return_area = area ? winrt::make_weak(area) : winrt::weak_ref<Control>{};
+        target_operation_pending_ = true;
+        target_operation_cancellation_ = std::make_shared<std::atomic_bool>(false);
+        const auto cancellation = target_operation_cancellation_;
+        const auto request = ++target_operation_request_;
+        const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+        RenderFileOperationStatus();
+        try
+        {
+            target_operation_work_ = Windows::System::Threading::ThreadPool::RunAsync(
+                [weak, dispatcher, owner, origin, action, mode, cancellation, request, return_focus, return_area](auto&&) mutable {
+                    DWORD error = ERROR_GEN_FAILURE;
+                    std::optional<blink::core::FileEntry> source;
+                    const auto preparation_origin = origin;
+                    try
+                    {
+                        if (cancellation->load()) { error = ERROR_CANCELLED; }
+                        else if (action == DirectoryTargetAction::NewFolder)
+                        {
+                            const auto result = blink::app::ReadFileDropTarget(origin.location.FolderPath(), origin.identity);
+                            error = SUCCEEDED(result) ? ERROR_SUCCESS : HRESULT_CODE(result);
+                        }
+                        else
+                        {
+                            blink::app::DirectoryOperationTarget target;
+                            error = blink::app::CaptureDirectoryOperationTarget(origin.location.FolderPath(), target, cancellation);
+                            if (!error)
+                            {
+                                source = std::move(target.source);
+                                origin = blink::app::FileDropOrigin(owner, blink::app::Location::Folder(target.parent), target.parent_identity);
+                            }
+                        }
+                        if (cancellation->load()) { error = ERROR_CANCELLED; }
+                    }
+                    catch (const std::bad_alloc&) { error = ERROR_NOT_ENOUGH_MEMORY; }
+                    catch (...) { error = ERROR_GEN_FAILURE; }
+                    (void)dispatcher.TryEnqueue([weak, origin, preparation_origin, source = std::move(source), action, mode,
+                        cancellation, request, return_focus, return_area, error]() mutable {
+                        const auto app = weak.get();
+                        if (!app || app->window_style_closed_ || request != app->target_operation_request_) { return; }
+                        app->target_operation_pending_ = false; app->target_operation_work_ = nullptr;
+                        app->RenderFileOperationStatus();
+                        if (!blink::app::IsFileOperationOwnerCurrent(preparation_origin, app->ActiveTab(), app->window_style_closed_)) { return; }
+                        if (cancellation->load() || error)
+                        {
+                            app->status_.Text(hstring(blink::core::Win32ErrorMessage(cancellation->load() ? ERROR_CANCELLED : error))); return;
+                        }
+                        app->operation_return_focus_ = return_focus; app->operation_return_area_ = return_area;
+                        if (action == DirectoryTargetAction::NewFolder)
+                        { app->ShowFileNameDialog(origin, app->localization_.GetString(L"NewFolder.DefaultName")); }
+                        else if (action == DirectoryTargetAction::Rename && source)
+                        { const auto name = source->name; app->ShowFileNameDialog(origin, name, {}, std::move(source)); }
+                        else if (source)
+                        { app->ConfirmDeletes(origin, { { origin.location.FolderPath(), origin.identity, std::move(*source), mode } }, mode); }
+                    });
+                });
+        }
+        catch (...)
+        {
+            target_operation_pending_ = false; RenderFileOperationStatus();
+            status_.Text(hstring(localization_.GetString(L"NewFolder.DialogFailed")));
+        }
+    }
+
     bool CanTransferTargetDirectory() const
     {
         const auto* tab = ActiveTab();
@@ -3268,6 +3422,20 @@ struct App : AppT<App>
                 [target = context.target](App& app) { app.PasteTargetDirectory(target); },
                 CanTransferTargetDirectory() && IsClipboardFormatAvailable(CF_HDROP));
             target_menu_.Items().Append(MenuFlyoutSeparator());
+            add(L"Command.NewFolder", L"TargetContextNewFolder", L"\xE8F4",
+                [context](App& app) { app.BeginTargetDirectoryOperation(context, DirectoryTargetAction::NewFolder); },
+                CanTransferTargetDirectory());
+            if (parent && parent->IsFolder())
+            {
+                add(L"Command.Rename", L"TargetContextRename", L"\xE8AC",
+                    [context](App& app) { app.BeginTargetDirectoryOperation(context, DirectoryTargetAction::Rename); },
+                    CanTransferTargetDirectory());
+                add(L"Command.Delete", L"TargetContextDelete", L"\xE74D",
+                    [context](App& app) { app.BeginTargetDirectoryOperation(context, DirectoryTargetAction::Delete,
+                        (GetKeyState(VK_SHIFT) & 0x8000) ? blink::app::DeleteMode::Permanent : blink::app::DeleteMode::Recycle); },
+                    CanTransferTargetDirectory());
+            }
+            target_menu_.Items().Append(MenuFlyoutSeparator());
             add(L"Search.MenuCopyPath", L"TargetContextCopyPath", L"\xE71B",
                 [target = context.target](App& app) { app.PublishPathText(target.FolderPath()); }, !FileDropBusy());
             add(L"Command.Properties", L"TargetContextProperties", L"\xE946",
@@ -3286,14 +3454,12 @@ struct App : AppT<App>
         target_menu_.ShowAt(anchor, options);
     }
 
-    void ShowNavigationContextMenu(const bool tree, const IInspectable& source,
-        const ContextRequestedEventArgs* args = nullptr)
+    bool CaptureNavigationTarget(const bool tree, const IInspectable& source,
+        TargetMenuContext& context, FrameworkElement& anchor)
     {
         auto current = source.try_as<DependencyObject>();
         while (current)
         {
-            FrameworkElement anchor{ nullptr };
-            TargetMenuContext context;
             if (tree)
             {
                 if (const auto item = current.try_as<TreeViewItem>())
@@ -3301,7 +3467,7 @@ struct App : AppT<App>
                     const auto node = navigation_tree_.NodeFromContainer(item);
                     const auto id = node ? NavigationTreeNodeIdFromItem(node.Content()) : std::nullopt;
                     const auto* model = id ? navigation_tree_model_.Find(*id) : nullptr;
-                    if (!model) { return; }
+                    if (!model) { return false; }
                     context.node_id = *id; context.target = model->target; anchor = item;
                 }
             }
@@ -3309,21 +3475,26 @@ struct App : AppT<App>
             {
                 const auto value = navigation_quick_list_.ItemFromContainer(item).try_as<
                     Windows::Foundation::Collections::PropertySet>();
-                if (!value || !value.HasKey(L"QuickId")) { return; }
+                if (!value || !value.HasKey(L"QuickId")) { return false; }
                 const auto index = winrt::unbox_value<std::uint64_t>(value.Lookup(L"QuickId"));
-                if (index >= quick_navigation_items_.size()) { return; }
+                if (index >= quick_navigation_items_.size()) { return false; }
                 context.quick_index = static_cast<std::size_t>(index);
                 context.target = quick_navigation_items_[index].target; anchor = item;
             }
-            if (anchor)
-            {
-                Windows::Foundation::Point point{ 16, static_cast<float>(anchor.ActualHeight() / 2) };
-                if (args) { (void)args->TryGetPosition(anchor, point); }
-                ShowTargetContextMenu(std::move(context), anchor, point);
-                return;
-            }
+            if (anchor) { return true; }
             current = VisualTreeHelper::GetParent(current);
         }
+        return false;
+    }
+
+    void ShowNavigationContextMenu(const bool tree, const IInspectable& source,
+        const ContextRequestedEventArgs* args = nullptr)
+    {
+        TargetMenuContext context; FrameworkElement anchor{ nullptr };
+        if (!CaptureNavigationTarget(tree, source, context, anchor)) { return; }
+        Windows::Foundation::Point point{ 16, static_cast<float>(anchor.ActualHeight() / 2) };
+        if (args) { (void)args->TryGetPosition(anchor, point); }
+        ShowTargetContextMenu(std::move(context), anchor, point);
     }
 
     void ConfigureNavigationContextMenu(const Control& control, const bool tree)
@@ -3337,6 +3508,24 @@ struct App : AppT<App>
             Windows::System::VirtualKeyModifiers::Shift, show_keyboard, true);
         AddAccelerator(control, Windows::System::VirtualKey::Application,
             Windows::System::VirtualKeyModifiers::None, show_keyboard, true);
+        const auto mutate_keyboard = [weak, tree](const DirectoryTargetAction action,
+            const blink::app::DeleteMode mode = blink::app::DeleteMode::Recycle) {
+            if (const auto app = weak.get(); app && !app->window_style_closed_ && !app->IsOperationDialogOpen())
+            {
+                TargetMenuContext context; FrameworkElement anchor{ nullptr };
+                if (app->CaptureNavigationTarget(tree, FocusManager::GetFocusedElement(app->root_.XamlRoot()), context, anchor))
+                { app->BeginTargetDirectoryOperation(context, action, mode); }
+            }
+        };
+        AddAccelerator(control, Windows::System::VirtualKey::N,
+            Windows::System::VirtualKeyModifiers::Control | Windows::System::VirtualKeyModifiers::Shift,
+            [mutate_keyboard] { mutate_keyboard(DirectoryTargetAction::NewFolder); }, true);
+        AddAccelerator(control, Windows::System::VirtualKey::F2, Windows::System::VirtualKeyModifiers::None,
+            [mutate_keyboard] { mutate_keyboard(DirectoryTargetAction::Rename); }, true);
+        AddAccelerator(control, Windows::System::VirtualKey::Delete, Windows::System::VirtualKeyModifiers::None,
+            [mutate_keyboard] { mutate_keyboard(DirectoryTargetAction::Delete); }, true);
+        AddAccelerator(control, Windows::System::VirtualKey::Delete, Windows::System::VirtualKeyModifiers::Shift,
+            [mutate_keyboard] { mutate_keyboard(DirectoryTargetAction::Delete, blink::app::DeleteMode::Permanent); }, true);
         control.ContextRequested([weak, tree](auto&&, const ContextRequestedEventArgs& args) {
             if (const auto app = weak.get(); app && !app->window_style_closed_)
             {
@@ -3617,7 +3806,7 @@ struct App : AppT<App>
             tab_ui && tab_ui->showing_this_pc && entries_ ?
                 entries_.SelectedItems().Size() : snapshot.selected_count, target,
             ActiveState().CommittedDirectoryIdentity().valid, file_operations_.IsBusy() || file_operations_.HasPendingBatch() ||
-                clipboard_work_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen() || file_drag_drop_.Pending() };
+                clipboard_work_pending_ || target_operation_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen() || file_drag_drop_.Pending() };
     }
 
     void ExecuteFolderCommand(const blink::app::FolderCommand command,
@@ -9010,7 +9199,14 @@ struct App : AppT<App>
     blink::app::DeleteConfirmationDialog delete_confirmation_;
     blink::app::PropertiesDialog properties_dialog_;
     blink::app::FileDragDropController file_drag_drop_;
-    std::optional<FileOperationOrigin> drop_retry_origin_;
+    std::optional<FileOperationOrigin> operation_origin_;
+    std::uint64_t operation_origin_id_{};
+    winrt::weak_ref<Control> operation_return_focus_, operation_return_area_;
+    winrt::weak_ref<Control> dialog_return_focus_, dialog_return_area_;
+    std::uint64_t target_operation_request_{};
+    bool target_operation_pending_{};
+    blink::app::FileOperationCancellation target_operation_cancellation_;
+    winrt::Windows::Foundation::IAsyncAction target_operation_work_{ nullptr };
     DispatcherQueueTimer drag_hover_timer_{ nullptr };
     blink::app::TabId drag_hover_tab_{};
     std::uint64_t delete_wait_operation_id_{};

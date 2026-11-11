@@ -20,6 +20,10 @@
 #include "Blink/App/BrowseController.h"
 #include "Blink/App/BrowseState.h"
 #include "Blink/App/FileActivationController.h"
+#include "Blink/App/FileOperations.h"
+#include "Blink/App/RenameOperation.h"
+#include "Blink/App/DeleteOperation.h"
+#include "Blink/App/FileDragDropModel.h"
 #include "Blink/App/FolderCommandPolicy.h"
 #include "Blink/App/FolderChangeState.h"
 #include "Blink/App/FolderWatcher.h"
@@ -51,6 +55,7 @@
 #include "Blink/Core/FileTypes.h"
 
 #include <Windows.h>
+#include <objbase.h>
 #include <shellapi.h>
 
 #include <algorithm>
@@ -63,6 +68,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -2274,6 +2280,147 @@ namespace
         return passed;
     }
 
+    [[nodiscard]] bool RunDirectoryOperationTargetTests()
+    {
+        namespace fs = std::filesystem;
+        using namespace blink::app;
+        const auto root = fs::absolute(fs::path(L".build") / L"file-operation-fixtures" /
+            (L"target-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64())));
+        struct Cleanup { fs::path path; ~Cleanup() { std::error_code error; fs::remove_all(path, error); } } cleanup{ root };
+        bool passed = true;
+        try
+        {
+            const auto parent = root / L"真实父目录", source = parent / L"目录 {目标}", behind = root / L"当前页面";
+            const auto relative_nested = fs::path(L"后代") / L"保留 {0}.bin";
+            const auto nested = source / relative_nested, behind_file = behind / L"实际选中文件.txt";
+            fs::create_directories(nested.parent_path()); fs::create_directory(behind);
+            const auto write = [](const fs::path& path, const std::string& data) {
+                std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+                stream.write(data.data(), static_cast<std::streamsize>(data.size()));
+                if (!stream) { throw std::runtime_error("directory target fixture write"); }
+            };
+            const auto read = [](const fs::path& path) {
+                std::ifstream stream(path, std::ios::binary);
+                return std::string(std::istreambuf_iterator<char>(stream), {});
+            };
+            const auto entry = [](const fs::path& path) {
+                blink::core::FileEntry value;
+                if (!blink::core::ReadEntryMetadata(path.wstring(), value))
+                { throw std::runtime_error("directory target fixture metadata"); }
+                value.full_path = path.wstring(); value.name = path.filename().wstring(); return value;
+            };
+            const auto empty = [](const DirectoryOperationTarget& value) {
+                return value.parent.empty() && !value.parent_identity.valid && !value.source.identity.valid &&
+                    value.source.name.empty() && value.source.full_path.empty();
+            };
+            constexpr char Payload[] = "owned-directory-target\0nested-payload";
+            const std::string data(Payload, sizeof(Payload) - 1), stream_data = "[ZoneTransfer]\r\nZoneId=3\r\n";
+            write(nested, data); write(nested.wstring() + L":Zone.Identifier:$DATA", stream_data);
+            write(behind_file, "unrelated-visible-selection");
+            const auto parent_entry = entry(parent), source_entry = entry(source), nested_entry = entry(nested);
+            DirectoryOperationTarget captured;
+            auto error = CaptureDirectoryOperationTarget(source.wstring(), captured);
+            passed &= Check(error == ERROR_SUCCESS && captured.parent == parent.wstring() &&
+                    captured.parent_identity == parent_entry.identity && captured.source.identity == source_entry.identity &&
+                    captured.source.full_path == source.wstring() && captured.source.name == source.filename().wstring() &&
+                    captured.source.is_directory && (captured.source.attributes & FILE_ATTRIBUTE_DIRECTORY),
+                "directory_operation_target_captures_exact_unicode_directory_and_containing_parent_identities");
+            const auto original = captured;
+            passed &= Check(read(nested) == data && entry(nested).identity == nested_entry.identity &&
+                    read(nested.wstring() + L":Zone.Identifier:$DATA") == stream_data &&
+                    read(behind_file) == "unrelated-visible-selection" && entry(source).identity == source_entry.identity,
+                "directory_operation_target_metadata_capture_preserves_nested_bytes_streams_and_unrelated_selection_payload");
+            error = CaptureDirectoryOperationTarget(source.wstring() + L"\\\\", captured);
+            passed &= Check(error == ERROR_SUCCESS && captured.source.identity == source_entry.identity &&
+                    captured.parent == parent.wstring() && captured.parent_identity == parent_entry.identity &&
+                    captured.source.name == source.filename().wstring(),
+                "directory_operation_target_trailing_separators_keep_the_real_leaf_and_parent");
+            error = CaptureDirectoryOperationTarget(L"\\\\?\\" + source.wstring() + L"\\", captured);
+            passed &= Check(error == ERROR_SUCCESS && captured.source.identity == source_entry.identity &&
+                    captured.source.full_path == source.wstring() && captured.parent_identity == parent_entry.identity,
+                "directory_operation_target_extended_drive_spelling_projects_the_same_directory_link");
+            captured = original;
+            error = CaptureDirectoryOperationTarget((parent / L"not-opened-after-cancel").wstring(), captured,
+                std::make_shared<std::atomic_bool>(true));
+            passed &= Check(error == ERROR_CANCELLED && empty(captured),
+                "directory_operation_target_precancel_clears_previous_target_before_missing_path_io");
+            captured = original;
+            error = CaptureDirectoryOperationTarget((parent / L"missing-directory").wstring(), captured);
+            passed &= Check(error == ERROR_FILE_NOT_FOUND && empty(captured),
+                "directory_operation_target_missing_directory_returns_real_error_and_clears_previous_target");
+            captured = original;
+            error = CaptureDirectoryOperationTarget(behind_file.wstring(), captured);
+            passed &= Check(error == ERROR_DIRECTORY && empty(captured),
+                "directory_operation_target_rejects_an_actual_file_instead_of_reusing_directory_intent");
+            captured = original;
+            const auto root_error = CaptureDirectoryOperationTarget(root.root_path().wstring(), captured);
+            const bool root_empty = empty(captured);
+            const auto extended_root_error = CaptureDirectoryOperationTarget(L"\\\\?\\" + root.root_path().wstring(), captured);
+            blink::core::FileIdentity root_identity;
+            passed &= Check(root_error == ERROR_NOT_SUPPORTED && root_empty && extended_root_error == ERROR_NOT_SUPPORTED &&
+                    empty(captured) && SUCCEEDED(ReadFileDropTarget(root.root_path().wstring(), root_identity)) && root_identity.valid,
+                "directory_operation_target_rejects_transfer_roots_while_root_destination_identity_remains_available");
+
+            const auto retained = parent / L"保留的原目录";
+            fs::rename(source, retained); fs::create_directory(source);
+            const auto replacement_file = source / L"替换内容.txt";
+            write(replacement_file, "owned-replacement-directory");
+            const auto replacement = entry(source);
+            bool rename_called = false;
+            const auto renamed = RenameEntrySafely({ original.parent, original.parent_identity, original.source, L"不得误改名" }, {},
+                [&](HANDLE, const std::wstring&, DWORD* result) { rename_called = true; *result = ERROR_GEN_FAILURE; return false; });
+            passed &= Check(replacement.identity != original.source.identity && !renamed.renamed &&
+                    renamed.error == ERROR_FILE_INVALID && !rename_called && !fs::exists(parent / L"不得误改名") &&
+                    entry(source).identity == replacement.identity && entry(retained).identity == original.source.identity &&
+                    read(retained / relative_nested) == data && read(replacement_file) == "owned-replacement-directory",
+                "directory_operation_target_stale_source_identity_is_rejected_before_any_rename_commit");
+            const DeleteRequest deletion{ original.parent, original.parent_identity, original.source, DeleteMode::Permanent, true };
+            const auto deleted = std::async(std::launch::async, [deletion] {
+                const auto initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+                if (FAILED(initialized)) { return DeleteResult{ initialized }; }
+                const auto result = DeleteEntrySafely(deletion); CoUninitialize(); return result;
+            }).get();
+            passed &= Check(deleted.error == HRESULT_FROM_WIN32(ERROR_FILE_INVALID) && !deleted.removed &&
+                    !deleted.possible_partial && !deleted.observed_removed && entry(source).identity == replacement.identity &&
+                    entry(retained).identity == original.source.identity && read(retained / relative_nested) == data &&
+                    read(replacement_file) == "owned-replacement-directory",
+                "directory_operation_target_stale_source_identity_is_rejected_before_shell_delete");
+
+            TabWindowState folder_window;
+            auto* folder_tab = folder_window.ActiveTab();
+            const auto browse = folder_tab->state->Navigate(behind.wstring());
+            const bool committed = browse && folder_tab->state->CommitBrowse(*browse,
+                blink::core::EnumerateDirectory(behind.wstring())).status == CommitBrowseStatus::Committed;
+            const auto selected = MakeRowIdentity(entry(behind_file));
+            folder_tab->state->SetRowSelection({ selected });
+            const auto owner = CaptureFileOperationOrigin(*folder_tab);
+            const auto detached = FileDropOrigin(owner, Location::Folder(original.parent), original.parent_identity);
+            TabWindowState pc_window;
+            const auto virtual_owner = CaptureFileOperationOrigin(*pc_window.ActiveTab());
+            const auto pc_detached = FileDropOrigin(virtual_owner, Location::Folder(original.parent), original.parent_identity);
+            passed &= Check(committed && IsFileOperationOriginCurrent(detached, folder_tab) &&
+                    detached.location != owner.location && detached.owner_location == owner.location &&
+                    detached.identity == original.parent_identity && folder_tab->state->IsRowSelected(selected) &&
+                    virtual_owner.location.IsThisPC() && !virtual_owner.identity.valid &&
+                    IsFileOperationOriginCurrent(pc_detached, pc_window.ActiveTab()),
+                "directory_operation_target_detached_parent_origin_supports_folder_and_virtual_this_pc_owners_without_selection_rebinding");
+            const bool closed_rejected = !IsFileOperationOriginCurrent(detached, folder_tab, true);
+            ++folder_tab->file_operation_generation;
+            const bool departure_rejected = !IsFileOperationOriginCurrent(detached, folder_tab);
+            const auto after_departure = FileDropOrigin(CaptureFileOperationOrigin(*folder_tab),
+                Location::Folder(original.parent), original.parent_identity);
+            folder_tab->EnterSearch();
+            passed &= Check(closed_rejected && departure_rejected && !IsFileOperationOriginCurrent(after_departure, folder_tab),
+                "directory_operation_target_detached_work_keeps_owner_departure_search_and_close_gates");
+        }
+        catch (const std::exception& failure)
+        {
+            std::cerr << "INFO directory target fixture exception " << failure.what() << '\n';
+            passed &= Check(false, "directory_operation_target_fixture_completed_without_exception");
+        }
+        return passed;
+    }
+
     [[nodiscard]] bool RunFileActivationValidationTests()
     {
         const auto root = std::filesystem::path(L".build") / L"phase1-activation-tests" /
@@ -3531,6 +3678,7 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunSearchExactTests();
     passed &= RunSearchContextMenuTests();
     passed &= RunFileOperationTests();
+    passed &= RunDirectoryOperationTargetTests();
     passed &= RunRenameOperationTests();
     passed &= RunFileCopyOperationTests();
     passed &= RunFileCopyConflictTests();

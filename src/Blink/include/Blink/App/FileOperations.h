@@ -29,6 +29,19 @@ namespace blink::app
     using FileOperationCancellation = std::shared_ptr<std::atomic_bool>;
     using CreateDirectoryFunction = std::function<bool(const std::wstring&, DWORD*)>;
 
+    struct DirectoryOperationTarget
+    {
+        std::wstring parent;
+        blink::core::FileIdentity parent_identity;
+        blink::core::FileEntry source;
+    };
+
+    // Worker-only capture of one ordinary non-root directory and its parent
+    // link for Rename/Delete. No clipboard access or descendant enumeration.
+    // Failures/cancellation clear output; destination roots use their own API.
+    [[nodiscard]] DWORD CaptureDirectoryOperationTarget(const std::wstring& path,
+        DirectoryOperationTarget& output, const FileOperationCancellation& cancelled = {});
+
     [[nodiscard]] DWORD ValidateNewFolderName(std::wstring_view name) noexcept;
     // Worker-only. The optional create function runs with the validated
     // directory chain held; it is also the native failure/race test seam.

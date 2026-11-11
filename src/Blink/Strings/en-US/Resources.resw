@@ -466,4 +466,6 @@
   <data name="Nav.MenuNewTab" xml:space="preserve"><value>Open in new tab</value></data>
   <data name="Nav.MenuExpand" xml:space="preserve"><value>Expand</value></data>
   <data name="Nav.MenuCollapse" xml:space="preserve"><value>Collapse</value></data>
+  <data name="Operation.TargetPreparing" xml:space="preserve"><value>Reading target folder…</value></data>
+  <data name="Operation.TargetCancelling" xml:space="preserve"><value>Cancelling folder preparation…</value></data>
 </root>

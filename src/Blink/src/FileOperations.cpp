@@ -1,5 +1,8 @@
 #include "Blink/App/FileOperations.h"
+#include "Blink/App/ClipboardFileTransfer.h"
 #include <algorithm>
+#include <new>
+#include <utility>
 #include <vector>
 
 namespace blink::app
@@ -35,6 +38,27 @@ namespace blink::app
         bool Cancelled(const FileOperationCancellation& cancelled) noexcept
         { return cancelled && cancelled->load(); }
     }
+    DWORD CaptureDirectoryOperationTarget(const std::wstring& path, DirectoryOperationTarget& output,
+        const FileOperationCancellation& cancelled)
+    {
+        output = {};
+        try
+        {
+            const auto normalized = LocalFolder(path);
+            ClipboardCopySources captured;
+            const auto error = CaptureDirectoryClipboardSource(normalized.empty() ? path : normalized, captured, cancelled);
+            if (error != ERROR_SUCCESS) { return error; }
+            if (Cancelled(cancelled)) { return ERROR_CANCELLED; }
+            auto& directory = std::get<DirectoryCopyRequest>(captured);
+            output.parent = std::move(directory.source_parent);
+            output.parent_identity = directory.source_parent_identity;
+            output.source = std::move(directory.source);
+            return ERROR_SUCCESS;
+        }
+        catch (const std::bad_alloc&) { output = {}; return ERROR_NOT_ENOUGH_MEMORY; }
+        catch (...) { output = {}; return ERROR_GEN_FAILURE; }
+    }
+
     DWORD ValidateNewFolderName(const std::wstring_view name) noexcept
     {
         if (name.empty() || name == L"." || name == L".." || name.back() == L'.' || name.back() == L' ')

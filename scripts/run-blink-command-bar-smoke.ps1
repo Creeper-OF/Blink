@@ -4,6 +4,11 @@ param(
     [string]$Binary='',
     [ValidateRange(5,90)][int]$StepTimeoutSeconds=30
 )
+
+# Historical body below is retained for reference and is never run by this entry.
+Write-Warning 'Historical command-bar smoke is disabled: it cannot completely restore arbitrary Clipboard formats. No validation ran. See docs/VALIDATION_GUIDE.md and the current per-feature scripts, including run-blink-navigation-mutation-smoke.ps1 -Feature NewFolder/Rename/Delete.'
+exit 2
+
 # Owned CommandBar integration smoke. Uses only this GUID fixture and new Blink PID.
 # No global input, service/configuration changes or system Recycle Bin enumeration.
 # A PASS means these recorded actions, not the whole Explorer compatibility matrix.

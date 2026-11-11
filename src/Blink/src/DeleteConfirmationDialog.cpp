@@ -11,15 +11,18 @@ namespace blink::app
         ContentDialog dialog{ nullptr };
         std::function<void()> confirmed;
         std::function<void(HRESULT)> failed;
+        DismissedCallback dismissed;
         bool closed{};
     };
     DeleteConfirmationDialog::~DeleteConfirmationDialog() noexcept { Close(); }
+    void DeleteConfirmationDialog::SetDismissedCallback(DismissedCallback callback)
+    { dismissed_ = std::move(callback); }
     bool DeleteConfirmationDialog::IsOpen() const noexcept { return ui_ && !ui_->closed; }
     bool DeleteConfirmationDialog::Show(const XamlRoot& root, const Localization& localization, const std::vector<std::wstring>& names,
         std::function<void()> confirmed, std::function<void(HRESULT)> failed)
     {
         if (IsOpen() || names.empty()) { return false; }
-        auto ui = std::make_shared<Ui>(); ui->confirmed = std::move(confirmed); ui->failed = std::move(failed);
+        auto ui = std::make_shared<Ui>(); ui->confirmed = std::move(confirmed); ui->failed = std::move(failed); ui->dismissed = dismissed_;
         ui->dialog = ContentDialog(); ui->dialog.XamlRoot(root);
         ui->dialog.Title(box_value(hstring(localization.GetString(L"Delete.ConfirmTitle"))));
         ui->dialog.PrimaryButtonText(hstring(localization.GetString(L"Delete.ConfirmPermanent")));
@@ -44,6 +47,7 @@ namespace blink::app
         if (FAILED(error)) { if (ui->failed) { ui->failed(error); } }
         else if (result == ContentDialogResult::Primary && ui->confirmed)
         { try { ui->confirmed(); } catch (...) { if (ui->failed) { ui->failed(to_hresult()); } } }
+        if (ui->dismissed) { ui->dismissed(); }
     }
     void DeleteConfirmationDialog::Close() noexcept
     {

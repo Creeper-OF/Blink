@@ -1,4 +1,9 @@
 ﻿param([ValidateSet('Debug','Release')][string]$Configuration='Debug')
+
+# Historical body below is retained for reference and is never run by this entry.
+Write-Warning 'Historical context-menu smoke is disabled: its unavailable-command assertions and Clipboard/fixture cleanup do not match the current product. No validation ran. See docs/VALIDATION_GUIDE.md and run-blink-object-menu-smoke.ps1 or run-blink-navigation-mutation-smoke.ps1 -Feature NewFolder/Rename/Delete.'
+exit 2
+
 $ErrorActionPreference='Stop'
 $principal=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 if($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'Ordinary user required'}

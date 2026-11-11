@@ -239,6 +239,8 @@ namespace blink::app
                 { L"NewFolder.RetryName", L"Retry / change name" },
                 { L"NewFolder.DialogFailed", L"Could not start the file operation. Please try again." },
                 { L"Operation.Cancel", L"Cancel" },
+                { L"Operation.TargetPreparing", L"Reading target folder…" },
+                { L"Operation.TargetCancelling", L"Cancelling folder preparation…" },
                 { L"Operation.Completed", L"Created folder: {0}" },
                 { L"Operation.Cancelled", L"Folder creation cancelled: {0}" },
                 { L"Operation.Cancelling", L"Cancelling folder creation: {0}" },

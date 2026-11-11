@@ -1,5 +1,7 @@
 # Explorer 菜单与命令矩阵
 
+2026-11-12审计同步：C06常用位置已有G06a菜单，G06c新建/改名/删除有实现但分功能脚本尚待实跑；保持已实现与已验证的区别。见[审计](DEVELOPMENT_AUDIT.md)。
+
 G06b最新（2026-11-11）：目录目标Cut/Copy/Paste已接入原队列，根仅Paste、虚拟ThisPC无传输；双配置1636/0/4、13项不写Clipboard窗口检查PASS。实际传输UI SKIP，因此相应动作仍明确限定，见[交接](EXPLORER_NAVIGATION_TRANSFER_HANDOFF.md)。
 
 G06a最新（2026-11-11）：新增导航/ThisPC目标菜单，双配置1618/0/4、249输入/386资源及最终10项窗口检查通过；C07/C08仅升级本切片覆盖的动作。系统属性仅入口/真实目标捕获已验，实际属性页、剪贴板写入、鼠标及完整环境待验。下方G02等段为各自历史证据，见[交接](EXPLORER_OBJECT_MENU_HANDOFF.md)。
@@ -261,11 +263,11 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 
 | 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C06 | 导航常用/固定项右键 > 打开 | 打开 | Open | 未接入 | 现有常用位置单击导航；没有专属右键 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [LOCATION] [F-SYSTEM] | NOT RUN: M-C06-01 |
-| C06 | 导航常用/固定项右键 > 在新标签页中打开 | 在新标签页中打开 | Open in new tab | 未接入 | 无上下文入口 | —（此上下文未定义） | Blink | DEFERRED | [NAV] [LOCATION] [F-SYSTEM] | NOT RUN: M-C06-02 |
+| C06 | 导航常用/固定项右键 > 打开 | 打开 | Open | Fluent E8E5 | 实际KnownFolder或ThisPC独立目标，保持文件区选择 | TargetContextOpen | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI07验证Quick Home Open；其它位置完整矩阵待验 |
+| C06 | 导航常用/固定项右键 > 在新标签页中打开 | 在新标签页中打开 | Open in new tab | Fluent E8A7 | 捕获当前常用位置Location，复用原新标签入口 | TargetContextNewTab | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 入口已接；Quick实际NewTab组合待验 |
 | C06 | 导航常用/固定项右键 > 固定/取消固定 | 固定/取消固定 | Pin / Unpin | 未接入 | 目前Home/桌面/下载/文档是KnownFolder清单，不是可编辑固定集合 | —（此上下文未定义） | Blink | DEFERRED | [NAV] [LOCATION] [F-SYSTEM] | NOT RUN: M-C06-03 |
-| C06 | 导航常用/固定项右键 > 复制路径 | 复制路径 | Copy path | 未接入 | 文件列表命令已实现；常用位置无捕获上下文/菜单 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [LOCATION] [F-SYSTEM] | NOT RUN: M-C06-04 |
-| C06 | 导航常用/固定项右键 > 属性 | 属性 | Properties | 未接入 | 有本地属性后端，常用位置右键未接入 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [LOCATION] [F-SYSTEM] | NOT RUN: M-C06-05 |
+| C06 | 导航常用/固定项右键 > 复制路径 | 复制路径 | Copy path | Fluent E71B | 实际目录目标复用文本Clipboard；虚拟ThisPC无路径动作 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 菜单适用性已接，真实写入待验 |
+| C06 | 导航常用/固定项右键 > 属性 | 属性 | Properties | Fluent E946 | 后台捕获实际目录身份，调用既有进程外properties | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 捕获/菜单已接，原生属性页待验 |
 | C06 | 导航常用/固定项右键 > 更多系统选项 | 更多系统选项 | More system options | 未接入 | 选中项host没有连接到常用位置ListView | —（此上下文未定义） | Shell | DEFERRED | [NAV] [LOCATION] [F-SYSTEM] | NOT RUN: M-C06-06 |
 
 ## C07 导航普通目录
@@ -278,9 +280,9 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C07 | 导航普通目录右键 > 剪切 | 剪切 | Cut | Fluent E8C6 | 普通目录独立worker捕获，MOVE只发布意图；Search/pending/busy不可用 | TargetContextCut | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | 目录来源10项新增原生检查/菜单enabled通过；实际UI SKIP |
 | C07 | 导航普通目录右键 > 复制 | 复制 | Copy | Fluent E8C8 | 单目录CF_HDROP/COPY，保持文件区选择 | TargetContextCopy | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | 菜单/真实目录来源模型通过；实际UI SKIP |
 | C07 | 导航普通目录右键 > 粘贴 | 粘贴 | Paste | Fluent E77F | 读取点中目录真实identity，复用原CopyItems/MOVE队列与冲突/取消/重试 | TargetContextPaste | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | enablement=真实CF_HDROP；实际传输UI SKIP |
-| C07 | 导航普通目录右键 > 新建文件夹 | 新建文件夹 | New folder | 未接入 | 新建后端存在，TreeView没有对应可见项 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-07 |
-| C07 | 导航普通目录右键 > 重命名 | 重命名 | Rename | 未接入 | 树节点与文件列表row context不同，未接入 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-08 |
-| C07 | 导航普通目录右键 > 删除 | 删除 | Delete | 未接入 | 无树节点删除菜单/确认入口 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-09 |
+| C07 | 导航普通目录右键 > 新建文件夹 | 新建文件夹 | New folder | Fluent E8F4 | 捕获所点目录真实ID，原名称框与queue，CtrlShiftN限导航焦点，事件更新已加载树 | TargetContextNewFolder | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-MUTATION] | G06c原生已过，独立NewFolder7项脚本待运行 |
+| C07 | 导航普通目录右键 > 重命名 | 重命名 | Rename | Fluent E8AC | 捕获目录与父ID，原whole-name/dialog/queue及其它Tab relocation，F2限导航，Retry保持实际目标 | TargetContextRename | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-MUTATION] | G06c原生已过，独立Rename8项脚本待运行 |
+| C07 | 导航普通目录右键 > 删除 | 删除 | Delete | Fluent E74D | 普通Delete走回收站；ShiftDelete走默认Cancel确认，原queue/Retry及事件树刷新 | TargetContextDelete | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-MUTATION] | G06c原生已过，独立Delete5项脚本及普通回收站UI待运行 |
 | C07 | 导航普通目录右键 > 属性 | 属性 | Properties | Fluent E946 | worker捕获点中目录的真实entry/parent，再走进程外properties-only | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 10项原生捕获及菜单enabled已验；真实属性页NOT RUN |
 | C07 | 导航普通目录右键 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B | 捕获点中目录Location，复用原后台文本剪贴板发布 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | enabled已验；本轮实际剪贴板写入NOT RUN |
 | C07 | 导航普通目录右键 > 更多系统选项 | 更多系统选项 | More system options | 未接入 | 无树节点host请求构建 | —（此上下文未定义） | Shell | DEFERRED | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-11 |
@@ -295,6 +297,7 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C08 | 驱动器目标专用右键 > 原生驱动器属性 | 属性 | Properties | Fluent E946 | 根entry和parent使用真实根身份；原有进程外properties协议 | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 根捕获/协议原生检查及enabled已验，实际属性页NOT RUN |
 | C08 | 驱动器目标专用右键 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B | 使用所点驱动器根Location，复用文本剪贴板发布 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | enabled已验，实际写入NOT RUN |
 | C08 | 驱动器目标专用右键 > 粘贴 | 粘贴 | Paste | Fluent E77F | 根是实际目录目标，仅在浏览owner可用且有CF_HDROP时启用；不提供根Cut/Copy | TargetContextPaste | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | readonly13核对适用性；真实盘根写入NOT RUN |
+| C08 | 驱动器目标专用右键 > 新建文件夹 | 新建文件夹 | New folder | Fluent E8F4 | 真实盘根只提供适用新建，不提供根Rename/Delete | TargetContextNewFolder | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-MUTATION] | G06c入口已接，实际盘根写入未验 |
 | C08 | 驱动器目标专用右键 > 弹出 | 弹出 | Eject | 未接入 | 仅适用可弹出设备；当前无设备类型驱动的动作 | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-22 |
 | C08 | 驱动器目标专用右键 > 格式化 | 格式化 | Format | 未接入 | 需要设备适用性与显式确认；当前未接入 | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-23 |
 | C08 | 驱动器目标专用右键 > 管理 | 管理 | Manage | 未接入 | 未接Windows系统管理跳转 | —（尚未定义） | 系统跳转 | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-24 |
@@ -486,11 +489,13 @@ print("rows", sum(sum(values.values()) for values in counts.values()))
 [PROVIDER]: ../src/Blink.Provider.Contracts/include/Blink/Provider/Contracts.h#L1
 [SCOPE]: PRODUCT_SCOPE.md
 [MENU-HANDOFF]: FOLDER_MENU_SYNC_HANDOFF.md
-[EXP25]: ../.build/explorer-ui-p0-view-menu/integration/explorer-reference.json
+[EXP25]: VALIDATION_GUIDE.md
+<!-- 原始报告路径: ../.build/explorer-ui-p0-view-menu/integration/explorer-reference.json；当前链接为交接摘要，旧目录已清理 -->
 
 [TOP-VIEW]: ../src/Blink/src/main.cpp
 
-[P0-GUI]: ../.build/explorer-ui-p0-view-menu/integration/ui-view-menu-report.json
+[P0-GUI]: VALIDATION_GUIDE.md
+<!-- 原始报告路径: ../.build/explorer-ui-p0-view-menu/integration/ui-view-menu-report.json；当前链接为交接摘要，旧目录已清理 -->
 
 [CB-PRESENTATION]: ../src/Blink/src/CommandBarPresentation.cpp
 [CB-MODEL]: ../src/Blink/include/Blink/App/ExplorerCommandBarModel.h
@@ -498,10 +503,14 @@ print("rows", sum(sum(values.values()) for values in counts.values()))
 [CB-TESTS]: ../tests/Blink.Phase1.Tests/src/ExplorerCommandBarTests.cpp
 [CB-HANDOFF]: EXPLORER_COMMAND_BAR_HANDOFF.md
 [CB-GUI]: ../scripts/run-blink-command-bar-smoke.ps1
-[CB-OVERFLOW]: ../.build/explorer-command-bar/integration/ui-overflow-probe.json
+[CB-OVERFLOW]: EXPLORER_COMMAND_BAR_HANDOFF.md
+<!-- 原始报告路径: ../.build/explorer-command-bar/integration/ui-overflow-probe.json；当前链接为交接摘要，旧目录已清理 -->
 [CB-LIFECYCLE]: ../tests/Blink.Phase1.Tests/src/main.cpp
-[CB-UI]: ../.build/explorer-command-bar/integration/ui-command-bar-report.json
+[CB-UI]: EXPLORER_COMMAND_BAR_HANDOFF.md
+<!-- 原始报告路径: ../.build/explorer-command-bar/integration/ui-command-bar-report.json；当前链接为交接摘要，旧目录已清理 -->
 
 - [TARGET]：main `TargetMenuContext/ShowTargetContextMenu/ShowNavigationContextMenu/ShowTargetProperties`，复用 `CaptureDirectoryShellMenuRequest`、原lazy loader与文本剪贴板发布；导航目标与当前文件列表选择独立。G06a只交付常用动作，树文件操作/其它对象菜单保持原缺口。
 
 - [NAV-TRANSFER]：main CopyTargetDirectory/PasteTargetDirectory/PublishFileCopySources，CaptureDirectoryClipboardSource及FileDropOrigin，复用原CopyItems/MOVE/cache；已加载树按真实目录操作与F5串行刷新。真实Clipboard传输报告=SKIP，不可将未执行动作等同入口检查。
+
+- [NAV-MUTATION]：main BeginTargetDirectoryOperation/CaptureNavigationTarget、CaptureDirectoryOperationTarget与原名称/删除对话框、唯一coordinator。源码已有实现，当前窗口独立功能仍待验证；见EXPLORER_NAVIGATION_MUTATION_HANDOFF。

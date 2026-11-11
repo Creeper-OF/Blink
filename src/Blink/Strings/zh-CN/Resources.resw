@@ -466,4 +466,6 @@
   <data name="Nav.MenuNewTab" xml:space="preserve"><value>在新标签页中打开</value></data>
   <data name="Nav.MenuExpand" xml:space="preserve"><value>展开</value></data>
   <data name="Nav.MenuCollapse" xml:space="preserve"><value>折叠</value></data>
+  <data name="Operation.TargetPreparing" xml:space="preserve"><value>正在读取目标文件夹…</value></data>
+  <data name="Operation.TargetCancelling" xml:space="preserve"><value>正在取消…</value></data>
 </root>

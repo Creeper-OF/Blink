@@ -1,5 +1,7 @@
 # Explorer 兼容差距与切片顺序
 
+2026-11-12审计：开发优先级改为功能/响应/易用性；G06c源码双配置1648/0/4、249输入/388资源已过，但NewFolder7/Rename8/Delete5窗口脚本仅完成拆分与AST，未实跑，不将旧片段计入通过。默认仍为G06b；当前审计与后续先搜索响应见[审计](DEVELOPMENT_AUDIT.md)。
+
 G06b最新（2026-11-11）：目录Cut/Copy/Paste、已加载树分支事件/F5刷新已接入，双配置1636/0/4、249输入/386资源；13项不写Clipboard窗口检查通过，实际传输UI为SKIP（0项）。其余对象菜单/完整G06/P0待续。见[交接](EXPLORER_NAVIGATION_TRANSFER_HANDOFF.md)。
 
 G06a最新（2026-11-11）：导航/位置常用目标菜单已接入；双配置1618/0/4、249输入/386资源，最终Release10项窗口检查通过。树文件操作/其它对象菜单仍待做，真实属性页/鼠标/剪贴板与环境待验，完整G06/P0未完。见[交接](EXPLORER_OBJECT_MENU_HANDOFF.md)。
@@ -35,7 +37,7 @@ G03b最新记录（2026-11-11）：逐级下级目录菜单已实现；两配置
 | G03 | P0，功能已接入/组合待验 | 编辑/面包屑、历史、逐级目录、前缀候选与键盘已接入 | IMPLEMENTED_NEEDS_MANUAL | AddressBarModel/Presentation、StartAddressSuggestions，复用Location/枚举/隐藏项与原导航 | 双配置1608/0/4、383资源，最终同Release补全15+地址20项；实物鼠标/真实IME/UNC及完整环境仍待验，不标完整G03/P0完成 |
 | G04 | P0，G04a所列子项已验 | F3共享搜索入口；F6/Shift+F6显式六区域切换，标准TabView/ListView快捷键保留 | PARTIAL（所列子项IMPLEMENTED_VERIFIED） | main `CanUseFocusShortcut/CurrentFocusRegion/CycleWindowFocus`；原生文本组合事件 | 双配置1583/0/4、最终23项窗口全PASS，零结果页原生“更多”入口已补并复测；真实IME/读屏及全部组合仍待验 |
 | G05 | P0，G05a/G05b所列场景已验 | 文件主名初选，目录及新建等全选；保留ContentDialog，改名后选中并滚动到精确新行 | PARTIAL（实测子项IMPLEMENTED_VERIFIED） | `ShowFileNameDialog`、`TabState::CommitBrowse`、`RestoreRenderedSelection`；搜索仍先定位父目录 | 双配置1583/0/4、最终17项窗口检查，覆盖同身份其他链接不误选、仅改大小写、分批列表滚动和编辑中正常关闭。真实IME与完整区域焦点组合仍待续，Ctrl+A可编辑全名 |
-| G06 | P0，G06a/G06b所列入口已接入 | 导航常用菜单与目录剪切复制粘贴、事件/F5树刷新已接；新建/改名/删除及其它对象菜单待续 | PARTIAL（新传输动作IMPLEMENTED_NEEDS_MANUAL） | TargetMenuContext/CopyTargetDirectory/PasteTargetDirectory、FileDropOrigin、原唯一queue | 双配置1636/0/4；13项不写Clipboard窗口检查通过，实际传输UI SKIP；物理鼠标及完整矩阵待验 |
+| G06 | P0，G06a/b已交付；G06c源码待分项验证 | 常用目标/剪贴板及G06c新建改名删除已有接线，更多系统/其它对象菜单待续 | PARTIAL（G06c IMPLEMENTED_NEEDS_MANUAL） | BeginTargetDirectoryOperation、FileDropOrigin、原唯一queue/对话框及串行已加载树刷新 | G06c双配置1648/0/4；NewFolder7/Rename8/Delete5仅AST，窗口尚待实跑；默认仍G06b |
 | G07 | P0，后续 | Shell菜单单/同父多选与2/3消息转发已做；host无wall-clock deadline，现代IExplorerCommand未对接 | PARTIAL | `ShellContextMenuController::Dispatch`、`Blink.ShellMenuHost` | 进程隔离不等于超时已覆盖；先验证实际挂起/取消边界再做必要处理；动态扩展按系统返回，不硬编码软件名，不进Blink主进程 |
 | G08 | P0，后续 | 标准COPY/MOVE剪贴板有Preferred；外部performed完成回传与剪切淡化闭环不足 | PARTIAL | `ClipboardFileTransfer`、main剪贴板缓存及唯一coordinator；OLE拖放现有完成反馈另计 | 保留真实sequence/源身份与部分完成；Explorer双向互操作必须实测，不能把“已发布剪贴板”写成已移动 |
 | G09 | P0，后续 | 同/跨卷拖放、Ctrl/Shift与OLE完成已有；link、右键拖放选择菜单、虚拟文件未接 | PARTIAL | `FileDragDropController/Model/Data`与 `FileDragDropTests` | 现有操作如实验证；未支持的effect返回NONE。FileDescriptor/FileContents不是CF_HDROP的既有能力 |
@@ -102,11 +104,11 @@ E. G03a最终WM_CLOSE修正后，两配置原生各1565/0/4；同一Release地�
 
 同Tab自动刷新保留编辑草稿和焦点；切Tab取消未提交草稿，返回时展示该Tab的committed路径，不承诺跨Tab草稿保存或会话落盘。ThisPC保持虚拟Location，不映射到C盘；纯UNC路径模型测试不代表实际SMB、权限或设备已验。
 
-当前仅本机最终Release实际覆盖子项为`IMPLEMENTED_VERIFIED`：两配置构建和原生各1565/0/4（23项新增地址模型），246输入/378资源；同一SHA256 `CF1D8A2BAE1A8B67ED2C99E53DFF373369EE8362060D69B8DAD3481A8E5FCA9D`的[地址20项](../.build/explorer-address-bar/integration/ui-address-bar-report.json)、[命令18项](../.build/explorer-address-bar/integration/ui-command-bar-compat-report.json)、[查看15项](../.build/explorer-address-bar/integration/ui-view-compat-report.json)合计53 PASS/0 FAIL/0 SKIP。旧Debug19+18+15=52只preflight，不混入最终结果；独立关闭A/B/C/D四项全PASS/exit0，另列不加进53。
+当前仅本机最终Release实际覆盖子项为`IMPLEMENTED_VERIFIED`：两配置构建和原生各1565/0/4（23项新增地址模型），246输入/378资源；同一SHA256 `CF1D8A2BAE1A8B67ED2C99E53DFF373369EE8362060D69B8DAD3481A8E5FCA9D`的[地址20项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-address-bar-report.json；旧目录已清理 -->、[命令18项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-command-bar-compat-report.json；旧目录已清理 -->、[查看15项（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/ui-view-compat-report.json；旧目录已清理 -->合计53 PASS/0 FAIL/0 SKIP。旧Debug19+18+15=52只preflight，不混入最终结果；独立关闭A/B/C/D四项全PASS/exit0，另列不加进53。
 
 本机zh-CN、25H2/build26200.9711、非管理员、window_dpi=96；系统AppsUseLightTheme=0，Blink实际主题未采集。620宽overflow真实入口为ID空、Name“更多”、`BreadcrumbBarItem / Button`，已打开原生popup并导航折叠祖先；最初harness误用已收进More的CommandSort作Ready门槛造成假阴性，改验精确路径/两条行/字节/新breadcrumb/菜单关闭，再恢复宽度查Ready。旧Debug19项preflight和最终Release20项均覆盖此动作；早期误报不作为产品导航缺陷或最终结果。
 
-关闭修复保留真实边界：初始/仅Closed退役补丁仍AV；两份真实dump经StackWalk64得到64帧匹配，顶栈WinUIEdit/Xaml、未见自有关闭直接栈，不臆定内部源码根因。最终WM_CLOSE转交WinUI前先焦点交可见列表，再用helper缓存committed取消编辑/隐藏editor、不重建crumb；程序Close前同样准备，Closed只退役shutdown。最终[四场景报告](../.build/explorer-address-bar/integration/window-close-probe/fixed/probe-report.json)A/B/C/D全PASS/exit0：C先准备自有SUT前台，再只激活自有PS WinForms伴随窗口，以前台PID/HWND和全局UIA focus/runtimeId严格确认后台Ctrl+L前后都真后台，background_branch=COVERED；D实际Ctrl+W关唯一Tab，无WM_CLOSE fallback。伴随窗口正常关闭/dispose；最终地址#18/#19另覆盖foreground草稿/焦点直接关闭。
+关闭修复保留真实边界：初始/仅Closed退役补丁仍AV；两份真实dump经StackWalk64得到64帧匹配，顶栈WinUIEdit/Xaml、未见自有关闭直接栈，不臆定内部源码根因。最终WM_CLOSE转交WinUI前先焦点交可见列表，再用helper缓存committed取消编辑/隐藏editor、不重建crumb；程序Close前同样准备，Closed只退役shutdown。最终[四场景报告（历史摘要）](EXPLORER_ADDRESS_BAR_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-address-bar/integration/window-close-probe/fixed/probe-report.json；旧目录已清理 -->A/B/C/D全PASS/exit0：C先准备自有SUT前台，再只激活自有PS WinForms伴随窗口，以前台PID/HWND和全局UIA focus/runtimeId严格确认后台Ctrl+L前后都真后台，background_branch=COVERED；D实际Ctrl+W关唯一Tab，无WM_CLOSE fallback。伴随窗口正常关闭/dispose；最终地址#18/#19另覆盖foreground草稿/焦点直接关闭。
 
 最终Release正常exit0、无强杀；366字节精确fixture已删除，compiler-temp已清、释放字节未记录，无系统剪贴板使用。下级目录菜单、自动完成、空白点击/完整错误分支、真实IME、Narrator、全部主题/DPI/语言/24H2/UNC矩阵、旧breadcrumb peer专项及F3/F6仍保留待做或待验；完整G03/P0仍`PARTIAL`。
 
@@ -119,6 +121,6 @@ E. G03a最终WM_CLOSE修正后，两配置原生各1565/0/4；同一Release地�
 
 2026-11-11实机问题修正补记：名称对话框取消后，顶部New/Sort曾保留模态期间的禁用状态；共享`Dismissed`通知在`ShowAsync`完成、`closed=true`之后统一调用`SyncCommandBarState`，从真实当前能力重算，不按入口硬设启用。另发现从工具栏Rename取消后焦点落到侧栏；同一完成回调在没有其它操作对话框时，把焦点交给当前实际可见的`SearchResults`或`FolderEntries`，不再只依赖ContentDialog返回旧焦点。搜索F2已导航父目录，故其取消后当前列表仍是`FolderEntries`。上述修正已在完整15项Release报告的实际取消/能力/焦点场景中通过；该结果不代表完整焦点环或其它环境均已验收。此G05a回焦结果不包含新名项继续选中；该行为由G05b另行验证。
 
-两配置原生各1578 PASS/0 FAIL/4既有权限SKIP，249输入/378资源，13项新增纯选择模型；[`ui-rename-selection-report.json`](../.build/explorer-rename-selection/integration/ui-rename-selection-report.json)已取得15 PASS / 0 FAIL / 0 SKIP（13功能+正常退出/归属清理），SHA256 `ef4986100848f3656dcaa0f2d8a645a96e9a40b09f44c5e86c51f16abb67434c`，PID29940 exit0、无force，425字节夹具清理完成。G05a的记录不含成功后新行选择；G05b将已提交的新RowIdentity用于同目录操作刷新。F3/F6、真实IME/候选、完整主题/DPI/24H2等仍NOT RUN，G05/P0保持PARTIAL。
+两配置原生各1578 PASS/0 FAIL/4既有权限SKIP，249输入/378资源，13项新增纯选择模型；[`ui-rename-selection-report.json`（历史摘要）](EXPLORER_RENAME_SELECTION_HANDOFF.md)<!-- 原始报告路径: ../.build/explorer-rename-selection/integration/ui-rename-selection-report.json；旧目录已清理 -->已取得15 PASS / 0 FAIL / 0 SKIP（13功能+正常退出/归属清理），SHA256 `ef4986100848f3656dcaa0f2d8a645a96e9a40b09f44c5e86c51f16abb67434c`，PID29940 exit0、无force，425字节夹具清理完成。G05a的记录不含成功后新行选择；G05b将已提交的新RowIdentity用于同目录操作刷新。F3/F6、真实IME/候选、完整主题/DPI/24H2等仍NOT RUN，G05/P0保持PARTIAL。
 
 发布核验已完成：原agent默认窗口PID10988正常exit0，候选发布的四项关键产物SHA与测试版本一致；新默认窗口PID7108可见并位于前台。主模型最终复核249项原生源码/11项保留产物、两配置1578/0/4、378资源及同一Release15项GUI均通过。此发布记录与测试PID29940分别记录，不把新开窗口当作再跑完整GUI或全部环境验收。
