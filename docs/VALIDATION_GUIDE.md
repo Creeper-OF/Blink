@@ -13,10 +13,18 @@
 
 本次原生回归全部检查约 33–54 秒，产品编译约 15–16 分钟。源码没变而脚本修正时，直接复测对应脚本，不重编产品。开发台构建使用本批 candidate OutDir，避免覆盖正在运行的正式索引服务；具体环境见 LOCAL_ENVIRONMENT。
 
+## 搜索响应与目录范围
+
+```powershell
+.\scripts\run-blink-search-smoke.ps1 -Configuration Release -Feature All
+```
+
+`All` 顺序启动 `--suite search-response`（15项）与 `--suite search-scope`（25项）两个独立原生进程；也能用 `-Feature Response` 或 `-Feature Scope` 单独复测。每项保存日志、退出码、精确检查数及二进制SHA。脚本不编译、不操作前台或正式服务；完整无参数原生回归另跑。详细约定及实际结果见[搜索功能验证](SEARCH_RESPONSE_VALIDATION.md)。调用次数和假IPC行为不能当成真实窗口首屏或Everything对比。
+
 ## 当前侧栏目录功能
 
 ```powershell
-$blinkBinary = '.build\explorer-navigation-mutation\runtime\Release\Blink.exe'
+$blinkBinary = '.build\search-response\runtime\Release\Blink.exe'
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature NewFolder -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Rename -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Delete -Binary $blinkBinary

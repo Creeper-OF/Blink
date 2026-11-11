@@ -9,7 +9,9 @@
 #include <future>
 #include <atomic>
 #include <algorithm>
+#include <iterator>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace
 {
@@ -543,5 +545,353 @@ bool RunSearchIntegrationTests()
     view_snapshot.volumes[0].searched = false;
     passed &= Check(BuildSearchView(view_snapshot, { true }, {}).rows.empty(),
         "search_view_does_not_render_rows_from_failed_volume");
+    return passed;
+}
+
+namespace
+{
+    struct ScopeCacheFixture
+    {
+        std::unordered_map<std::wstring, blink::core::FileEntry> entries;
+        std::unordered_map<std::wstring, DWORD> errors;
+        std::unordered_map<std::wstring, std::size_t> reads;
+        std::function<void(const std::wstring&)> before_read;
+        std::size_t calls{};
+
+        ScopeCacheFixture()
+        {
+            Directory(L"D:\\", 1);
+            Directory(L"D:\\Scope", 2);
+            Directory(L"D:\\Scope\\shared", 3);
+        }
+        void Directory(const std::wstring& path, const std::uint8_t id)
+        {
+            blink::core::FileEntry entry;
+            entry.full_path = path; entry.is_directory = true; entry.attributes = FILE_ATTRIBUTE_DIRECTORY;
+            entry.identity = { 77, { id }, true }; entries[path] = std::move(entry);
+        }
+        blink::app::SearchResult Hit(const std::wstring& parent, const std::wstring& name, const std::uint8_t id = 32)
+        {
+            blink::core::FileEntry entry;
+            entry.name = name; entry.full_path = blink::core::JoinPath(parent, name);
+            entry.attributes = FILE_ATTRIBUTE_NORMAL; entry.identity = { 77, { id }, true };
+            entries[entry.full_path] = entry;
+            blink::app::SearchResult result; result.source_volume = L"D:\\";
+            result.hit.name = name; result.hit.full_path = entry.full_path;
+            result.hit.identity = entry.identity; result.hit.parent_identity = entries.at(parent).identity;
+            result.hit.attributes = entry.attributes; return result;
+        }
+        std::vector<blink::app::SearchResult> Hits(const std::wstring& parent, const std::size_t count = 200)
+        {
+            std::vector<blink::app::SearchResult> results;
+            for (std::size_t index{}; index < count; ++index)
+            { results.push_back(Hit(parent, L"文件-" + std::to_wstring(index) + L".txt", static_cast<std::uint8_t>(32 + index))); }
+            return results;
+        }
+        blink::app::SearchMetadataReader Reader()
+        {
+            return [this](const std::wstring& path, blink::core::FileEntry& entry) -> DWORD {
+                ++calls; ++reads[path];
+                if (before_read) { before_read(path); }
+                if (const auto error = errors.find(path); error != errors.end()) { return error->second; }
+                const auto found = entries.find(path);
+                if (found == entries.end()) { return ERROR_PATH_NOT_FOUND; }
+                entry = found->second; return ERROR_SUCCESS;
+            };
+        }
+        std::size_t ReadCount(const std::wstring& path) const
+        { const auto found = reads.find(path); return found == reads.end() ? 0 : found->second; }
+        void ResetReads() { calls = 0; reads.clear(); }
+    };
+    blink::app::SearchVolumeResult ScopeCacheVolume(std::vector<blink::app::SearchResult> results)
+    {
+        blink::app::SearchVolumeResult volume;
+        volume.root = L"D:\\"; volume.searched = true; volume.stage = blink::app::VolumeIndexStage::Healthy;
+        volume.results = std::move(results); return volume;
+    }
+    bool ScopeCacheFailure(const blink::app::SearchVolumeResult& volume, const DWORD error)
+    {
+        return !volume.searched && volume.stage == blink::app::VolumeIndexStage::Unavailable &&
+            volume.results.empty() && volume.error == error;
+    }
+    std::string ScopeFixtureText(const std::filesystem::path& path)
+    {
+        std::ifstream stream(path, std::ios::binary);
+        return { std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>() };
+    }
+}
+
+bool RunSearchScopeCacheTests()
+{
+    using namespace blink::app;
+    namespace fs = std::filesystem;
+    bool passed = true;
+    const std::wstring folder = L"D:\\Scope", shared = L"D:\\Scope\\shared";
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader();
+        const auto scope = ResolveSearchFolderScope(folder, reader);
+        const auto hits = fixture.Hits(shared); auto volume = ScopeCacheVolume(hits);
+        fixture.ResetReads(); FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(volume.searched && volume.results.size() == 200 &&
+            std::equal(volume.results.begin(), volume.results.end(), hits.begin(), [](const auto& left, const auto& right) {
+                return left.hit.full_path == right.hit.full_path && left.hit.identity == right.hit.identity &&
+                    left.hit.parent_identity == right.hit.parent_identity;
+            }), "search_scope_cache_preserves_all_200_same_parent_results_and_order");
+        passed &= Check(fixture.calls <= 8 && fixture.ReadCount(shared) == 2,
+            "search_scope_cache_200_same_parent_uses_at_most_8_reads_instead_of_1002_and_rechecks_parent");
+        std::cout << "INFO search_scope_cache same_parent_old_reads=1002 actual_reads=" << fixture.calls << '\n';
+    }
+    {
+        ScopeCacheFixture fixture; std::wstring parent = folder;
+        for (std::uint8_t index{}; index < 20; ++index)
+        { parent += L"\\depth-" + std::to_wstring(index); fixture.Directory(parent, static_cast<std::uint8_t>(10 + index)); }
+        const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume(fixture.Hits(parent)); fixture.ResetReads();
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(volume.searched && volume.results.size() == 200 && fixture.calls <= 46 && fixture.ReadCount(parent) == 2,
+            "search_scope_cache_deep_shared_chain_uses_at_most_46_reads_instead_of_4802");
+        std::cout << "INFO search_scope_cache deep_chain_old_reads=4802 actual_reads=" << fixture.calls << '\n';
+    }
+    {
+        ScopeCacheFixture fixture; std::vector<SearchResult> hits;
+        for (std::uint8_t index{}; index < 5; ++index)
+        {
+            const auto parent = folder + L"\\parent-" + std::to_wstring(index);
+            fixture.Directory(parent, static_cast<std::uint8_t>(10 + index));
+            auto children = fixture.Hits(parent, 40); hits.insert(hits.end(), children.begin(), children.end());
+        }
+        const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume(std::move(hits)); fixture.ResetReads();
+        FilterSearchFolderResults(scope, volume, reader);
+        bool parents_rechecked = true;
+        for (unsigned index{}; index < 5; ++index)
+        { parents_rechecked &= fixture.ReadCount(folder + L"\\parent-" + std::to_wstring(index)) == 2; }
+        passed &= Check(volume.searched && volume.results.size() == 200 && fixture.calls <= 24 && parents_rechecked,
+            "search_scope_cache_mixed_parents_share_prefix_reads_but_each_parent_is_freshly_rechecked");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader();
+        const auto scope = ResolveSearchFolderScope(L"\\\\?\\D:\\Scope\\", reader);
+        auto hits = fixture.Hits(shared);
+        for (std::size_t index{}; index < hits.size(); ++index)
+        {
+            hits[index].hit.full_path = index % 2 ? L"\\\\?\\" + hits[index].hit.full_path :
+                folder + L"\\shared\\..\\shared\\" + hits[index].hit.name;
+        }
+        auto volume = ScopeCacheVolume(hits); fixture.ResetReads(); FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(scope.path == folder && volume.searched && volume.results.size() == 200 && fixture.calls <= 8 &&
+            volume.results.front().hit.full_path == hits.front().hit.full_path,
+            "search_scope_cache_extended_and_lexical_aliases_share_canonical_spelling_without_rewriting_hits");
+    }
+    {
+        ScopeCacheFixture fixture; fixture.Directory(L"D:\\scope", 8); fixture.Directory(L"D:\\scope\\child", 9);
+        const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto hits = fixture.Hits(shared, 2); hits.push_back(fixture.Hit(L"D:\\scope\\child", L"outside.txt"));
+        auto volume = ScopeCacheVolume(std::move(hits)); fixture.ResetReads(); FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(volume.searched && volume.results.size() == 2 && fixture.ReadCount(L"D:\\scope") == 1 &&
+            fixture.ReadCount(L"D:\\scope\\child") == 0,
+            "search_scope_cache_case_sensitive_scope_spelling_with_different_identity_stays_outside");
+    }
+    {
+        ScopeCacheFixture fixture; fixture.Directory(folder + L"\\Child", 8); fixture.Directory(folder + L"\\child", 9);
+        const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume({ fixture.Hit(folder + L"\\Child", L"a.txt"), fixture.Hit(folder + L"\\child", L"b.txt") });
+        fixture.ResetReads(); FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(volume.searched && volume.results.size() == 2 &&
+            volume.results[0].hit.parent_identity != volume.results[1].hit.parent_identity &&
+            fixture.ReadCount(folder + L"\\Child") == 2 && fixture.ReadCount(folder + L"\\child") == 2,
+            "search_scope_cache_case_sensitive_parents_keep_separate_identities_and_fresh_checks");
+    }
+    {
+        ScopeCacheFixture fixture; fixture.Directory(L"D:\\scope", 2); fixture.Directory(L"D:\\scope\\child", 9);
+        const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume({ fixture.Hit(L"D:\\scope\\child", L"a.txt") }); fixture.ResetReads();
+        fixture.before_read = [&](const auto& path) {
+            if (path == L"D:\\scope" && fixture.ReadCount(path) == 2) { fixture.entries.at(path).identity.file_id[0] = 8; }
+        };
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_FILE_INVALID),
+            "search_scope_cache_freshly_rechecks_actual_scope_spelling_not_just_leaf_parent_identity");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto hits = fixture.Hits(shared, 1); auto outside = hits.front();
+        for (const auto& path : { L"D:\\Scope-old\\file.txt", L"C:\\Scope\\file.txt", L"D:\\Other\\file.txt", L"D:\\Scope" })
+        { outside.hit.full_path = path; hits.push_back(outside); }
+        auto volume = ScopeCacheVolume(std::move(hits)); fixture.ResetReads(); FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(volume.searched && volume.results.size() == 1 && fixture.calls <= 8 &&
+            fixture.ReadCount(L"D:\\Scope-old") == 0 && fixture.ReadCount(L"C:\\") == 0,
+            "search_scope_cache_outside_paths_and_sibling_prefixes_never_enter_metadata_validation");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(L"D:\\", reader);
+        auto volume = ScopeCacheVolume(fixture.Hits(folder)); fixture.ResetReads(); FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(volume.searched && volume.results.size() == 200 && fixture.calls <= 5 && fixture.ReadCount(folder) == 2,
+            "search_scope_cache_drive_root_retains_descendants_and_fresh_parent_check");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume(fixture.Hits(shared, 1)); scope.identity.file_id[0] ^= 1;
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_FILE_INVALID),
+            "search_scope_cache_stale_initial_scope_identity_clears_the_volume");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume(fixture.Hits(shared, 1)); fixture.errors[folder] = ERROR_ACCESS_DENIED;
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_ACCESS_DENIED),
+            "search_scope_cache_preserves_initial_scope_metadata_error");
+    }
+    {
+        ScopeCacheFixture fixture; fixture.Directory(folder + L"\\denied", 9);
+        const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto hits = fixture.Hits(shared, 1); hits.push_back(fixture.Hit(folder + L"\\denied", L"b.txt"));
+        auto volume = ScopeCacheVolume(std::move(hits)); fixture.errors[folder + L"\\denied"] = ERROR_SHARING_VIOLATION;
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_SHARING_VIOLATION),
+            "search_scope_cache_later_parent_metadata_error_discards_already_filtered_prefix");
+    }
+    {
+        ScopeCacheFixture fixture; fixture.Directory(folder + L"\\junction", 8); fixture.Directory(folder + L"\\junction\\child", 9);
+        const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume({ fixture.Hit(folder + L"\\junction\\child", L"a.txt") });
+        fixture.entries.at(folder + L"\\junction").attributes |= FILE_ATTRIBUTE_REPARSE_POINT;
+        fixture.ResetReads(); FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_NOT_SUPPORTED) && fixture.ReadCount(folder + L"\\junction\\child") == 0,
+            "search_scope_cache_reparse_ancestor_stays_unsupported_without_reading_through_it");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto hits = fixture.Hits(shared, 2); hits.back().hit.parent_identity.file_id[0] ^= 1;
+        auto volume = ScopeCacheVolume(std::move(hits)); FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_FILE_INVALID),
+            "search_scope_cache_still_checks_every_indexed_parent_identity");
+    }
+    {
+        ScopeCacheFixture fixture; fixture.Directory(folder + L"\\trigger", 9);
+        const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto hits = fixture.Hits(shared); hits.insert(hits.begin() + 1, fixture.Hit(folder + L"\\trigger", L"a.txt"));
+        auto volume = ScopeCacheVolume(std::move(hits)); fixture.ResetReads();
+        fixture.before_read = [&](const auto& path) {
+            if (path == folder + L"\\trigger") { fixture.entries.at(shared).identity.file_id[0] = 10; }
+        };
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_FILE_INVALID) && fixture.ReadCount(shared) == 2,
+            "search_scope_cache_parent_replaced_mid_batch_is_rejected_by_fresh_final_check");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume(fixture.Hits(shared)); fixture.ResetReads();
+        fixture.before_read = [&](const auto& path) {
+            if (path == shared && fixture.ReadCount(path) == 2) { fixture.errors[path] = ERROR_ACCESS_DENIED; }
+        };
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_ACCESS_DENIED),
+            "search_scope_cache_preserves_final_parent_metadata_error_and_clears_results");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume(fixture.Hits(shared)); fixture.ResetReads();
+        fixture.before_read = [&](const auto& path) {
+            if (path == shared && fixture.ReadCount(path) == 2) { fixture.entries.at(path).attributes |= FILE_ATTRIBUTE_REPARSE_POINT; }
+        };
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_NOT_SUPPORTED),
+            "search_scope_cache_parent_becomes_reparse_during_batch_is_not_hidden");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        auto volume = ScopeCacheVolume(fixture.Hits(shared));
+        fixture.before_read = [&](const auto& path) {
+            if (path == shared) { fixture.entries.at(folder).identity.file_id[0] = 10; }
+        };
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(ScopeCacheFailure(volume, ERROR_FILE_INVALID),
+            "search_scope_cache_scope_replaced_after_initial_validation_is_freshly_rejected");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        const auto hits = fixture.Hits(shared); auto first = ScopeCacheVolume(hits); FilterSearchFolderResults(scope, first, reader);
+        fixture.entries.at(shared).identity.file_id[0] = 10; fixture.ResetReads();
+        auto second = ScopeCacheVolume(hits); FilterSearchFolderResults(scope, second, reader);
+        passed &= Check(first.searched && first.results.size() == 200 && ScopeCacheFailure(second, ERROR_FILE_INVALID) &&
+            fixture.ReadCount(folder) != 0 && fixture.ReadCount(shared) != 0,
+            "search_scope_cache_independent_filter_call_reopens_changed_directories");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        const auto hit = fixture.Hit(shared, L"a.txt"); auto volume = ScopeCacheVolume({ hit });
+        FilterSearchFolderResults(scope, volume, reader); fixture.ResetReads();
+        fixture.entries.at(hit.hit.full_path).identity.file_id[0] ^= 1;
+        const auto target = ValidateSearchResult(hit, reader);
+        passed &= Check(volume.searched && target.error == ERROR_FILE_INVALID &&
+            fixture.ReadCount(shared) == 1 && fixture.ReadCount(hit.hit.full_path) == 1,
+            "search_scope_cache_does_not_supply_open_locate_validation_with_cached_file_or_parent");
+    }
+    {
+        ScopeCacheFixture fixture; const auto reader = fixture.Reader(); const auto scope = ResolveSearchFolderScope(folder, reader);
+        const auto hit = fixture.Hit(shared, L"a.txt"); auto volume = ScopeCacheVolume({ hit });
+        FilterSearchFolderResults(scope, volume, reader); fixture.ResetReads();
+        fixture.before_read = [&](const auto& path) {
+            if (path == hit.hit.full_path) { fixture.entries.at(shared).identity.file_id[0] = 10; }
+        };
+        const auto target = ValidateSearchResult(hit, reader);
+        passed &= Check(volume.searched && target.error == ERROR_FILE_INVALID &&
+            fixture.ReadCount(shared) == 2 && fixture.ReadCount(hit.hit.full_path) == 1,
+            "search_scope_cache_leaves_open_locate_post_file_parent_revalidation_fresh");
+    }
+    {
+        const auto root = fs::absolute(fs::path(L".build") / L"search-integration-fixtures" /
+            (L"scope-cache-pid-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64())));
+        struct Cleanup { fs::path path; ~Cleanup() { std::error_code error; fs::remove_all(path, error); } } cleanup{ root };
+        const auto real_folder = root / L"Unicode目录", real_parent = real_folder / L"共享父目录";
+        const auto trigger = real_folder / L"trigger", file = real_parent / L"文件.txt";
+        fs::create_directories(real_parent); fs::create_directories(trigger);
+        const std::string original = "owned scope cache fixture\n";
+        { std::ofstream stream(file, std::ios::binary); stream << original; }
+        { std::ofstream stream(trigger / L"trigger.txt"); stream << "owned trigger"; }
+        std::size_t calls{};
+        const SearchMetadataReader reader = [&](const auto& path, auto& entry) -> DWORD {
+            ++calls;
+            if (blink::core::ReadEntryMetadata(path, entry)) { return ERROR_SUCCESS; }
+            const auto error = GetLastError(); return error ? error : ERROR_FILE_INVALID;
+        };
+        const auto scope = ResolveSearchFolderScope(real_parent.wstring(), reader); const auto depth = calls;
+        const auto hit = ResultFor(file); auto volume = VolumeFor(hit); volume.results.assign(200, hit); calls = 0;
+        FilterSearchFolderResults(scope, volume, reader);
+        passed &= Check(!scope.error && volume.searched && volume.results.size() == 200 && calls <= 2 * depth &&
+            volume.results.front().hit.identity == hit.hit.identity &&
+            volume.results.front().hit.parent_identity == scope.identity && ScopeFixtureText(file) == original,
+            "search_scope_cache_real_unicode_parent_200_hits_use_two_chain_reads_and_leave_contents_unchanged");
+
+        const auto broader = ResolveSearchFolderScope(real_folder.wstring()); const auto trigger_hit = ResultFor(trigger / L"trigger.txt");
+        const auto saved = real_folder / L"原目录保留"; bool replaced{};
+        const SearchMetadataReader replacing_reader = [&](const auto& path, auto& entry) -> DWORD {
+            if (!replaced && path == trigger.wstring())
+            {
+                fs::rename(real_parent, saved); fs::create_directory(real_parent);
+                { std::ofstream stream(file); stream << "replacement directory contents"; }
+                replaced = true;
+            }
+            return reader(path, entry);
+        };
+        volume = VolumeFor(hit); volume.results = { hit, trigger_hit, hit };
+        FilterSearchFolderResults(broader, volume, replacing_reader);
+        blink::core::FileEntry new_parent, saved_parent;
+        const bool identities = blink::core::ReadEntryMetadata(real_parent.wstring(), new_parent) &&
+            blink::core::ReadEntryMetadata(saved.wstring(), saved_parent);
+        passed &= Check(replaced && identities && ScopeCacheFailure(volume, ERROR_FILE_INVALID) &&
+            new_parent.identity != hit.hit.parent_identity && saved_parent.identity == hit.hit.parent_identity &&
+            ScopeFixtureText(saved / file.filename()) == original,
+            "search_scope_cache_real_parent_replacement_mid_batch_rejects_old_hits_without_changing_original_file");
+
+        const auto removed_scope = ResolveSearchFolderScope(real_parent.wstring()); const auto replacement_hit = ResultFor(file);
+        fs::rename(real_parent, real_folder / L"替换目录保留");
+        blink::core::FileEntry missing_parent; const auto missing_error = reader(real_parent.wstring(), missing_parent);
+        volume = VolumeFor(replacement_hit); FilterSearchFolderResults(removed_scope, volume, reader);
+        passed &= Check(!removed_scope.error && missing_error != ERROR_SUCCESS && ScopeCacheFailure(volume, missing_error),
+            "search_scope_cache_real_missing_parent_preserves_actual_metadata_error_and_clears_results");
+    }
     return passed;
 }

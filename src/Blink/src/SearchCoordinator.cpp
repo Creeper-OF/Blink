@@ -2,8 +2,6 @@
 #include "Blink/App/Location.h"
 #include <winrt/Windows.System.Threading.h>
 #include <algorithm>
-#include <chrono>
-#include <thread>
 #include <utility>
 
 namespace blink::app
@@ -11,54 +9,6 @@ namespace blink::app
     namespace
     {
         namespace ipc = blink::index::ipc;
-        SearchCoordinator::ExchangeFunction DefaultExchange(const std::shared_ptr<SearchState>& state)
-        {
-            const auto client = std::make_shared<ipc::Client>();
-            using Clock = std::chrono::steady_clock;
-            return [client, weak_state = std::weak_ptr<SearchState>(state), generation = std::uint64_t{},
-                deadline = Clock::time_point{}](ipc::Request request) mutable {
-                const auto state = weak_state.lock();
-                if (!state) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
-                const auto snapshot = state->Snapshot();
-                if (snapshot.stage != SearchStage::Searching || !state->IsCurrent(snapshot.generation))
-                { return IndexRpcResult{ false, ERROR_CANCELLED }; }
-                if (generation != snapshot.generation)
-                {
-                    generation = snapshot.generation;
-                    deadline = Clock::now() + std::chrono::seconds(120);
-                }
-                IndexRpcResult reply;
-                for (;;)
-                {
-                    if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
-                    // All volumes share this generation's budget. Reserve the
-                    // existing Connect + Send bounds before another request.
-                    if (Clock::now() + std::chrono::seconds(6) > deadline)
-                    {
-                        if (!reply.received) { reply.error = ERROR_TIMEOUT; }
-                        return reply;
-                    }
-                    IndexRpcResult next;
-                    if (!client->IsConnected() && !client->Connect(1000, &next.error)) { return next; }
-                    if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
-                    next.received = client->Send(request, next.response, 5000, &next.error);
-                    if (next.received) { next.expected_request_id = next.response.request_id; }
-                    else { client->Disconnect(); }
-                    if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
-                    reply = std::move(next);
-                    if (ValidateIndexReply(reply) != ERROR_SUCCESS || reply.response.status == ipc::ResponseStatus::NotFound)
-                    { return reply; }
-                    const auto error = reply.response.error;
-                    const bool pending = error == ERROR_IO_PENDING || (reply.response.status == ipc::ResponseStatus::Busy &&
-                        (error == ERROR_SUCCESS || error == ERROR_BUSY));
-                    if (!pending || Clock::now() + std::chrono::milliseconds(500) + std::chrono::seconds(6) > deadline)
-                    { return reply; }
-                    if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                    if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
-                }
-            };
-        }
         std::vector<std::wstring> DiscoverRoots()
         {
             std::vector<std::wstring> roots;
@@ -147,9 +97,38 @@ namespace blink::app
         }
     }
 
+    SearchCoordinator::ExchangeFunction MakeSearchExchange(const std::shared_ptr<SearchState>& state,
+        SearchCoordinator::ExchangeFunction raw_transport)
+    {
+        const auto client = raw_transport ? std::shared_ptr<ipc::Client>{} : std::make_shared<ipc::Client>();
+        return [weak_state = std::weak_ptr<SearchState>(state), client, raw_transport = std::move(raw_transport)](
+            ipc::Request request) {
+            const auto state = weak_state.lock();
+            if (!state) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
+            const auto snapshot = state->Snapshot();
+            const auto generation = snapshot.generation;
+            if (snapshot.stage != SearchStage::Searching || !state->IsCurrent(generation))
+            { return IndexRpcResult{ false, ERROR_CANCELLED }; }
+
+            IndexRpcResult reply;
+            if (raw_transport) { reply = raw_transport(std::move(request)); }
+            else if (client->IsConnected() || client->Connect(1000, &reply.error))
+            {
+                if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
+                reply.received = client->Send(std::move(request), reply.response, 5000, &reply.error);
+                if (reply.received) { reply.expected_request_id = reply.response.request_id; }
+                else { client->Disconnect(); }
+            }
+            if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
+            // Collect must reach the other volumes after Busy/IO_PENDING.
+            // An explicit retry retains the successful volumes already found.
+            return reply;
+        };
+    }
+
     SearchCoordinator::SearchCoordinator(std::shared_ptr<SearchState> state, ExchangeFunction exchange, DiscoverFunction discover,
         ScopeResolver resolve_scope, ScopeFilter filter_scope)
-        : state_(std::move(state)), exchange_(exchange ? std::move(exchange) : DefaultExchange(state_)),
+        : state_(std::move(state)), exchange_(exchange ? std::move(exchange) : MakeSearchExchange(state_)),
           discover_(discover ? std::move(discover) : DiscoverRoots),
           resolve_scope_(resolve_scope ? std::move(resolve_scope) :
               ScopeResolver{ [](const std::wstring& path) { return ResolveSearchFolderScope(path); } }),

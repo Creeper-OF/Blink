@@ -3,6 +3,7 @@
 #include "Blink/App/SearchViewModel.h"
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <iostream>
 
@@ -191,5 +192,203 @@ bool RunSearchExactTests()
     passed &= Check(view.query_incomplete && view.rows.empty(),
         "search_exact_view_preserves_incomplete_marker_with_zero_visible_rows");
     (void)coordinator.Shutdown();
+    return passed;
+}
+
+bool RunSearchResponseTests()
+{
+    using namespace blink::app;
+    bool passed = true;
+    const SearchQuery query{ L"needle", SearchScope::AllLocalVolumes };
+    const auto scope = [](const std::wstring& root) {
+        return SearchFolderScope{ root, { 77, { 1 }, true }, ERROR_SUCCESS };
+    };
+
+    struct Trace
+    {
+        std::vector<std::wstring> roots;
+        unsigned c_calls{}, d_calls{};
+        bool search_requests_only{ true };
+        std::atomic_bool retry_ready{};
+    };
+    const auto trace = std::make_shared<Trace>();
+    const auto state = std::make_shared<SearchState>();
+    const auto publications = std::make_shared<std::atomic<unsigned>>(0);
+    const auto publish = [publications](auto) { ++*publications; };
+    auto exchange = MakeSearchExchange(state, [trace](ipc::Request request) {
+        trace->roots.push_back(request.volume_root);
+        trace->search_requests_only &= request.type == ipc::RequestType::Search &&
+            request.protocol_version == ipc::kProtocolVersion;
+        if (request.volume_root == L"C:\\")
+        {
+            ++trace->c_calls;
+            if (!trace->retry_ready.load())
+            {
+                // A mistaken inner retry fails promptly instead of keeping
+                // this test waiting for a production-scale Busy budget.
+                if (trace->c_calls != 1) { return IndexRpcResult{ false, ERROR_RETRY }; }
+                auto reply = Reply({});
+                reply.response.status = ipc::ResponseStatus::Busy;
+                reply.response.error = ERROR_IO_PENDING;
+                reply.response.index_state = ipc::IndexState::CatchingUp;
+                return reply;
+            }
+            auto hit = Hit(L"needle-c.txt"); hit.full_path = L"C:\\Folder\\" + hit.name;
+            return Reply({ hit });
+        }
+        if (request.volume_root == L"D:\\")
+        {
+            ++trace->d_calls;
+            return Reply({ Hit(trace->d_calls == 1 ? L"needle-healthy.txt" : L"unexpected-requery.txt") });
+        }
+        return IndexRpcResult{ false, ERROR_INVALID_DRIVE };
+    });
+    SearchCoordinator coordinator(state, std::move(exchange),
+        [] { return std::vector<std::wstring>{ L"C:\\", L"D:\\" }; }, scope);
+    const auto first_generation = coordinator.Search(query, publish);
+    const bool first_done = first_generation && Finished(coordinator.CurrentAction());
+    const auto first = state->Snapshot();
+    passed &= Check(first_done && trace->roots == std::vector<std::wstring>{ L"C:\\", L"D:\\" } &&
+        trace->c_calls == 1 && trace->d_calls == 1 && trace->search_requests_only,
+        "search_response_busy_is_returned_once_before_the_healthy_volume_request");
+    passed &= Check(first_done && publications->load() == 1 && first.generation == first_generation &&
+        first.stage == SearchStage::Partial && first.error == ERROR_IO_PENDING && first.volumes.size() == 2 &&
+        !first.volumes[0].searched && first.volumes[0].stage == VolumeIndexStage::Unconfirmed &&
+        first.volumes[0].error == ERROR_IO_PENDING && first.volumes[1].searched &&
+        first.volumes[1].results.size() == 1 && first.volumes[1].results.front().hit.name == L"needle-healthy.txt",
+        "search_response_busy_and_healthy_volumes_publish_one_partial_snapshot_with_results");
+
+    trace->retry_ready.store(true);
+    const auto retry_generation = coordinator.Search(query, publish, true);
+    const bool retry_done = retry_generation && Finished(coordinator.CurrentAction());
+    const auto retried = state->Snapshot();
+    passed &= Check(first_done && retry_done && retry_generation > first_generation && publications->load() == 2 &&
+        retried.stage == SearchStage::Complete && retried.error == ERROR_SUCCESS && retried.volumes.size() == 2 &&
+        retried.volumes[0].searched && retried.volumes[0].results.size() == 1 &&
+        retried.volumes[0].results.front().hit.name == L"needle-c.txt" && retried.volumes[1].searched,
+        "search_response_explicit_retry_completes_the_previously_busy_volume");
+    passed &= Check(first_done && retry_done && trace->c_calls == 2 && trace->d_calls == 1 &&
+        trace->roots == std::vector<std::wstring>{ L"C:\\", L"D:\\", L"C:\\" } &&
+        first.volumes.size() == 2 && first.volumes[1].results.size() == 1 &&
+        retried.volumes.size() == 2 && retried.volumes[1].results.size() == 1 &&
+        SameSearchLink(first.volumes[1].results.front(), retried.volumes[1].results.front()),
+        "search_response_retry_reuses_successful_volume_results_without_another_transport_call");
+    (void)coordinator.Shutdown();
+
+    struct ResponseCase
+    {
+        const char* name;
+        ipc::ResponseStatus status;
+        DWORD error;
+        ipc::IndexState index_state;
+        DWORD expected_error;
+        VolumeIndexStage expected_stage;
+        bool received{ true };
+    };
+    const ResponseCase cases[]{
+        { "search_response_pending_busy_returns_without_retry", ipc::ResponseStatus::Busy, ERROR_IO_PENDING,
+            ipc::IndexState::CatchingUp, ERROR_IO_PENDING, VolumeIndexStage::Unconfirmed },
+        { "search_response_busy_error_returns_without_retry", ipc::ResponseStatus::Busy, ERROR_BUSY,
+            ipc::IndexState::CatchingUp, ERROR_IO_PENDING, VolumeIndexStage::Unconfirmed },
+        { "search_response_busy_without_error_remains_unconfirmed", ipc::ResponseStatus::Busy, ERROR_SUCCESS,
+            ipc::IndexState::Rebuilding, ERROR_IO_PENDING, VolumeIndexStage::Unconfirmed },
+        { "search_response_pending_with_ok_is_not_a_successful_search", ipc::ResponseStatus::Ok, ERROR_IO_PENDING,
+            ipc::IndexState::Healthy, ERROR_IO_PENDING, VolumeIndexStage::Unconfirmed },
+        { "search_response_real_error_is_preserved_without_retry", ipc::ResponseStatus::Failed, ERROR_ACCESS_DENIED,
+            ipc::IndexState::Unavailable, ERROR_ACCESS_DENIED, VolumeIndexStage::Unavailable },
+        { "search_response_missing_store_is_not_retried_or_reported_as_healthy", ipc::ResponseStatus::NotFound, ERROR_FILE_NOT_FOUND,
+            ipc::IndexState::RebuildRequired, ERROR_FILE_NOT_FOUND, VolumeIndexStage::RebuildRequired },
+        { "search_response_transport_failure_remains_unavailable", ipc::ResponseStatus::Failed, ERROR_BROKEN_PIPE,
+            ipc::IndexState::Unavailable, ERROR_BROKEN_PIPE, VolumeIndexStage::Unavailable, false },
+    };
+    for (const auto& test : cases)
+    {
+        const auto response_state = std::make_shared<SearchState>();
+        const auto calls = std::make_shared<std::atomic<unsigned>>(0);
+        const auto published = std::make_shared<std::atomic<unsigned>>(0);
+        auto response_exchange = MakeSearchExchange(response_state, [calls, test](auto) {
+            if (++*calls != 1) { return IndexRpcResult{ false, ERROR_RETRY }; }
+            auto reply = Reply({});
+            reply.received = test.received; reply.error = test.received ? ERROR_SUCCESS : test.error;
+            reply.response.status = test.status; reply.response.error = test.error;
+            reply.response.index_state = test.index_state;
+            return reply;
+        });
+        SearchCoordinator response_coordinator(response_state, std::move(response_exchange),
+            [] { return std::vector<std::wstring>{ L"C:\\" }; }, scope);
+        const auto generation = response_coordinator.Search(query, [published](auto) { ++*published; });
+        const bool done = generation && Finished(response_coordinator.CurrentAction());
+        const auto snapshot = response_state->Snapshot();
+        passed &= Check(done && calls->load() == 1 && published->load() == 1 &&
+            snapshot.stage == SearchStage::Unavailable && snapshot.error == test.expected_error &&
+            snapshot.volumes.size() == 1 && !snapshot.volumes.front().searched &&
+            snapshot.volumes.front().results.empty() && snapshot.volumes.front().stage == test.expected_stage &&
+            snapshot.volumes.front().error == test.expected_error, test.name);
+        (void)response_coordinator.Shutdown();
+    }
+
+    auto cancelled_state = std::make_shared<SearchState>();
+    const auto cancelled_calls = std::make_shared<std::atomic<unsigned>>(0);
+    const auto cancelled_exchange = MakeSearchExchange(cancelled_state, [cancelled_calls](auto) {
+        ++*cancelled_calls; return Reply({});
+    });
+    (void)cancelled_state->Begin(query); cancelled_state->Cancel();
+    const auto cancelled_reply = cancelled_exchange(MakeSearchRequest(query, L"C:\\"));
+    cancelled_state.reset();
+    const auto expired_reply = cancelled_exchange(MakeSearchRequest(query, L"C:\\"));
+    passed &= Check(!cancelled_reply.received && cancelled_reply.error == ERROR_CANCELLED &&
+        !expired_reply.received && expired_reply.error == ERROR_CANCELLED && cancelled_calls->load() == 0,
+        "search_response_cancelled_or_expired_owner_never_calls_raw_transport");
+
+    const auto replaced_state = std::make_shared<SearchState>();
+    const auto replaced_calls = std::make_shared<std::atomic<unsigned>>(0);
+    const auto old_generation = replaced_state->Begin(query);
+    auto newer_query = query; newer_query.text = L"newer-query";
+    const auto replaced_exchange = MakeSearchExchange(replaced_state, [replaced_state, replaced_calls, newer_query](auto) {
+        ++*replaced_calls;
+        replaced_state->Cancel(); (void)replaced_state->Begin(newer_query);
+        return Reply({ Hit(L"needle-old.txt") });
+    });
+    const auto replaced_reply = replaced_exchange(MakeSearchRequest(query, L"D:\\"));
+    const auto newer_snapshot = replaced_state->Snapshot();
+    passed &= Check(!replaced_reply.received && replaced_reply.error == ERROR_CANCELLED && replaced_calls->load() == 1 &&
+        newer_snapshot.generation > old_generation && newer_snapshot.stage == SearchStage::Searching &&
+        newer_snapshot.query == newer_query,
+        "search_response_transport_result_from_an_old_generation_is_discarded");
+
+    struct Gate
+    {
+        std::promise<void> entered, release;
+        std::atomic<unsigned> calls{}, publications{};
+    };
+    const auto gate = std::make_shared<Gate>();
+    auto entered = gate->entered.get_future();
+    const auto release = gate->release.get_future().share();
+    const auto blocked_state = std::make_shared<SearchState>();
+    auto blocked_exchange = MakeSearchExchange(blocked_state, [gate, release](auto) {
+        if (++gate->calls != 1) { return IndexRpcResult{ false, ERROR_RETRY }; }
+        gate->entered.set_value();
+        if (release.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+        { return IndexRpcResult{ false, ERROR_TIMEOUT }; }
+        return Reply({ Hit(L"needle-old.txt") });
+    });
+    SearchCoordinator blocked(blocked_state, std::move(blocked_exchange),
+        [] { return std::vector<std::wstring>{ L"C:\\", L"D:\\" }; }, scope);
+    const auto blocked_generation = blocked.Search(query, [gate](auto) { ++gate->publications; });
+    const auto action = blocked.CurrentAction();
+    const bool entered_transport = entered.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
+    blocked.Cancel();
+    const bool still_owned = action && action.Status() == winrt::Windows::Foundation::AsyncStatus::Started;
+    const auto replacement = blocked.Search(newer_query, [gate](auto) { ++gate->publications; });
+    gate->release.set_value();
+    const bool blocked_done = Finished(action);
+    const auto cancelled_snapshot = blocked_state->Snapshot();
+    passed &= Check(blocked_generation && entered_transport && still_owned && replacement == 0 && blocked_done,
+        "search_response_cancellation_keeps_a_blocked_action_owned_until_transport_returns");
+    passed &= Check(entered_transport && blocked_done && gate->calls.load() == 1 && gate->publications.load() == 0 &&
+        cancelled_snapshot.generation > blocked_generation && cancelled_snapshot.stage == SearchStage::Idle &&
+        cancelled_snapshot.volumes.empty(),
+        "search_response_cancelled_query_neither_publishes_nor_submits_a_later_volume");
+    (void)blocked.Shutdown();
     return passed;
 }

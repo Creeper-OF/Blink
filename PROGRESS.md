@@ -1,5 +1,14 @@
 # Blink Progress
 
+## 搜索响应与单次目录范围复用 — 2026-11-12
+
+- 本轮按用户要求完成后暂停：3个独立模块分工、主模型统一集成和单并发构建；只实现A01/A03，不扩索引格式、服务协议或远端范围。新增业务在既有搜索模块，未继续增加应用main职责。
+- A01生产MakeSearchExchange每卷只处理一次有界响应，Busy/IO_PENDING直接交Collect查询后续卷，移除120秒内部等待。Partial/Unavailable保留真实状态；显式Retry只补未完成卷，保留成功结果。Connect1秒/Send5秒、取消/旧代次及阻塞action所有权保持；仍逐卷串行、最终一次发布，不宣称并行或流式UI。
+- A03只在单次Filter中按精确canonical拼写复用目录链；逐结果比较scope/parent身份，批尾鲜读实际scope拼写和唯一parent，错误清该卷并保留码。Open/Locate不共享缓存。200同父目录夹具实际8次metadata读取，旧逻辑1002次；20层链46对4802，5父24对1002，均为调用计数而非耗时倍率。
+- Release一次构建365.200秒；两个独立headless进程Response15/Scope25全PASS，随后完整原生31.329秒、1688 PASS/0 FAIL/4既有1314权限SKIP。249冻结输入/388资源一致；新增40项已包含在1688中，不重复相加。Debug本轮未重建，不用此前1648冒充当前源码验证；新脚本提供Response/Scope/All独立入口，6份相关PS脚本AST通过。
+- 候选Blink.exe SHA `cfcdd314c00cc2bb2a28a66d9996cfa9dda2f794d42c80b0fdded73d6508a7b7`；默认G06b/PID15036、正式服务6848及其二进制未替换，正式库与原剪贴板保持。本轮没有前台窗口测试，G06c侧栏7/8/5项与真实首屏/Everything基准仍待验。校验最初过严限制旧/新服务候选hash相同，现以隔离构建匹配及实际CodeView路径差异核清；未修改源码或重复构建/重测。
+- 清理可核算220683754字节（313文件/143目录/1测试链接）：旧G06c重复runtime/service-build、已结束夹具、重复原生日志及已完成一次性脚本。保留当前搜索候选/匹配服务符号、有效增量缓存/15包和最近2成功恢复点；固定.build/tmp为当前Shell保留。证据归.build/search-response/integration，详细边界见[搜索验证](docs/SEARCH_RESPONSE_VALIDATION.md)。A02/A04、窗口余项和外部Clipboard后续再推进。
+
 ## 代码审计与开发流程调整 — 2026-11-12
 
 - 用户要求先整体审计，当前优先级为功能实现、响应效率、日常易用性；体积后续优化。按批集中实现→代码稳定统一构建→每功能独立脚本→只重测受影响项；全应用流程脚本在批次稳定后再做。约定已写入AGENTS、维护规则及验证指南。

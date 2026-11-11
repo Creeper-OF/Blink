@@ -3652,6 +3652,23 @@ int wmain(int argc, wchar_t* argv[])
         winrt::uninit_apartment();
         return result;
     }
+    if (argc > 1)
+    {
+        if (argc == 3 && std::wstring(argv[1]) == L"--suite")
+        {
+            const std::wstring suite = argv[2];
+            if (suite == L"search-response" || suite == L"search-scope")
+            {
+                winrt::init_apartment(winrt::apartment_type::multi_threaded);
+                const bool passed = suite == L"search-response" ? RunSearchResponseTests() : RunSearchScopeCacheTests();
+                winrt::uninit_apartment();
+                return passed ? 0 : 1;
+            }
+        }
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope]"
+            " or --live-index-probe <options>\n";
+        return 2;
+    }
     bool passed = true;
     // Run the allocation-sensitive performance gate before the other large
     // model/projection tests. Its result should measure CommitBrowse behavior,
@@ -3676,6 +3693,8 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunSearchCoordinatorTests();
     passed &= RunSearchIntegrationTests();
     passed &= RunSearchExactTests();
+    passed &= RunSearchResponseTests();
+    passed &= RunSearchScopeCacheTests();
     passed &= RunSearchContextMenuTests();
     passed &= RunFileOperationTests();
     passed &= RunDirectoryOperationTargetTests();

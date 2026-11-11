@@ -34,4 +34,10 @@ namespace blink::app
         mutable std::mutex mutex_;
         winrt::Windows::Foundation::IAsyncAction work_{ nullptr };
     };
+
+    // One response per volume, including Busy. The optional raw transport
+    // shares the production generation checks without opening a real pipe.
+    [[nodiscard]] SearchCoordinator::ExchangeFunction MakeSearchExchange(
+        const std::shared_ptr<SearchState>& state,
+        SearchCoordinator::ExchangeFunction raw_transport = {});
 }

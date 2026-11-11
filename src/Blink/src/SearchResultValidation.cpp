@@ -1,5 +1,6 @@
 #include "Blink/App/SearchResultValidation.h"
 #include <algorithm>
+#include <unordered_map>
 namespace blink::app
 {
     namespace
@@ -24,33 +25,57 @@ namespace blink::app
             volume.results.clear(); volume.searched = false;
             volume.stage = VolumeIndexStage::Unavailable; volume.error = error;
         }
+        // Exact canonical spelling matters on case-sensitive directories.
+        // This cache belongs to one filter call, never an action validation.
+        using DirectoryScopeCache = std::unordered_map<std::wstring, blink::core::FileIdentity>;
+        SearchFolderScope ResolveCanonicalFolderScope(const std::wstring& path, const SearchMetadataReader& read,
+            DirectoryScopeCache* cache = nullptr)
+        {
+            SearchFolderScope scope; scope.path = path;
+            if (scope.path.empty()) { scope.error = ERROR_NOT_SUPPORTED; return scope; }
+            if (cache)
+            {
+                const auto found = cache->find(scope.path);
+                if (found != cache->end()) { scope.identity = found->second; return scope; }
+            }
+            if (!read)
+            {
+                const auto type = GetDriveTypeW(SearchDriveRoot(scope.path).c_str());
+                if (type != DRIVE_FIXED && type != DRIVE_REMOVABLE)
+                { scope.error = ERROR_NOT_SUPPORTED; return scope; }
+            }
+            std::size_t end = 3;
+            for (;;)
+            {
+                const auto prefix = scope.path.substr(0, end);
+                const blink::core::FileIdentity* cached_identity{};
+                if (cache)
+                {
+                    const auto found = cache->find(prefix);
+                    if (found != cache->end()) { cached_identity = &found->second; }
+                }
+                if (cached_identity) { scope.identity = *cached_identity; }
+                else
+                {
+                    blink::core::FileEntry entry;
+                    scope.error = Read(read, prefix, entry);
+                    if (scope.error != ERROR_SUCCESS) { return scope; }
+                    if (!entry.is_directory || !entry.identity.valid)
+                    { scope.error = ERROR_DIRECTORY; return scope; }
+                    if ((entry.attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+                    { scope.error = ERROR_NOT_SUPPORTED; return scope; }
+                    scope.identity = entry.identity;
+                    if (cache) { cache->emplace(prefix, entry.identity); }
+                }
+                if (end == scope.path.size()) { return scope; }
+                const auto next = scope.path.find(L'\\', end == 3 ? 3 : end + 1);
+                end = next == std::wstring::npos ? scope.path.size() : next;
+            }
+        }
     }
     SearchFolderScope ResolveSearchFolderScope(const std::wstring& folder, const SearchMetadataReader& read)
     {
-        SearchFolderScope scope;
-        scope.path = Canonical(folder);
-        if (scope.path.empty()) { scope.error = ERROR_NOT_SUPPORTED; return scope; }
-        if (!read)
-        {
-            const auto type = GetDriveTypeW(SearchDriveRoot(scope.path).c_str());
-            if (type != DRIVE_FIXED && type != DRIVE_REMOVABLE)
-            { scope.error = ERROR_NOT_SUPPORTED; return scope; }
-        }
-        std::size_t end = 3;
-        for (;;)
-        {
-            blink::core::FileEntry entry;
-            scope.error = Read(read, scope.path.substr(0, end), entry);
-            if (scope.error != ERROR_SUCCESS) { return scope; }
-            if (!entry.is_directory || !entry.identity.valid)
-            { scope.error = ERROR_DIRECTORY; return scope; }
-            if ((entry.attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
-            { scope.error = ERROR_NOT_SUPPORTED; return scope; }
-            scope.identity = entry.identity;
-            if (end == scope.path.size()) { return scope; }
-            const auto next = scope.path.find(L'\\', end == 3 ? 3 : end + 1);
-            end = next == std::wstring::npos ? scope.path.size() : next;
-        }
+        return ResolveCanonicalFolderScope(Canonical(folder), read);
     }
     void BindSearchVolumeIdentity(SearchVolumeResult& volume, const SearchFolderScope& actual_volume)
     {
@@ -83,9 +108,11 @@ namespace blink::app
     {
         if (!volume.searched) { return; }
         if (scope.error != ERROR_SUCCESS) { Fail(volume, scope.error); return; }
-        const auto current = ResolveSearchFolderScope(scope.path, read);
+        DirectoryScopeCache cache;
+        const auto current = ResolveCanonicalFolderScope(Canonical(scope.path), read, &cache);
         if (current.error != ERROR_SUCCESS || !scope.identity.valid || current.identity != scope.identity)
         { Fail(volume, current.error == ERROR_SUCCESS ? ERROR_FILE_INVALID : current.error); return; }
+        DirectoryScopeCache recheck{ { current.path, current.identity } };
         std::vector<SearchResult> filtered;
         for (const auto& result : volume.results)
         {
@@ -95,17 +122,28 @@ namespace blink::app
             if (path.size() <= boundary + 1 || path[boundary] != L'\\' ||
                 CompareStringOrdinal(path.c_str(), static_cast<int>(size), scope.path.c_str(),
                     static_cast<int>(size), TRUE) != CSTR_EQUAL) { continue; }
-            const auto ancestor = ResolveSearchFolderScope(path.substr(0, size), read);
+            const auto ancestor = ResolveCanonicalFolderScope(path.substr(0, size), read, &cache);
             if (ancestor.error != ERROR_SUCCESS) { Fail(volume, ancestor.error); return; }
             if (ancestor.identity == scope.identity)
             {
                 const auto slash = path.find_last_of(L'\\');
                 const auto parent_path = path.substr(0, slash == 2 ? 3 : slash);
-                const auto parent = ResolveSearchFolderScope(parent_path, read);
+                const auto parent = ResolveCanonicalFolderScope(parent_path, read, &cache);
                 if (parent.error != ERROR_SUCCESS || parent.identity != result.hit.parent_identity)
                 { Fail(volume, parent.error == ERROR_SUCCESS ? ERROR_FILE_INVALID : parent.error); return; }
+                recheck.emplace(ancestor.path, ancestor.identity);
+                recheck.emplace(parent.path, parent.identity);
                 filtered.push_back(result);
             }
+        }
+        // Freshly re-read every used scope spelling and distinct parent after
+        // filtering. Do not let a cached chain conceal a replacement/reparse
+        // introduced while another result's metadata was being processed.
+        for (const auto& [path, identity] : recheck)
+        {
+            const auto actual = ResolveCanonicalFolderScope(path, read);
+            if (actual.error != ERROR_SUCCESS || actual.identity != identity)
+            { Fail(volume, actual.error == ERROR_SUCCESS ? ERROR_FILE_INVALID : actual.error); return; }
         }
         volume.results = std::move(filtered);
     }
