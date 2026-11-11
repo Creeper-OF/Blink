@@ -903,8 +903,9 @@ struct App : AppT<App>
             auto accelerator = KeyboardAccelerator();
             accelerator.Key(key); accelerator.Modifiers(modifiers);
             const auto weak = get_weak();
-            accelerator.Invoked([weak, invoke = std::move(invoke)](auto&&, auto&& args) {
-                if (auto app = weak.get(); app && app->CanUseFocusShortcut())
+            accelerator.Invoked([weak, key, invoke = std::move(invoke)](auto&&, auto&& args) {
+                const bool function_key = key == Windows::System::VirtualKey::F3 || key == Windows::System::VirtualKey::F6;
+                if (auto app = weak.get(); app && app->CanUseFocusShortcut(function_key))
                 { invoke(); args.Handled(true); }
             });
             window_frame_.KeyboardAccelerators().Append(accelerator);
@@ -7138,7 +7139,7 @@ struct App : AppT<App>
         address_bar_.BeginEdit();
     }
 
-    bool CanUseFocusShortcut() const
+    bool CanUseFocusShortcut(const bool function_key) const
     {
         if (window_style_closed_ || IsOperationDialogOpen() || !window_frame_.XamlRoot() ||
             address_bar_.IsComposing() || search_text_composing_) { return false; }
@@ -7149,7 +7150,7 @@ struct App : AppT<App>
             if (const auto combo = focused.try_as<ComboBox>(); combo && combo.IsDropDownOpen()) { return false; }
             // Other editors (for example advanced search paths) keep their
             // native function keys, including IME conversion commands.
-            if (const auto editor = focused.try_as<TextBox>(); editor && editor != path_box_ && editor != search_box_)
+            if (const auto editor = focused.try_as<TextBox>(); function_key && editor && editor != path_box_ && editor != search_box_)
             { return false; }
         }
         return true;

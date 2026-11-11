@@ -386,9 +386,9 @@ C-NATIVE新增共26项检查；其中23项命令栏测试见[ExplorerCommandBarT
 
 ### G04a F3与区域焦点
 
-最终同一Release完整23项窗口全PASS，结果见[焦点报告](../.build/explorer-focus/integration/ui-focus-report.json)与[交接](EXPLORER_KEYBOARD_FOCUS_HANDOFF.md)。覆盖ThisPC、目录/空目录、非空与零结果搜索正反六区域循环，F3/别名全选且不提交、地址草稿、文件/搜索选择、命名弹窗、原生高级文本输入、标签草稿隔离及编辑态正常关窗。测试进程正常退出0，44字节自有夹具清理。
+同一冻结Release由两次成功进程覆盖23个不同用例，结果见[焦点报告](../.build/explorer-focus/integration/ui-focus-report.json)与[交接](EXPLORER_KEYBOARD_FOCUS_HANDOFF.md)。覆盖ThisPC、目录/空目录、非空与零结果搜索正反六区域循环，F3/别名全选且不提交、地址草稿、文件/搜索选择、命名弹窗、原生高级文本输入、标签草稿隔离及编辑态正常关窗。两次进程正常退出0，88字节自有夹具清理；Initial与SearchAndInput原始报告及SHA均保留。
 
-首候选的锁屏与“仅原生更多可用时跳过命令栏”分别保留证据；修正后重新完成双配置1583/0/4与全部23项，未拼接旧候选的17项。真实IME/UNC、全主题/DPI/多屏/读屏及所有菜单/ComboBox组合不计入通过。复现入口为`scripts/run-blink-focus-smoke.ps1`，默认执行完整检查；`-Phase Remaining`只补后六项，单独结果不能称完整23项。
+首候选的锁屏与“仅原生更多可用时跳过命令栏”分别保留证据；原生“更多”及高级Ctrl+F/E兼容性修正后，重新完成双配置1583/0/4；最终23项只取同一候选的两个成功阶段，不拼接任何失败或旧候选检查。真实IME/UNC、全主题/DPI/多屏/读屏及所有菜单/ComboBox组合不计入通过。复现入口为`scripts/run-blink-focus-smoke.ps1`，默认执行完整检查；`-Phase Remaining`只补后六项，单独结果不能称完整23项。
 
 ## 8. 可复现执行约定与工作台归属
 

@@ -3,7 +3,7 @@
 阶段A审计2026-11-08；G02实现更新2026-11-09；G03a实现更新2026-11-10（同一最终Release限定GUI53项通过）。接受用户提供的[任务书](EXPLORER_UI_MASTER_PROMPT.md)，以 `7135a14` 为阶段 A 的源码基线。该文档与[UI 规范](EXPLORER_UI_SPEC.md)、[菜单台账](EXPLORER_MENU_MATRIX.md)、[交互矩阵](EXPLORER_INTERACTION_TESTS.md)共同记录事实；下面的优先级是实施顺序，不是完成比例。
 
 
-G04a区域焦点更新：两配置各1583 PASS / 0 FAIL / 4既有符号链接权限SKIP，249输入/378资源；最终同一Release完整23项GUI全PASS，已发布默认版。G05b新行选择历史验证保留；完整G04/P0及输入/环境矩阵仍为`PARTIAL`。
+G04a区域焦点更新：两配置各1583 PASS / 0 FAIL / 4既有符号链接权限SKIP，249输入/378资源；同一Release两段覆盖23项GUI全PASS，已发布默认版。G05b新行选择历史验证保留；完整G04/P0及输入/环境矩阵仍为`PARTIAL`。
 
 ## 基线与证据边界
 
