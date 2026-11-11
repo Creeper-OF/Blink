@@ -373,6 +373,9 @@ namespace blink::app
     void AddressBarPresentation::BeginEdit(const bool select_all)
     { if (ui_) { ui_->BeginEditing(select_all); } }
 
+    bool AddressBarPresentation::IsComposing() const noexcept
+    { return ui_ && !ui_->retired && ui_->composing; }
+
     void AddressBarPresentation::CancelEdit()
     { if (ui_ && !ui_->retired) { ui_->CancelEditing(); } }
 

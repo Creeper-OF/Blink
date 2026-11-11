@@ -307,6 +307,7 @@ namespace blink::app
         volume_details.Content(volume_scroll); volume_details.HorizontalAlignment(HorizontalAlignment::Stretch);
         ui->root.Children().Append(volume_details); Grid::SetRow(volume_details, 3);
         ui->list = ListView(); ui->list.SelectionMode(ListViewSelectionMode::Single);
+        ui->list.IsTabStop(true);
         ui->list.HorizontalContentAlignment(HorizontalAlignment::Stretch);
         ui->list.IsItemClickEnabled(false);
         ui->list.ContainerContentChanging([](auto&&, const ContainerContentChangingEventArgs& args) {

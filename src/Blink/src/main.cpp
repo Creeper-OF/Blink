@@ -63,6 +63,7 @@
 
 #include <atomic>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cwchar>
@@ -897,12 +898,27 @@ struct App : AppT<App>
         window_frame_.KeyboardAccelerators().Append(address_history_accelerator);
         AddAccelerator(window_frame_, Windows::System::VirtualKey::F5,
             Windows::System::VirtualKeyModifiers::None, [this] { RefreshNavigation(); });
+        const auto focus_accelerator = [this](Windows::System::VirtualKey key,
+            Windows::System::VirtualKeyModifiers modifiers, std::function<void()> invoke) {
+            auto accelerator = KeyboardAccelerator();
+            accelerator.Key(key); accelerator.Modifiers(modifiers);
+            const auto weak = get_weak();
+            accelerator.Invoked([weak, invoke = std::move(invoke)](auto&&, auto&& args) {
+                if (auto app = weak.get(); app && app->CanUseFocusShortcut())
+                { invoke(); args.Handled(true); }
+            });
+            window_frame_.KeyboardAccelerators().Append(accelerator);
+        };
         for (const auto key : { Windows::System::VirtualKey::F, Windows::System::VirtualKey::E })
         {
-            AddAccelerator(window_frame_, key, Windows::System::VirtualKeyModifiers::Control, [this] {
-                search_box_.Focus(FocusState::Keyboard); search_box_.SelectAll();
-            });
+            focus_accelerator(key, Windows::System::VirtualKeyModifiers::Control, [this] { FocusSearchInput(); });
         }
+        focus_accelerator(Windows::System::VirtualKey::F3, Windows::System::VirtualKeyModifiers::None,
+            [this] { FocusSearchInput(); });
+        focus_accelerator(Windows::System::VirtualKey::F6, Windows::System::VirtualKeyModifiers::None,
+            [this] { CycleWindowFocus(false); });
+        focus_accelerator(Windows::System::VirtualKey::F6, Windows::System::VirtualKeyModifiers::Shift,
+            [this] { CycleWindowFocus(true); });
         AddAccelerator(window_frame_, Windows::System::VirtualKey::Left,
             Windows::System::VirtualKeyModifiers::Menu, [this] { NavigateBack(); });
         AddAccelerator(window_frame_, Windows::System::VirtualKey::Right,
@@ -954,8 +970,17 @@ struct App : AppT<App>
             if (auto app = search_weak.get(); app && !app->search_input_sync_)
             { if (auto* tab = app->ActiveTab()) { tab->search_draft = app->search_box_.Text().c_str(); } }
         });
+        search_box_.TextCompositionStarted([search_weak](auto&&, auto&&) {
+            if (auto app = search_weak.get()) { app->search_text_composing_ = true; }
+        });
+        search_box_.TextCompositionEnded([search_weak](auto&&, auto&&) {
+            if (auto app = search_weak.get()) { app->search_text_composing_ = false; }
+        });
+        search_box_.LostFocus([search_weak](auto&&, auto&&) {
+            if (auto app = search_weak.get()) { app->search_text_composing_ = false; }
+        });
         search_box_.KeyDown([search_weak](auto&&, const KeyRoutedEventArgs& args) {
-            if (auto app = search_weak.get())
+            if (auto app = search_weak.get(); app && !app->search_text_composing_)
             {
                 if (args.Key() == Windows::System::VirtualKey::Enter) { app->SubmitSearch(false); args.Handled(true); }
                 else if (args.Key() == Windows::System::VirtualKey::Escape) { app->LeaveActiveSearch(); args.Handled(true); }
@@ -7079,6 +7104,7 @@ struct App : AppT<App>
             { app->SyncAddressBar(true); }
         };
         const auto surface = address_bar_.Build(localization_, std::move(callbacks));
+        address_focus_root_ = surface;
         // Escape after dismissing the native history popup also returns to
         // the visible list. TextBox Escape (including IME) stays with its editor.
         surface.KeyDown([weak](auto&&, const KeyRoutedEventArgs& args) {
@@ -7110,6 +7136,83 @@ struct App : AppT<App>
         DismissCommandBarMenus();
         DismissSearchContextMenu();
         address_bar_.BeginEdit();
+    }
+
+    bool CanUseFocusShortcut() const
+    {
+        if (window_style_closed_ || IsOperationDialogOpen() || !window_frame_.XamlRoot() ||
+            address_bar_.IsComposing() || search_text_composing_) { return false; }
+        auto focused = FocusManager::GetFocusedElement(window_frame_.XamlRoot()).try_as<DependencyObject>();
+        for (; focused; focused = VisualTreeHelper::GetParent(focused))
+        {
+            if (focused.try_as<MenuFlyoutItemBase>() || focused.try_as<ComboBoxItem>()) { return false; }
+            if (const auto combo = focused.try_as<ComboBox>(); combo && combo.IsDropDownOpen()) { return false; }
+            // Other editors (for example advanced search paths) keep their
+            // native function keys, including IME conversion commands.
+            if (const auto editor = focused.try_as<TextBox>(); editor && editor != path_box_ && editor != search_box_)
+            { return false; }
+        }
+        return true;
+    }
+
+    void FocusSearchInput()
+    {
+        if (search_box_ && search_box_.Focus(FocusState::Keyboard)) { search_box_.SelectAll(); }
+    }
+
+    int CurrentFocusRegion() const
+    {
+        const bool searching = search_surface_ && search_surface_.Visibility() == Visibility::Visible;
+        const std::array<DependencyObject, 6> regions{
+            searching ? search_surface_.as<DependencyObject>() : entries_.as<DependencyObject>(),
+            address_focus_root_, search_box_, command_bar_.Element(), navigation_pane_, tab_view_ };
+        auto focused = FocusManager::GetFocusedElement(window_frame_.XamlRoot()).try_as<DependencyObject>();
+        for (; focused; focused = VisualTreeHelper::GetParent(focused))
+        {
+            for (int index = 0; index < static_cast<int>(regions.size()); ++index)
+            { if (focused == regions[index]) { return index; } }
+        }
+        return -1;
+    }
+
+    void CycleWindowFocus(const bool reverse)
+    {
+        // Broad regions only. Standard Tab/arrow navigation stays inside each
+        // region and existing text drafts, locations and selections stay put.
+        constexpr int region_count = 6;
+        const auto current = CurrentFocusRegion();
+        int next = current < 0 ? (reverse ? 0 : region_count - 1) : current;
+        for (int attempt = 0; attempt < region_count; ++attempt)
+        {
+            next = (next + (reverse ? region_count - 1 : 1)) % region_count;
+            switch (next)
+            {
+            case 0:
+                if (search_surface_ && search_surface_.Visibility() == Visibility::Visible)
+                { search_presentation_.FocusResults(); }
+                else if (entries_) { (void)entries_.Focus(FocusState::Keyboard); }
+                break;
+            case 1: BeginAddressEdit(); break;
+            case 2: FocusSearchInput(); break;
+            case 3:
+                // Include the native overflow button when it is the only
+                // available command (for example a zero-result search).
+                if (const auto control = FocusManager::FindFirstFocusableElement(command_bar_.Element()).try_as<Control>())
+                {
+                    (void)control.Focus(FocusState::Keyboard);
+                }
+                break;
+            case 4:
+                if (!navigation_tree_.Focus(FocusState::Keyboard))
+                { (void)navigation_quick_list_.Focus(FocusState::Keyboard); }
+                break;
+            case 5:
+                if (const auto tab = tab_view_.SelectedItem().try_as<Control>(); !tab || !tab.Focus(FocusState::Keyboard))
+                { (void)tab_view_.Focus(FocusState::Keyboard); }
+                break;
+            }
+            if (CurrentFocusRegion() == next) { return; }
+        }
     }
 
     void CancelAddressEdit()
@@ -8272,6 +8375,8 @@ struct App : AppT<App>
     Button refresh_button_{ nullptr };
     TextBox search_box_{ nullptr };
     Grid search_surface_{ nullptr };
+    FrameworkElement address_focus_root_{ nullptr };
+    bool search_text_composing_{};
     blink::app::SearchPresentation search_presentation_;
     blink::app::SearchRequestQueue search_requests_;
     Windows::Foundation::IAsyncAction search_work_{ nullptr };

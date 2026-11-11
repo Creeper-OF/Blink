@@ -384,6 +384,12 @@ C-NATIVE新增共26项检查；其中23项命令栏测试见[ExplorerCommandBarT
 
 双配置各1583 PASS / 0 FAIL / 4既有权限SKIP；新增五项覆盖精确链接、监听先刷新、同名替换、隐藏与目录身份变化。动态切标签或另选发生在待完成改名中的组合、真实IME/UNC、完整主题/DPI/多屏/读屏及F3/F6区域焦点不计入通过。G05a历史15项仍保留各自镜像和报告；当前脚本`run-blink-rename-selection-smoke.ps1`验证G05b，默认指向当前Release。
 
+### G04a F3与区域焦点
+
+最终同一Release完整23项窗口全PASS，结果见[焦点报告](../.build/explorer-focus/integration/ui-focus-report.json)与[交接](EXPLORER_KEYBOARD_FOCUS_HANDOFF.md)。覆盖ThisPC、目录/空目录、非空与零结果搜索正反六区域循环，F3/别名全选且不提交、地址草稿、文件/搜索选择、命名弹窗、原生高级文本输入、标签草稿隔离及编辑态正常关窗。测试进程正常退出0，44字节自有夹具清理。
+
+首候选的锁屏与“仅原生更多可用时跳过命令栏”分别保留证据；修正后重新完成双配置1583/0/4与全部23项，未拼接旧候选的17项。真实IME/UNC、全主题/DPI/多屏/读屏及所有菜单/ComboBox组合不计入通过。复现入口为`scripts/run-blink-focus-smoke.ps1`，默认执行完整检查；`-Phase Remaining`只补后六项，单独结果不能称完整23项。
+
 ## 8. 可复现执行约定与工作台归属
 
 以下为README的真实构建/普通回归入口。G01记录归B-NATIVE，G02历史结果归C-NATIVE；G03a最终两配置各1565/0/4归D-NATIVE，本文更新代理没有另跑：

@@ -7,7 +7,7 @@
 本文更新代理只核对源码、主模型提供的验证记录和既有参考资料，没有另行构建或运行GUI。G01受控GUI为15 PASS/0 FAIL/0 SKIP，另有独立的Explorer查看/显示参考观察；二者环境采样与边界保留于第7节。G02原生结果与最终18项GUI结果单独记录，不能外推为整套界面验收。
 
 
-G05b重命名后选择更新：按真实文件身份和精确新名称选中并滚动到新行。两配置原生各1583 PASS / 0 FAIL / 4既有符号链接权限SKIP，249输入/378资源。同一最终Release 17项GUI全PASS，包含G05a名称输入、取消与关闭的相关回归；完整G05/P0与未覆盖焦点/输入环境矩阵仍为`PARTIAL`。
+G04a区域焦点更新：F3共享搜索入口，F6/Shift+F6显式正反切换六区域，保留输入和选择。两配置各1583 PASS / 0 FAIL / 4既有符号链接权限SKIP，249输入/378资源；最终同一Release完整23项GUI全PASS。已覆盖子项升级，完整G04/P0与未覆盖输入/环境矩阵仍为`PARTIAL`。
 
 ## 1. 基线、证据与状态口径
 
@@ -153,7 +153,7 @@ flowchart TD
 
 ## 5. 焦点与快捷键规范
 
-现有焦点路径按XAML层次和标准控件行为运行；没有一套已验收的自定义F6全窗格环。下表区分显式Blink实现与WinUI默认，不能因为main没有手写快捷键就判断标准控件完全缺失。
+G04a已接入F6区域切换：文件区→地址→搜索→命令→导航→标签，Shift+F6反向。普通Tab和方向键仍由控件处理，不维护另一套焦点状态。最终同一Release完整23项窗口检查及默认发布已完成；原生“更多”是零结果页的实际命令栏入口。
 
 | 输入区域/按键 | 当前绑定或行为 | 状态/验证边界 |
 | --- | --- | --- |
@@ -162,8 +162,9 @@ flowchart TD
 | Ctrl+L / Alt+D；地址空白处点击 | `BeginAddressEdit`进入编辑并全选；重复Ctrl+L保留当前草稿再全选；空白点击也进入编辑 | 键盘及重复Ctrl+L `IMPLEMENTED_VERIFIED`（Release D-UI #02/#04）；空白点击、普通失焦/模态及真实IME完整组合仍`IMPLEMENTED_NEEDS_MANUAL` |
 | 地址TextBox Enter / Esc | Enter同步读实际Text并复用`BrowseAsync`；Esc恢复真正committed路径并聚焦当前普通/搜索列表；IME组合输入期间Enter/Esc留给原生TextBox | Unicode提交、不存在路径失败恢复、普通/真实搜索页Esc回焦`IMPLEMENTED_VERIFIED`（Release D-UI #03/#04/#06/#09）；真实IME候选、无权限等组合仍NOT RUN |
 | F4 / 地址历史按钮 | 原生MenuFlyout只展示当前Tab已commit的current/back/forward；空历史仅进入编辑；原生Combo/Menu保留自身F4 | 按钮/F4真实导航、Home/Down/Enter、菜单Esc `IMPLEMENTED_VERIFIED`（Release D-UI #07/#08/#16/#17）；空历史和Combo边界待专项，不是自动完成或下级目录菜单 |
-| Alt+Left/Right/Up；F5 | 原历史/上级/刷新入口不变 | F6/Shift+F6全区域轮转、F3搜索聚焦仍留后续独立切片 |
-| 搜索Ctrl+F / Ctrl+E；Enter/Esc | `main.cpp:856/927`；焦点搜索全选，提交/离开；高级路径/卷输入支持Enter提交 | 已有范围GUI；IME与全部文本编辑组合待验 |
+| Alt+Left/Right/Up；F5 | 原历史/上级/刷新入口不变 | 原生与历史窗口回归保留 |
+| F6 / Shift+F6 | `CycleWindowFocus/CurrentFocusRegion`在六个实际可用区域间正反切换；搜索可见时文件区对应SearchResults | ThisPC/目录/空目录/非空与零结果搜索、原生“更多”及选择保持已通过G04a完整23项中的对应项；非全环境结论 |
+| 搜索F3 / Ctrl+F / Ctrl+E；Enter/Esc | `FocusSearchInput`共享聚焦/全选，不自动搜索；Enter/Esc仍提交/离开，组合输入期间留给原生编辑器 | F3/别名/草稿/弹窗和高级文本所列场景通过；真实IME与全部输入组合待验 |
 | 顶部查看Space/方向键/Enter/Esc | 本轮受控InputSite消息走实际WinUI菜单；Space打开，Home/Down/Right进入Show，Enter切Hidden；Esc/Esc取消，焦点回`FolderViewMode` | `IMPLEMENTED_VERIFIED`限本轮GUI第10项；全部实物键盘、主题/DPI和IME组合仍NOT RUN |
 | 文件区Ctrl+A / Enter | `main.cpp:3445`；ScopeOwner为列表，选择权威模型全部项/打开焦点项 | 已实现，地址/对话框不借用该列表动作 |
 | 文件区Ctrl+C/X/V、F2、Alt+Enter、Ctrl+Shift+N | `main.cpp:3451/3468/3499` → 唯一ExecuteFolderCommand | 已实现；G05a普通文件Rename初选主名，目录全选；本机最终Release选区/Enter/Esc/文本编辑所列子项已PASS，完整输入环境仍待验 |

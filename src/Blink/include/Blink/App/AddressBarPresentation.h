@@ -38,6 +38,7 @@ namespace blink::app
             std::vector<AddressBreadcrumb> breadcrumbs, std::vector<Location> history,
             bool preserve_draft = false);
         void BeginEdit(bool select_all = true);
+        [[nodiscard]] bool IsComposing() const noexcept;
         void CancelEdit();
         // history_opening runs before the menu is created, so the owner may
         // synchronously Present a fresh history snapshot from that callback.
