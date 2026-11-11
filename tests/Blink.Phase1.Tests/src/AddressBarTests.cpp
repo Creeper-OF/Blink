@@ -33,6 +33,18 @@ namespace
         const auto request = navigation.Back();
         return request && navigation.Commit(*request);
     }
+
+    bool PlanIs(const AddressCompletionPlan& plan, const AddressCompletionSource source,
+        const std::wstring_view directory = {}, const std::wstring_view prefix = {})
+    { return plan.source == source && plan.directory == directory && plan.prefix == prefix; }
+
+    bool CompletionTargets(const std::vector<AddressBreadcrumb>& actual,
+        const std::initializer_list<Location> expected)
+    {
+        if (actual.size() != expected.size()) { return false; }
+        return std::equal(actual.begin(), actual.end(), expected.begin(),
+            [](const AddressBreadcrumb& item, const Location& target) { return item.location == target; });
+    }
 }
 
 bool RunAddressBarTests()
@@ -176,5 +188,131 @@ bool RunAddressBarTests()
     passed &= Check(!state.IsEditing() && state.DraftText() == L"E:\\refreshed" &&
         state.CommittedText() == L"E:\\refreshed",
         "address_edit_preserving_idle_refresh_does_not_enter_edit_mode");
+
+    const auto base = Location::Folder(L"D:\\completion-model\\项目 文档");
+    using Source = AddressCompletionSource;
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"", this_pc, L"此电脑"), Source::ThisPC) &&
+        PlanIs(BuildAddressCompletionPlan(L"", base, L"此电脑"), Source::Directory, base.FolderPath()),
+        "address_completion_empty_uses_virtual_places_or_committed_directory");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"c:", base, L"此电脑"), Source::ThisPC, {}, L"c:") &&
+        PlanIs(BuildAddressCompletionPlan(L"C:relative", base, L"此电脑"), Source::None),
+        "address_completion_drive_prefix_never_reads_per_drive_current_directory");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"C:\\", this_pc, L"此电脑"), Source::Directory, L"C:\\") &&
+        PlanIs(BuildAddressCompletionPlan(L"C:\\Win", base, L"此电脑"), Source::Directory, L"C:\\", L"Win"),
+        "address_completion_drive_root_and_root_child_split_correctly");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"D:/completion-model/项目 文档/资", this_pc, L"此电脑"),
+        Source::Directory, base.FolderPath(), L"资"),
+        "address_completion_absolute_unicode_spaces_and_forward_separators");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"资料", base, L"此电脑"),
+        Source::Directory, base.FolderPath(), L"资料") &&
+        PlanIs(BuildAddressCompletionPlan(L"nested\\资", base, L"此电脑"),
+            Source::Directory, base.FolderPath() + L"\\nested", L"资"),
+        "address_completion_relative_prefix_resolves_from_committed_folder");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"资料", this_pc, L"此电脑"), Source::ThisPC, {}, L"资料") &&
+        PlanIs(BuildAddressCompletionPlan(L"nested\\资", this_pc, L"此电脑"), Source::None) &&
+        PlanIs(BuildAddressCompletionPlan(L"..", this_pc, L"此电脑"), Source::None),
+        "address_completion_this_pc_relative_text_does_not_fabricate_process_cwd");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L".", base, L"此电脑"), Source::Directory, base.FolderPath()) &&
+        PlanIs(BuildAddressCompletionPlan(L"..", base, L"此电脑"), Source::Directory, L"D:\\completion-model") &&
+        PlanIs(BuildAddressCompletionPlan(L"..\\资", base, L"此电脑"), Source::Directory, L"D:\\completion-model", L"资"),
+        "address_completion_dot_and_parent_are_resolved_lexically");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"nested\\..\\资料\\", base, L"此电脑"),
+        Source::Directory, base.FolderPath() + L"\\资料") &&
+        PlanIs(BuildAddressCompletionPlan(L"..\\..\\..\\资", base, L"此电脑"), Source::Directory, L"D:\\", L"资"),
+        "address_completion_directory_normalization_removes_dot_segments_and_stops_at_volume_root");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"\\Win", base, L"此电脑"), Source::Directory, L"D:\\", L"Win") &&
+        PlanIs(BuildAddressCompletionPlan(L"\\Win", this_pc, L"此电脑"), Source::None),
+        "address_completion_rooted_input_uses_committed_volume_not_process_drive");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"\\\\completion-model.invalid", base, L"此电脑"), Source::None) &&
+        PlanIs(BuildAddressCompletionPlan(L"\\\\completion-model.invalid\\", base, L"此电脑"), Source::None) &&
+        PlanIs(BuildAddressCompletionPlan(L"\\\\completion-model.invalid\\\\share", base, L"此电脑"), Source::None),
+        "address_completion_incomplete_unc_server_never_becomes_directory_enumeration");
+    const std::wstring unc_root = L"\\\\completion-model.invalid\\share";
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(unc_root, base, L"此电脑"), Source::Directory, unc_root) &&
+        PlanIs(BuildAddressCompletionPlan(unc_root + L"\\", base, L"此电脑"), Source::Directory, unc_root) &&
+        PlanIs(BuildAddressCompletionPlan(unc_root + L"\\资料\\子", base, L"此电脑"),
+            Source::Directory, unc_root + L"\\资料", L"子"),
+        "address_completion_unc_share_root_and_child_keep_real_share_boundary");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"..\\子", Location::Folder(unc_root + L"\\资料"), L"此电脑"),
+        Source::Directory, unc_root, L"子") &&
+        PlanIs(BuildAddressCompletionPlan(L"\\资料\\子", Location::Folder(unc_root + L"\\other"), L"此电脑"),
+            Source::Directory, unc_root + L"\\资料", L"子"),
+        "address_completion_relative_and_rooted_unc_use_committed_share");
+    const auto long_completion = BuildAddressCompletionPlan(long_path + L"\\资料-😀", this_pc, L"This PC");
+    passed &= Check(long_completion.directory == long_path && long_completion.directory.size() > 260 &&
+        long_completion.source == Source::Directory && long_completion.prefix == L"资料-😀",
+        "address_completion_long_directory_and_unicode_prefix_remain_complete");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"\\\\?\\D:\\资料\\子", this_pc, L"This PC"),
+        Source::Directory, L"\\\\?\\D:\\资料", L"子") &&
+        PlanIs(BuildAddressCompletionPlan(L"\\\\?\\UNC\\completion-model.invalid\\share\\子", this_pc, L"This PC"),
+            Source::Directory, L"\\\\?\\UNC\\completion-model.invalid\\share", L"子"),
+        "address_completion_extended_drive_and_unc_paths_keep_namespace");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L" \t此电脑\t ", base, L"此电脑"), Source::None) &&
+        PlanIs(BuildAddressCompletionPlan(L"tHIS pC", base, L"This PC"), Source::None),
+        "address_completion_complete_localized_virtual_alias_does_not_become_folder_path");
+    bool unsupported = true;
+    for (const auto text : { L"https://example.invalid/path", L"sftp://host/path", L"webdav://host/path",
+        L"shell:Downloads", L"%USERPROFILE%\\资料", L"$env:USERPROFILE", L"\\\\.\\C:\\", L"\\\\?\\GLOBALROOT\\Device" })
+    { unsupported &= PlanIs(BuildAddressCompletionPlan(text, base, L"此电脑"), Source::None); }
+    passed &= Check(unsupported, "address_completion_does_not_expand_uri_shell_environment_or_device_syntax");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(std::wstring(L"a\0b", 3), base, L"此电脑"), Source::None) &&
+        PlanIs(BuildAddressCompletionPlan(L"prefix", Location::Folder(L""), L"此电脑"), Source::None),
+        "address_completion_invalid_draft_or_committed_folder_has_no_plan");
+    passed &= Check(PlanIs(BuildAddressCompletionPlan(L"100%", base, L"此电脑"),
+        Source::Directory, base.FolderPath(), L"100%") &&
+        PlanIs(BuildAddressCompletionPlan(L"D:\\literal%folder%\\子", this_pc, L"此电脑"),
+            Source::Directory, L"D:\\literal%folder%", L"子"),
+        "address_completion_literal_percent_folder_names_are_not_environment_expansion");
+
+    const auto alpha = Location::Folder(L"D:\\completion-model\\Alpha");
+    const auto alpine = Location::Folder(L"D:\\completion-model\\ALPine");
+    const auto beta = Location::Folder(L"D:\\completion-model\\Beta");
+    const std::vector<AddressBreadcrumb> candidates{
+        { L"ALPine", alpine }, { L"Alpha", alpha }, { L"Beta", beta },
+        { L"Alpha duplicate", Location::Folder(L"d:\\COMPLETION-MODEL\\ALPHA") },
+        { L"Alpha virtual", this_pc }, { L"Alpha invalid", Location::Folder(L"") },
+        { L"", Location::Folder(L"D:\\completion-model\\unlabelled") } };
+    const AddressCompletionPlan partial{ Source::Directory, L"D:\\completion-model", L"aLp" };
+    const auto matched = FilterAddressCompletions(partial, candidates);
+    passed &= Check(CompletionTargets(matched, { alpine, alpha }) &&
+        matched[0].label == L"ALPine" && matched[1].label == L"Alpha",
+        "address_completion_filters_case_insensitive_prefix_and_preserves_supplied_order_and_labels");
+    passed &= Check(CompletionTargets(FilterAddressCompletions({ Source::Directory, partial.directory, {} }, candidates),
+        { alpine, alpha, beta }),
+        "address_completion_excludes_virtual_invalid_blank_and_duplicate_target_candidates");
+    passed &= Check(CompletionTargets(FilterAddressCompletions(partial, candidates, 1), { alpine }) &&
+        FilterAddressCompletions(partial, candidates, 0).empty() &&
+        FilterAddressCompletions({}, candidates).empty() &&
+        FilterAddressCompletions({ Source::Directory, partial.directory, L"missing" }, candidates).empty(),
+        "address_completion_limit_zero_none_and_no_match_do_not_fabricate_choices");
+    const std::vector<AddressBreadcrumb> places{
+        { L"Documents", Location::Folder(L"C:\\Users\\completion\\Documents") },
+        { L"System volume", Location::Folder(L"C:\\") },
+        { L"Data volume", Location::Folder(L"D:\\") } };
+    passed &= Check(CompletionTargets(FilterAddressCompletions({ Source::ThisPC, {}, L"c:" }, places),
+        { Location::Folder(L"C:\\") }) &&
+        CompletionTargets(FilterAddressCompletions({ Source::ThisPC, {}, L"doc" }, places),
+            { Location::Folder(L"C:\\Users\\completion\\Documents") }),
+        "address_completion_this_pc_matches_root_drive_prefix_and_localized_place_labels_separately");
+    const std::vector<AddressBreadcrumb> unicode_candidates{
+        { L"资料-😀", Location::Folder(L"D:\\资料-😀") },
+        { L"École", Location::Folder(L"D:\\École") },
+        { L"Other", Location::Folder(L"D:\\Other") } };
+    passed &= Check(CompletionTargets(FilterAddressCompletions({ Source::Directory, L"D:\\", L"资料" }, unicode_candidates),
+        { Location::Folder(L"D:\\资料-😀") }) &&
+        CompletionTargets(FilterAddressCompletions({ Source::Directory, L"D:\\", L"éC" }, unicode_candidates),
+            { Location::Folder(L"D:\\École") }),
+        "address_completion_ordinal_unicode_case_and_surrogate_names_keep_exact_targets");
+    std::vector<AddressBreadcrumb> many;
+    for (std::size_t index = 0; index < 16; ++index)
+    { many.push_back({ L"folder-" + std::to_wstring(index), Location::Folder(L"D:\\folder-" + std::to_wstring(index)) }); }
+    const auto bounded = FilterAddressCompletions({ Source::Directory, L"D:\\", {} }, many);
+    passed &= Check(bounded.size() == 12 && bounded.front().location == many.front().location &&
+        bounded.back().location == many[11].location,
+        "address_completion_default_limit_is_twelve_without_reordering_backend_folders");
+    passed &= Check(candidates.size() == 7 && candidates[0].label == L"ALPine" &&
+        candidates[3].label == L"Alpha duplicate" && partial.prefix == L"aLp" &&
+        partial.directory == L"D:\\completion-model",
+        "address_completion_filter_keeps_available_snapshot_and_request_unchanged");
     return passed;
 }

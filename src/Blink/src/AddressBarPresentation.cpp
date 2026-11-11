@@ -3,6 +3,8 @@
 #include "Blink/App/ContextMenuAppearance.h"
 
 #include <winrt/Microsoft.UI.Xaml.Automation.h>
+#include <winrt/Microsoft.UI.Dispatching.h>
+#include <winrt/Microsoft.UI.Input.h>
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.Primitives.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
@@ -11,6 +13,9 @@
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.h>
+#include <winrt/Windows.UI.Core.h>
+#include <algorithm>
+#include <chrono>
 #include <utility>
 
 namespace blink::app
@@ -55,6 +60,17 @@ namespace blink::app
         Button history_button{ nullptr };
         MenuFlyout history_menu{ nullptr };
         MenuFlyout children_menu{ nullptr };
+        Primitives::Popup suggestion_popup{ nullptr };
+        FlyoutPresenter suggestion_presenter{ nullptr };
+        ListView suggestion_list{ nullptr };
+        Microsoft::UI::Dispatching::DispatcherQueueTimer suggestion_timer{ nullptr };
+        std::vector<AddressBreadcrumb> suggestions;
+        Location committed_location;
+        std::wstring observed_text;
+        std::wstring pending_suggestion_draft;
+        std::uint64_t suggestion_revision{}, pending_suggestion_request{}, pending_suggestion_owner{};
+        bool suggestion_pending{}, suggestion_inflight{}, suggestions_armed{}, active{ true };
+        int pending_suggestion_direction{};
         Location children_parent;
         Localization localization;
         AddressBarState state;
@@ -89,10 +105,139 @@ namespace blink::app
         {
             const auto& text = state.IsEditing() ? state.DraftText() : state.CommittedText();
             const hstring display_text(text);
-            if (editor.Text() != display_text) { editor.Text(display_text); }
+            if (editor.Text() != display_text)
+            {
+                observed_text = text;
+                editor.Text(display_text);
+            }
             editor.Visibility(state.IsEditing() ? Visibility::Visible : Visibility::Collapsed);
             breadcrumb_host.Visibility(state.IsEditing() ? Visibility::Collapsed : Visibility::Visible);
             SyncHelpText();
+        }
+
+        [[nodiscard]] bool HasEditorFocus() const
+        {
+            if (!host.XamlRoot()) { return false; }
+            auto focused = Input::FocusManager::GetFocusedElement(host.XamlRoot()).try_as<DependencyObject>();
+            for (; focused; focused = Media::VisualTreeHelper::GetParent(focused))
+            { if (focused == editor) { return true; } }
+            return false;
+        }
+
+        void HideSuggestions() noexcept
+        {
+            const auto request = suggestion_revision++;
+            suggestion_pending = false;
+            suggestion_inflight = false;
+            pending_suggestion_direction = 0;
+            try { if (suggestion_timer) { suggestion_timer.Stop(); } } catch (...) {}
+            try { if (suggestion_popup) { suggestion_popup.IsOpen(false); } } catch (...) {}
+            suggestions.clear();
+            try { if (suggestion_list) { suggestion_list.Items().Clear(); } } catch (...) {}
+            try { if (callbacks.suggestions_cancelled) { callbacks.suggestions_cancelled(request); } } catch (...) {}
+        }
+
+        void SizeSuggestions()
+        {
+            suggestion_presenter.Width(std::clamp(editor.ActualWidth(), 240.0, 640.0));
+        }
+
+        void RequestSuggestions()
+        {
+            suggestion_timer.Stop();
+            if (retired || !enabled || !active || composing || !suggestions_armed || !state.IsEditing() ||
+                !suggestion_pending || !HasEditorFocus() || pending_suggestion_request != suggestion_revision ||
+                pending_suggestion_owner != state.Owner() || editor.Text() != hstring(pending_suggestion_draft))
+            { return; }
+            suggestion_pending = false;
+            suggestion_inflight = true;
+            const auto requested = callbacks.suggestions_requested;
+            if (requested) { requested(state.Owner(), suggestion_revision, pending_suggestion_draft, committed_location); }
+        }
+
+        void QueueSuggestions(const bool immediate = false, const int direction = 0)
+        {
+            HideSuggestions();
+            if (retired || !enabled || !active || composing || !suggestions_armed || !state.IsEditing() || !HasEditorFocus())
+            { return; }
+            pending_suggestion_request = ++suggestion_revision;
+            pending_suggestion_owner = state.Owner();
+            pending_suggestion_draft = std::wstring(editor.Text());
+            pending_suggestion_direction = direction;
+            suggestion_pending = true;
+            if (immediate) { RequestSuggestions(); }
+            else { suggestion_timer.Start(); }
+        }
+
+        void AcceptSuggestion(const std::size_t index, const bool navigate_now)
+        {
+            if (retired || !enabled || !active || composing || !state.IsEditing() ||
+                !suggestion_popup.IsOpen() || index >= suggestions.size()) { return; }
+            if (editor.Text() != hstring(pending_suggestion_draft)) { HideSuggestions(); return; }
+            const auto target = suggestions[index].location;
+            if (!target.IsFolder()) { return; }
+            auto text = target.FolderPath();
+            HideSuggestions();
+            if (!navigate_now && !text.empty() && text.back() != L'\\') { text += L'\\'; }
+            observed_text = text;
+            state.SetDraft(text);
+            editor.Text(hstring(text));
+            editor.SelectionStart(static_cast<int32_t>(text.size()));
+            editor.SelectionLength(0);
+            SyncHelpText();
+            if (navigate_now)
+            {
+                suggestions_armed = false;
+                const auto navigate = callbacks.navigate;
+                if (navigate) { navigate(target); }
+            }
+            else { QueueSuggestions(); }
+        }
+
+        void CompleteSuggestions(const std::uint64_t owner, const std::uint64_t request,
+            const std::wstring& draft, std::vector<AddressBreadcrumb> values)
+        {
+            if (retired || !enabled || !active || composing || !suggestions_armed || !state.IsEditing() ||
+                suggestion_revision != request || state.Owner() != owner || editor.Text() != hstring(draft) || !HasEditorFocus())
+            { return; }
+            suggestion_inflight = false;
+            suggestion_list.Items().Clear();
+            suggestions = std::move(values);
+            if (suggestions.empty()) { suggestion_popup.IsOpen(false); return; }
+            for (std::size_t index = 0; index < suggestions.size(); ++index)
+            {
+                const auto& value = suggestions[index];
+                ListViewItem item;
+                item.IsTabStop(false);
+                item.AllowFocusOnInteraction(false);
+                item.MinHeight(32);
+                item.Padding(Thickness{ 10, 6, 10, 6 });
+                item.Tag(box_value(static_cast<std::uint64_t>(index)));
+                StackPanel content;
+                content.Orientation(Orientation::Horizontal);
+                content.Spacing(8);
+                FontIcon icon;
+                icon.FontFamily(Media::FontFamily(L"Segoe Fluent Icons"));
+                icon.FontSize(16);
+                icon.Glyph(L"\xE8B7");
+                TextBlock label;
+                label.Text(hstring(value.label));
+                label.VerticalAlignment(VerticalAlignment::Center);
+                content.Children().Append(icon);
+                content.Children().Append(label);
+                item.Content(content);
+                Automation::AutomationProperties::SetAutomationId(item, hstring(L"AddressSuggestion" + std::to_wstring(index)));
+                Automation::AutomationProperties::SetName(item, hstring(value.label));
+                Automation::AutomationProperties::SetHelpText(item, hstring(TextFor(value.location)));
+                ToolTipService::SetToolTip(item, box_value(hstring(TextFor(value.location))));
+                suggestion_list.Items().Append(item);
+            }
+            suggestion_list.SelectedIndex(pending_suggestion_direction > 0 ? 0 :
+                pending_suggestion_direction < 0 ? static_cast<int32_t>(suggestions.size() - 1) : -1);
+            pending_suggestion_direction = 0;
+            SizeSuggestions();
+            suggestion_presenter.RequestedTheme(host.ActualTheme());
+            suggestion_popup.IsOpen(true);
         }
 
         void HideHistory() noexcept
@@ -321,6 +466,7 @@ namespace blink::app
         {
             HideHistory();
             HideChildren();
+            HideSuggestions();
             // Replacing the native control also dismisses its overflow popup.
             // Its old event closure keeps its own values and is now retired.
             try { RebuildBreadcrumbs(); } catch (...) {}
@@ -336,6 +482,7 @@ namespace blink::app
             }
             HideMenus();
             state.BeginEdit();
+            suggestions_armed = true;
             SyncVisuals();
             editor.Focus(FocusState::Programmatic);
             if (select_all) { editor.SelectAll(); }
@@ -345,6 +492,7 @@ namespace blink::app
         {
             HideMenus();
             composing = false;
+            suggestions_armed = false;
             state.Cancel();
             SyncVisuals();
         }
@@ -402,6 +550,7 @@ namespace blink::app
             callbacks = {};
             HideHistory();
             HideChildren();
+            HideSuggestions();
             ++breadcrumb_revision;
             // Window.Closed may be unloading XAML. The native tree owns its
             // teardown; only retire late events and dismiss an existing menu.
@@ -464,6 +613,30 @@ namespace blink::app
             hstring(localization.GetString(L"AddressBar.Edit")));
         ui->row.Children().Append(ui->editor);
 
+        ui->suggestion_list = ListView();
+        ui->suggestion_list.IsTabStop(false);
+        ui->suggestion_list.AllowFocusOnInteraction(false);
+        ui->suggestion_list.IsItemClickEnabled(true);
+        ui->suggestion_list.SelectionMode(ListViewSelectionMode::Single);
+        ui->suggestion_list.MaxHeight(288);
+        Automation::AutomationProperties::SetAutomationId(ui->suggestion_list, L"AddressSuggestions");
+        Automation::AutomationProperties::SetName(ui->suggestion_list, hstring(localization.GetString(L"AddressBar.Suggestions")));
+        ui->suggestion_presenter = FlyoutPresenter();
+        ui->suggestion_presenter.IsTabStop(false);
+        ui->suggestion_presenter.AllowFocusOnInteraction(false);
+        ui->suggestion_presenter.Padding(Thickness{ 4, 4, 4, 4 });
+        ui->suggestion_presenter.CornerRadius(CornerRadius{ 8, 8, 8, 8 });
+        ui->suggestion_presenter.Content(ui->suggestion_list);
+        ui->suggestion_popup = Primitives::Popup();
+        ui->suggestion_popup.IsLightDismissEnabled(false);
+        ui->suggestion_popup.PlacementTarget(ui->editor);
+        ui->suggestion_popup.DesiredPlacement(Primitives::PopupPlacementMode::BottomEdgeAlignedLeft);
+        ui->suggestion_popup.Child(ui->suggestion_presenter);
+        ui->row.Children().Append(ui->suggestion_popup);
+        ui->suggestion_timer = Microsoft::UI::Dispatching::DispatcherQueue::GetForCurrentThread().CreateTimer();
+        ui->suggestion_timer.IsRepeating(false);
+        ui->suggestion_timer.Interval(std::chrono::milliseconds(180));
+
         ui->history_button = Button();
         ui->history_button.Width(32);
         ui->history_button.Height(32);
@@ -482,6 +655,34 @@ namespace blink::app
         ui->row.Children().Append(ui->history_button);
 
         const std::weak_ptr<Ui> weak = ui;
+        ui->suggestion_timer.Tick([weak](auto&&, auto&&) {
+            if (const auto live = weak.lock()) { live->RequestSuggestions(); }
+        });
+        ui->suggestion_list.ItemClick([weak](auto&&, const ItemClickEventArgs& args) {
+            const auto live = weak.lock();
+            if (!live) { return; }
+            const auto clicked = args.ClickedItem();
+            // Own-container ListViewItems can report their Content as the
+            // clicked data item. Resolve either identity in the current list;
+            // an unloaded peer from an older draft matches neither value.
+            for (std::uint32_t index = 0; index < live->suggestion_list.Items().Size(); ++index)
+            {
+                const auto item = live->suggestion_list.Items().GetAt(index).as<ListViewItem>();
+                if (clicked == item || clicked == item.Content())
+                { live->AcceptSuggestion(index, true); return; }
+            }
+        });
+        ui->editor.LostFocus([weak](auto&&, auto&&) {
+            const auto live = weak.lock();
+            if (!live || live->retired) { return; }
+            (void)live->host.DispatcherQueue().TryEnqueue([weak] {
+                if (const auto live = weak.lock(); live && !live->retired && !live->HasEditorFocus())
+                { live->HideSuggestions(); }
+            });
+        });
+        ui->host.SizeChanged([weak](auto&&, auto&&) {
+            if (const auto live = weak.lock(); live && live->suggestion_popup.IsOpen()) { live->SizeSuggestions(); }
+        });
         ui->history_button.Click([weak](auto&&, auto&&) {
             if (const auto live = weak.lock(); live && !live->retired) { live->OpenHistory(); }
         });
@@ -489,22 +690,86 @@ namespace blink::app
             if (const auto live = weak.lock(); live && !live->retired && live->state.IsEditing())
             {
                 const auto text = live->editor.Text();
-                live->state.SetDraft(std::wstring(text.c_str(), text.size()));
+                const std::wstring draft(text);
+                const bool changed = draft != live->observed_text;
+                live->observed_text = draft;
+                live->state.SetDraft(draft);
                 live->SyncHelpText();
+                if (changed) { live->QueueSuggestions(); }
             }
         });
         // These are native TextBox IME events in the pinned WinUI metadata.
         ui->editor.TextCompositionStarted([weak](auto&&, auto&&) {
-            if (const auto live = weak.lock(); live && !live->retired) { live->composing = true; }
+            if (const auto live = weak.lock(); live && !live->retired)
+            { live->composing = true; live->HideSuggestions(); }
         });
         ui->editor.TextCompositionEnded([weak](auto&&, auto&&) {
-            if (const auto live = weak.lock(); live && !live->retired) { live->composing = false; }
+            if (const auto live = weak.lock(); live && !live->retired)
+            { live->composing = false; live->QueueSuggestions(); }
         });
+        // Tab and arrow navigation must be intercepted before TextBox's
+        // own caret/focus handling, while composing text keeps native input.
+        ui->editor.PreviewKeyDown([weak](auto&&, const Input::KeyRoutedEventArgs& args) {
+            const auto live = weak.lock();
+            if (!live || live->retired || live->composing) { return; }
+            const auto is_down = [](const Windows::System::VirtualKey key) {
+                return (Microsoft::UI::Input::InputKeyboardSource::GetKeyStateForCurrentThread(key) &
+                    Windows::UI::Core::CoreVirtualKeyStates::Down) == Windows::UI::Core::CoreVirtualKeyStates::Down;
+            };
+            const bool plain = !is_down(Windows::System::VirtualKey::Control) &&
+                !is_down(Windows::System::VirtualKey::Shift) && !is_down(Windows::System::VirtualKey::Menu);
+            if (plain && (args.Key() == Windows::System::VirtualKey::Down || args.Key() == Windows::System::VirtualKey::Up))
+            {
+                const int direction = args.Key() == Windows::System::VirtualKey::Down ? 1 : -1;
+                if (!live->suggestion_popup.IsOpen())
+                {
+                    if ((live->suggestion_pending || live->suggestion_inflight) &&
+                        live->pending_suggestion_owner == live->state.Owner() &&
+                        live->pending_suggestion_request == live->suggestion_revision &&
+                        live->editor.Text() == hstring(live->pending_suggestion_draft))
+                    {
+                        live->pending_suggestion_direction = direction;
+                        if (live->suggestion_pending) { live->RequestSuggestions(); }
+                    }
+                    else { live->QueueSuggestions(true, direction); }
+                }
+                else
+                {
+                    const auto count = static_cast<int32_t>(live->suggestions.size());
+                    const auto selected = live->suggestion_list.SelectedIndex();
+                    const auto next = selected < 0 ? (direction > 0 ? 0 : count - 1) :
+                        (selected + direction + count) % count;
+                    live->suggestion_list.SelectedIndex(next);
+                    live->suggestion_list.ScrollIntoView(live->suggestion_list.Items().GetAt(next));
+                }
+                args.Handled(true);
+                return;
+            }
+            if (plain && args.Key() == Windows::System::VirtualKey::Tab && live->suggestion_popup.IsOpen() && !live->suggestions.empty())
+            {
+                if (live->editor.Text() != hstring(live->pending_suggestion_draft))
+                { live->HideSuggestions(); return; }
+                const auto selected = live->suggestion_list.SelectedIndex();
+                args.Handled(true);
+                live->AcceptSuggestion(selected < 0 ? 0 : static_cast<std::size_t>(selected), false);
+                return;
+            }
+        });
+        // Keep Enter/Escape after the native TextBox/IME input handling, as
+        // before completion was added. Read the latest Text on this UI turn.
         ui->editor.KeyDown([weak](auto&&, const Input::KeyRoutedEventArgs& args) {
             const auto live = weak.lock();
             if (!live || live->retired || live->composing) { return; }
             if (args.Key() == Windows::System::VirtualKey::Enter)
             {
+                const auto selected = live->suggestion_list.SelectedIndex();
+                if (live->suggestion_popup.IsOpen() && selected >= 0 &&
+                    live->editor.Text() == hstring(live->pending_suggestion_draft))
+                {
+                    args.Handled(true);
+                    live->AcceptSuggestion(static_cast<std::size_t>(selected), true);
+                    return;
+                }
                 // Read Text synchronously; queued TextChanged notifications
                 // must not make the last typed character disappear on Enter.
                 const auto text = live->editor.Text();
@@ -512,6 +777,8 @@ namespace blink::app
                 live->state.SetDraft(draft);
                 live->SyncHelpText();
                 const auto submit = live->callbacks.submit;
+                live->suggestions_armed = false;
+                live->HideSuggestions();
                 args.Handled(true);
                 if (submit) { submit(std::move(draft)); }
             }
@@ -558,10 +825,14 @@ namespace blink::app
         }
         const bool keep_children = preserve_draft && ui_->children_open && ui_->state.Owner() == owner &&
             ui_->state.CommittedText() == ui_->TextFor(committed);
+        const bool keep_suggestions = preserve_draft && ui_->state.IsEditing() && ui_->state.Owner() == owner &&
+            ui_->committed_location == committed;
+        if (!keep_suggestions) { ui_->HideSuggestions(); }
         ui_->HideHistory();
         if (!keep_children) { ui_->HideChildren(); }
         ui_->state.Present(owner, ui_->TextFor(committed), preserve_draft);
-        if (!ui_->state.IsEditing()) { ui_->composing = false; }
+        ui_->committed_location = committed;
+        if (!ui_->state.IsEditing()) { ui_->composing = false; ui_->suggestions_armed = false; }
         ui_->breadcrumbs = std::move(breadcrumbs);
         ui_->history = std::move(history);
         if (!keep_children) { ui_->RebuildBreadcrumbs(); }
@@ -584,6 +855,20 @@ namespace blink::app
         const Location& parent, std::vector<AddressBreadcrumb> children, std::wstring error)
     { if (ui_) { ui_->CompleteChildren(owner, request, parent, std::move(children), error); } }
 
+    void AddressBarPresentation::CompleteSuggestions(const std::uint64_t owner, const std::uint64_t request,
+        const std::wstring& draft, std::vector<AddressBreadcrumb> suggestions)
+    { if (ui_) { ui_->CompleteSuggestions(owner, request, draft, std::move(suggestions)); } }
+
+    void AddressBarPresentation::HideSuggestions() noexcept
+    { if (ui_) { ui_->HideSuggestions(); } }
+
+    void AddressBarPresentation::SetActive(const bool active)
+    {
+        if (!ui_ || ui_->retired) { return; }
+        ui_->active = active;
+        if (!active) { ui_->HideSuggestions(); }
+    }
+
     void AddressBarPresentation::HideMenus() noexcept
     { if (ui_ && !ui_->retired) { ui_->HideMenus(); } }
 
@@ -595,6 +880,8 @@ namespace blink::app
         ui_->SyncVisuals();
         ui_->HideHistory();
         ui_->HideChildren();
+        ui_->suggestions_armed = false;
+        ui_->HideSuggestions();
     }
 
     void AddressBarPresentation::Close() noexcept

@@ -17,6 +17,33 @@ namespace blink::app
         Location location;
     };
 
+    enum class AddressCompletionSource
+    {
+        None,
+        ThisPC,
+        Directory,
+    };
+
+    struct AddressCompletionPlan
+    {
+        AddressCompletionSource source{ AddressCompletionSource::None };
+        std::wstring directory;
+        std::wstring prefix;
+    };
+
+    // Produces only a directory and name prefix. Relative input is resolved
+    // against the committed folder, never the process or per-drive CWD.
+    // An incomplete UNC server has no directory completion plan.
+    [[nodiscard]] AddressCompletionPlan BuildAddressCompletionPlan(
+        std::wstring_view draft, const Location& committed,
+        std::wstring_view this_pc_label);
+
+    // The owner supplies direct folders from the planned directory, or the
+    // existing This PC entries. Preserve that ordering and first target value.
+    [[nodiscard]] std::vector<AddressBreadcrumb> FilterAddressCompletions(
+        const AddressCompletionPlan& plan,
+        const std::vector<AddressBreadcrumb>& available, std::size_t max = 12);
+
     // Uses Location's existing parent semantics only. No folder enumeration,
     // volume metadata, or synthetic network/server locations are introduced.
     [[nodiscard]] std::vector<AddressBreadcrumb> BuildAddressBreadcrumbs(

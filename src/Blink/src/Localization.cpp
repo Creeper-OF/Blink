@@ -318,6 +318,7 @@ namespace blink::app
                 { L"AddressBar.ChildrenLoading", L"Loading child folders…" },
                 { L"AddressBar.ChildrenEmpty", L"No child folders" },
                 { L"AddressBar.ChildrenFailed", L"Could not read child folders: {0}" },
+                { L"AddressBar.Suggestions", L"Folder suggestions" },
                 { L"Toolbar.SearchPlaceholder", L"Search names or extensions" },
                 { L"Toolbar.SortBy", L"Sort by {0}" },
                 { L"Toolbar.View", L"View" },

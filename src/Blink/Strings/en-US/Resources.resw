@@ -462,4 +462,5 @@
   <data name="AddressBar.ChildrenLoading" xml:space="preserve"><value>Loading child folders…</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.ChildrenEmpty" xml:space="preserve"><value>No child folders</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.ChildrenFailed" xml:space="preserve"><value>Could not read child folders: {0}</value><comment>Address child folder menu.</comment></data>
+  <data name="AddressBar.Suggestions" xml:space="preserve"><value>Folder suggestions</value><comment>Address completion list.</comment></data>
 </root>

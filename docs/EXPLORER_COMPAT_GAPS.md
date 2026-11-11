@@ -1,5 +1,7 @@
 # Explorer 兼容差距与切片顺序
 
+G03c最新（2026-11-11）：目录自动完成已接入；双配置1608/0/4、249输入/383资源，同Release自动完成15+地址20项通过。以下G03a/G03b为历史快照，当前地址剩余以G03行和[交接](EXPLORER_ADDRESS_COMPLETION_HANDOFF.md)为准。
+
 阶段A审计2026-11-08；G02实现更新2026-11-09；G03a实现更新2026-11-10（同一最终Release限定GUI53项通过）。接受用户提供的[任务书](EXPLORER_UI_MASTER_PROMPT.md)，以 `7135a14` 为阶段 A 的源码基线。该文档与[UI 规范](EXPLORER_UI_SPEC.md)、[菜单台账](EXPLORER_MENU_MATRIX.md)、[交互矩阵](EXPLORER_INTERACTION_TESTS.md)共同记录事实；下面的优先级是实施顺序，不是完成比例。
 
 
@@ -26,7 +28,7 @@ G03b最新记录（2026-11-11）：逐级下级目录菜单已实现；两配置
 | --- | --- | --- | --- | --- | --- |
 | G01 | P0，历史限定切片已交付 | 顶部已改真实查看/显示菜单：Grid/List/Details及Hidden | IMPLEMENTED_VERIFIED | main `BuildFolderViewCommands/SetFolderViewMode/SetShowHiddenItems`，`FolderCommandPolicy`、`ContextMenuAppearance` | 只收拢三个已实现视图与隐藏项；复用每标签视图、窗口级visibility、既有命令；用实际布局、勾选、双标签和stale peer验证，不塞预览等占位 |
 | G02 | P0，限定验证完成/4排序叶待验 | 标准CommandBar已集成8个主按钮、New/Sort/View菜单、原生More的7个次级动作及动态溢出；旧排序Combo/方向按钮已移除 | IMPLEMENTED_NEEDS_MANUAL | `CommandBarPresentation`仅展示；`ExplorerCommandBarModel`从现有Tab/Search推导能力；main复用 `ExecuteFolderCommand`、原搜索动作和唯一队列 | Hidden/Search修正后Debug/Release各1542/0/4，240冻结输入哈希匹配/375资源；新Release完整GUI18/0/0；实际覆盖24条顶部入口已验，Sort Name/Modified/Type/Ascending4条未点仍待验。命令行跨窗格，bar本体Left内容宽；640宽原生溢出已验，其他环境及整P0不外推 |
-| G03 | P0，G03a/G03b所列场景已验 | 编辑/面包屑、历史、逐级子目录、原生overflow和键盘已接入；自动完成待做 | PARTIAL（实测子项IMPLEMENTED_VERIFIED） | AddressBarPresentation、StartAddressChildren，复用Location/导航树过滤与原导航入口 | 双配置1583/0/4，最终Release菜单15+地址20项通过；旧peer、真实刷新和目录删除错误已验；实物鼠标/IME/UNC及完整环境仍待验 |
+| G03 | P0，功能已接入/组合待验 | 编辑/面包屑、历史、逐级目录、前缀候选与键盘已接入 | IMPLEMENTED_NEEDS_MANUAL | AddressBarModel/Presentation、StartAddressSuggestions，复用Location/枚举/隐藏项与原导航 | 双配置1608/0/4、383资源，最终同Release补全15+地址20项；实物鼠标/真实IME/UNC及完整环境仍待验，不标完整G03/P0完成 |
 | G04 | P0，G04a所列子项已验 | F3共享搜索入口；F6/Shift+F6显式六区域切换，标准TabView/ListView快捷键保留 | PARTIAL（所列子项IMPLEMENTED_VERIFIED） | main `CanUseFocusShortcut/CurrentFocusRegion/CycleWindowFocus`；原生文本组合事件 | 双配置1583/0/4、最终23项窗口全PASS，零结果页原生“更多”入口已补并复测；真实IME/读屏及全部组合仍待验 |
 | G05 | P0，G05a/G05b所列场景已验 | 文件主名初选，目录及新建等全选；保留ContentDialog，改名后选中并滚动到精确新行 | PARTIAL（实测子项IMPLEMENTED_VERIFIED） | `ShowFileNameDialog`、`TabState::CommitBrowse`、`RestoreRenderedSelection`；搜索仍先定位父目录 | 双配置1583/0/4、最终17项窗口检查，覆盖同身份其他链接不误选、仅改大小写、分批列表滚动和编辑中正常关闭。真实IME与完整区域焦点组合仍待续，Ctrl+A可编辑全名 |
 | G06 | P0，后续 | 文件/目录/多选/搜索有Blink主菜单，导航树/驱动器/虚拟背景的专属菜单未完整接入 | PARTIAL | main `ShowFolderContextMenu/ShowSearchContextMenu`、`SearchContextMenu`、`NavigationTree` | 按12场景补菜单；盘根不套普通文件Replace/Delete，设备动作须适用且有真实接口，不能加空按钮 |

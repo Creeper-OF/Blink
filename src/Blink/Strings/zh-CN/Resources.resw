@@ -462,4 +462,5 @@
   <data name="AddressBar.ChildrenLoading" xml:space="preserve"><value>正在读取下级目录…</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.ChildrenEmpty" xml:space="preserve"><value>没有可用的下级目录</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.ChildrenFailed" xml:space="preserve"><value>无法读取下级目录：{0}</value><comment>Address child folder menu.</comment></data>
+  <data name="AddressBar.Suggestions" xml:space="preserve"><value>目录建议</value><comment>Address completion list.</comment></data>
 </root>

@@ -7114,6 +7114,15 @@ struct App : AppT<App>
             if (auto app = weak.get(); app && app->address_children_request_ == request)
             { app->CancelAddressChildrenWork(); }
         };
+        callbacks.suggestions_requested = [weak](const std::uint64_t owner, const std::uint64_t request,
+            std::wstring draft, blink::app::Location committed) {
+            if (auto app = weak.get(); app && !app->window_style_closed_ && !app->IsOperationDialogOpen())
+            { app->StartAddressSuggestions(owner, request, std::move(draft), std::move(committed)); }
+        };
+        callbacks.suggestions_cancelled = [weak](const std::uint64_t request) {
+            if (auto app = weak.get(); app && app->address_suggestion_request_ == request)
+            { app->CancelAddressSuggestionWork(); }
+        };
         const auto surface = address_bar_.Build(localization_, std::move(callbacks));
         address_focus_root_ = surface;
         // Escape after dismissing the native history popup also returns to
@@ -7127,6 +7136,27 @@ struct App : AppT<App>
             { app->CancelAddressEdit(); args.Handled(true); }
         });
         path_box_ = address_bar_.Editor();
+        window_.Activated([weak](auto&&, const WindowActivatedEventArgs& args) {
+            if (const auto app = weak.get(); app && !app->window_style_closed_)
+            {
+                if (args.WindowActivationState() != WindowActivationState::Deactivated)
+                { app->address_bar_.SetActive(true); }
+                else
+                {
+                    // XAML popup/input-site windows can be active HWNDs in
+                    // this same process. Check after the activation transition
+                    // before treating it as leaving the application.
+                    (void)app->dispatcher_.TryEnqueue([weak] {
+                        if (const auto live = weak.get(); live && !live->window_style_closed_)
+                        {
+                            DWORD foreground_pid{};
+                            (void)GetWindowThreadProcessId(GetForegroundWindow(), &foreground_pid);
+                            live->address_bar_.SetActive(foreground_pid == GetCurrentProcessId());
+                        }
+                    });
+                }
+            }
+        });
         navigation_bar.Children().Append(surface);
         Grid::SetColumn(surface, 4);
         SyncAddressBar();
@@ -7202,6 +7232,68 @@ struct App : AppT<App>
         address_bar_.Present(tab_window_state_.ActiveTabId(), navigation.committed_location,
             blink::app::BuildAddressBreadcrumbs(navigation.committed_location, localization_.GetString(L"Location.ThisPC")),
             blink::app::BuildAddressHistory(navigation), preserve_draft);
+    }
+
+    void CancelAddressSuggestionWork() noexcept
+    {
+        address_suggestion_request_ = 0;
+        try { if (address_suggestion_work_) { address_suggestion_work_.Cancel(); } } catch (...) {}
+        address_suggestion_work_ = nullptr;
+    }
+
+    void StartAddressSuggestions(const std::uint64_t owner, const std::uint64_t request,
+        std::wstring draft, blink::app::Location committed)
+    {
+        CancelAddressSuggestionWork();
+        address_suggestion_request_ = request;
+        const auto weak = get_weak();
+        const auto dispatcher = dispatcher_;
+        const auto policy = tab_window_state_.GetVisibilityPolicy();
+        const auto localization = localization_;
+        address_suggestion_work_ = Windows::System::Threading::ThreadPool::RunAsync(
+            [weak, dispatcher, owner, request, draft = std::move(draft), committed = std::move(committed), policy, localization](
+                const Windows::Foundation::IAsyncAction& action) {
+                std::vector<blink::app::AddressBreadcrumb> suggestions;
+                try
+                {
+                    if (action.Status() == Windows::Foundation::AsyncStatus::Canceled) { return; }
+                    const auto plan = blink::app::BuildAddressCompletionPlan(draft, committed, localization.GetString(L"Location.ThisPC"));
+                    std::vector<blink::app::AddressBreadcrumb> available;
+                    if (plan.source == blink::app::AddressCompletionSource::ThisPC)
+                    {
+                        const auto content = blink::app::EnumerateThisPcContent();
+                        available.reserve(content.items.size());
+                        for (const auto& item : content.items)
+                        {
+                            available.push_back({ item.label_key.empty() ? item.display_name :
+                                localization.GetString(item.label_key), item.target });
+                        }
+                    }
+                    else if (plan.source == blink::app::AddressCompletionSource::Directory)
+                    {
+                        const auto listing = blink::core::EnumerateDirectory(plan.directory);
+                        if (listing.error == ERROR_SUCCESS)
+                        {
+                            const auto entries = blink::app::FilterNavigationTreeChildren(listing, policy);
+                            available.reserve(entries.size());
+                            for (const auto& entry : entries) { available.push_back({ entry.label, entry.target }); }
+                        }
+                    }
+                    if (action.Status() == Windows::Foundation::AsyncStatus::Canceled) { return; }
+                    suggestions = blink::app::FilterAddressCompletions(plan, available);
+                }
+                catch (...) { /* Enter still uses normal navigation and its real failure feedback. */ }
+                if (action.Status() == Windows::Foundation::AsyncStatus::Canceled) { return; }
+                (void)dispatcher.TryEnqueue([weak, owner, request, draft, suggestions = std::move(suggestions)]() mutable {
+                    if (const auto app = weak.get(); app && !app->window_style_closed_ &&
+                        app->address_suggestion_request_ == request && app->tab_window_state_.ActiveTabId() == owner)
+                    {
+                        if (app->IsOperationDialogOpen()) { app->address_bar_.HideSuggestions(); return; }
+                        app->address_suggestion_work_ = nullptr;
+                        app->address_bar_.CompleteSuggestions(owner, request, draft, std::move(suggestions));
+                    }
+                });
+            });
     }
 
     void BeginAddressEdit()
@@ -7362,6 +7454,7 @@ struct App : AppT<App>
     {
         window_style_closed_ = true;
         CancelAddressChildrenWork();
+        CancelAddressSuggestionWork();
         address_bar_.Close();
         DismissSearchContextMenu();
         shell_context_menu_.Shutdown(); search_menu_selection_.reset(); pending_search_folder_command_.reset();
@@ -8444,6 +8537,8 @@ struct App : AppT<App>
     blink::app::AddressBarPresentation address_bar_;
     Windows::Foundation::IAsyncAction address_children_work_{ nullptr };
     std::uint64_t address_children_request_{};
+    Windows::Foundation::IAsyncAction address_suggestion_work_{ nullptr };
+    std::uint64_t address_suggestion_request_{};
     TextBox path_box_{ nullptr };
     Button back_button_{ nullptr };
     Button forward_button_{ nullptr };
