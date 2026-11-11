@@ -37,6 +37,11 @@ namespace blink::app
 
     [[nodiscard]] std::wstring BuildShellMenuCommandLine(const std::wstring& host,
         const ShellMenuRequest& request, std::uintptr_t cancel_handle = 0);
+    // Captures one absolute directory, including a drive root, independently
+    // of the active file-list selection. Resets request before capture; set
+    // owner/position/locale/verb after success. Metadata I/O: call on a worker.
+    [[nodiscard]] DWORD CaptureDirectoryShellMenuRequest(const std::wstring& path,
+        ShellMenuRequest& request);
     // Performs only the metadata checks needed to keep a menu tied to its
     // captured selection. Call on a worker; no Shell extensions are loaded.
     [[nodiscard]] DWORD ValidateShellMenuRequest(const ShellMenuRequest& request);

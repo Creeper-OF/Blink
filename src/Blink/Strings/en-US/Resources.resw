@@ -463,4 +463,7 @@
   <data name="AddressBar.ChildrenEmpty" xml:space="preserve"><value>No child folders</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.ChildrenFailed" xml:space="preserve"><value>Could not read child folders: {0}</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.Suggestions" xml:space="preserve"><value>Folder suggestions</value><comment>Address completion list.</comment></data>
+  <data name="Nav.MenuNewTab" xml:space="preserve"><value>Open in new tab</value></data>
+  <data name="Nav.MenuExpand" xml:space="preserve"><value>Expand</value></data>
+  <data name="Nav.MenuCollapse" xml:space="preserve"><value>Collapse</value></data>
 </root>

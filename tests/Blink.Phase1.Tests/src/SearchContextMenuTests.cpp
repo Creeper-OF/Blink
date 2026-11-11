@@ -187,6 +187,67 @@ bool RunSearchContextMenuTests()
         folder_menu.additional_entries = { Entry(sources / L"目录结果") };
         passed &= Check(ValidateShellMenuRequest(folder_menu) == ERROR_SUCCESS,
             "folder_shell_menu_accepts_file_and_directory_siblings_together");
+        const auto directory_path = (sources / L"目录结果").wstring();
+        const auto directory_entry = Entry(directory_path);
+        ShellMenuRequest captured_menu;
+        auto capture_error = CaptureDirectoryShellMenuRequest(directory_path, captured_menu);
+        passed &= Check(capture_error == ERROR_SUCCESS && captured_menu.entry.full_path == directory_path &&
+            captured_menu.entry.identity == directory_entry.identity && captured_menu.entry.is_directory &&
+            captured_menu.parent_identity == Entry(sources).identity &&
+            captured_menu.entry.full_path != hidden_selection.wstring() &&
+            ValidateShellMenuRequest(captured_menu) == ERROR_SUCCESS,
+            "directory_shell_menu_captures_its_target_independently_of_active_browse_selection");
+        capture_error = CaptureDirectoryShellMenuRequest(directory_path + L"\\", captured_menu);
+        passed &= Check(capture_error == ERROR_SUCCESS && captured_menu.entry.full_path == directory_path &&
+            captured_menu.parent_identity == Entry(sources).identity &&
+            captured_menu.parent_identity != directory_entry.identity && ValidateShellMenuRequest(captured_menu) == ERROR_SUCCESS,
+            "directory_shell_menu_trailing_separator_keeps_actual_parent_instead_of_directory_itself");
+        capture_error = CaptureDirectoryShellMenuRequest(L"\\\\?\\" + directory_path, captured_menu);
+        passed &= Check(capture_error == ERROR_SUCCESS && captured_menu.entry.full_path == directory_path &&
+            captured_menu.entry.identity == directory_entry.identity && ValidateShellMenuRequest(captured_menu) == ERROR_SUCCESS,
+            "directory_shell_menu_extended_drive_spelling_resolves_same_target_and_parent");
+        const auto drive_root = root.root_path().wstring();
+        const auto root_entry = Entry(drive_root);
+        ShellMenuRequest root_menu;
+        capture_error = CaptureDirectoryShellMenuRequest(drive_root, root_menu);
+        passed &= Check(capture_error == ERROR_SUCCESS && root_menu.entry.full_path == drive_root &&
+            root_menu.entry.identity == root_entry.identity && root_menu.parent_identity == root_entry.identity &&
+            root_menu.additional_entries.empty() && ValidateShellMenuRequest(root_menu) == ERROR_SUCCESS,
+            "directory_shell_menu_accepts_real_drive_root_with_its_own_filesystem_parent_identity");
+        capture_error = CaptureDirectoryShellMenuRequest(L"\\\\?\\" + drive_root, captured_menu);
+        passed &= Check(capture_error == ERROR_SUCCESS && captured_menu.entry.full_path == drive_root &&
+            captured_menu.entry.identity == root_menu.entry.identity &&
+            captured_menu.parent_identity == root_menu.parent_identity && ValidateShellMenuRequest(captured_menu) == ERROR_SUCCESS,
+            "directory_shell_menu_extended_drive_root_keeps_required_root_separator");
+        root_menu.verb = L"properties";
+        const auto root_arguments = Arguments(BuildShellMenuCommandLine(L"D:\\tools\\Blink.ShellMenuHost.exe", root_menu));
+        passed &= Check(Argument(root_arguments, L"--path") == drive_root &&
+            Argument(root_arguments, L"--identity") == root_entry.identity.ToString() &&
+            Argument(root_arguments, L"--parent-identity") == root_entry.identity.ToString() &&
+            Argument(root_arguments, L"--verb") == L"properties",
+            "directory_shell_menu_root_properties_uses_existing_quoted_host_protocol");
+        captured_menu = folder_menu;
+        captured_menu.verb = L"properties";
+        capture_error = CaptureDirectoryShellMenuRequest(file.wstring(), captured_menu);
+        passed &= Check(capture_error == ERROR_DIRECTORY && captured_menu.entry.full_path.empty() &&
+            !captured_menu.entry.identity.valid && !captured_menu.parent_identity.valid &&
+            captured_menu.additional_entries.empty() && captured_menu.verb.empty(),
+            "directory_shell_menu_non_directory_failure_clears_prior_selection_and_options");
+        capture_error = CaptureDirectoryShellMenuRequest((sources / L"missing-directory").wstring(), captured_menu);
+        passed &= Check(capture_error == ERROR_FILE_NOT_FOUND && !captured_menu.entry.identity.valid &&
+            !captured_menu.parent_identity.valid,
+            "directory_shell_menu_missing_target_preserves_real_metadata_error");
+        bool rejected_relative = true;
+        for (const auto& path : { L"", L"relative-directory", L"D:", L"\\relative-directory" })
+        { rejected_relative &= CaptureDirectoryShellMenuRequest(path, captured_menu) == ERROR_INVALID_PARAMETER; }
+        passed &= Check(rejected_relative && captured_menu.entry.full_path.empty() &&
+            !captured_menu.parent_identity.valid,
+            "directory_shell_menu_does_not_resolve_drive_relative_or_process_relative_targets");
+        auto nul_path = directory_path;
+        nul_path.push_back(L'\0'); nul_path += L"different-target";
+        passed &= Check(CaptureDirectoryShellMenuRequest(nul_path, captured_menu) == ERROR_INVALID_PARAMETER &&
+            captured_menu.entry.full_path.empty(),
+            "directory_shell_menu_does_not_silently_truncate_captured_target_path");
         auto invalid_menu = folder_menu;
         invalid_menu.additional_entries = { invalid_menu.entry };
         invalid_menu.additional_entries.front().full_path = (sources / L"." / file.filename()).wstring();

@@ -2,7 +2,10 @@
 
 #include <charconv>
 #include <filesystem>
+#include <pathcch.h>
 #include <set>
+
+#pragma comment(lib, "pathcch")
 
 namespace blink::app
 {
@@ -54,6 +57,42 @@ namespace blink::app
         }
         if (cancel_handle) { result += L" --cancel-handle " + std::to_wstring(cancel_handle); }
         return result;
+    }
+
+    DWORD CaptureDirectoryShellMenuRequest(const std::wstring& path,
+        ShellMenuRequest& request)
+    {
+        request = {};
+        if (path.empty() || path.find(L'\0') != path.npos || !std::filesystem::path(path).is_absolute())
+        { return ERROR_INVALID_PARAMETER; }
+        auto full_path = blink::core::NormalizePath(path);
+        // Shell parsing uses the ordinary absolute spelling. Metadata reads
+        // retain extended-length support through Extended() below.
+        if (full_path.size() >= 8 && CompareStringOrdinal(full_path.data(), 8, L"\\\\?\\UNC\\", 8, TRUE) == CSTR_EQUAL)
+        { full_path = L"\\\\" + full_path.substr(8); }
+        else if (full_path.size() >= 7 && full_path.starts_with(L"\\\\?\\") && full_path[5] == L':' && full_path[6] == L'\\')
+        { full_path.erase(0, 4); }
+        PCWSTR root_end{};
+        if (FAILED(PathCchSkipRoot(full_path.c_str(), &root_end)) || !root_end)
+        { return ERROR_INVALID_PARAMETER; }
+        const auto root_length = static_cast<std::size_t>(root_end - full_path.c_str());
+        while (full_path.size() > root_length && full_path.back() == L'\\') { full_path.pop_back(); }
+        if (full_path.size() == root_length && full_path.back() != L'\\') { full_path += L'\\'; }
+        const auto parent_path = std::filesystem::path(full_path).parent_path().wstring();
+        if (parent_path.empty()) { return ERROR_INVALID_PARAMETER; }
+        blink::core::FileEntry entry, parent;
+        if (!blink::core::ReadEntryMetadata(Extended(full_path), entry))
+        { const auto error = GetLastError(); return error ? error : ERROR_GEN_FAILURE; }
+        if (!entry.is_directory) { return ERROR_DIRECTORY; }
+        if (!blink::core::ReadEntryMetadata(Extended(parent_path), parent))
+        { const auto error = GetLastError(); return error ? error : ERROR_GEN_FAILURE; }
+        if (!parent.is_directory) { return ERROR_DIRECTORY; }
+        entry.full_path = std::move(full_path);
+        entry.name = std::filesystem::path(entry.full_path).filename().wstring();
+        if (entry.name.empty()) { entry.name = entry.full_path; }
+        request.entry = std::move(entry);
+        request.parent_identity = parent.identity;
+        return ERROR_SUCCESS;
     }
 
     DWORD ValidateShellMenuRequest(const ShellMenuRequest& request)

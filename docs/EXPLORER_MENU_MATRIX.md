@@ -1,5 +1,7 @@
 # Explorer 菜单与命令矩阵
 
+G06a最新（2026-11-11）：新增导航/ThisPC目标菜单，双配置1618/0/4、249输入/386资源及最终10项窗口检查通过；C07/C08仅升级本切片覆盖的动作。系统属性仅入口/真实目标捕获已验，实际属性页、剪贴板写入、鼠标及完整环境待验。下方G02等段为各自历史证据，见[交接](EXPLORER_OBJECT_MENU_HANDOFF.md)。
+
 阶段A只读审计基线为`7135a14`，审计文档提交为`e497600`。2026-11-09更新到G02标准CommandBar当前实现：240冻结输入哈希匹配、375套中英/fallback资源；Hidden/Search修正后Debug/Release完整构建成功，普通回归各1542 PASS / 0 FAIL / 4符号链接权限1314 SKIP。新增共26项检查：23项命令栏能力/选择模型、3项搜索生命周期。修正后Release完整18项GUI已18 PASS/0 FAIL/0 SKIP；只将实际覆盖的24条顶部入口升级，4个未点击排序叶仍`IMPLEMENTED_NEEDS_MANUAL`。
 
 G01历史候选为235输入/369资源、两配置各1516/0/4、Release自有窗口15 PASS/0 FAIL/0 SKIP；下方保留这份有效证据。G02将查看host由DropDownButton换为AppBarButton，G01历史结果不自动证明新host、原生overflow或新增文件动作。
@@ -268,33 +270,35 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 
 | 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C07 | 导航普通目录右键 > 打开 | 打开 | Open | 未接入 | 现有ItemInvoked导航，无ContextRequested | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-01 |
-| C07 | 导航普通目录右键 > 展开/折叠 | 展开/折叠 | Expand / Collapse | 未接入 | 已有Lazy Load箭头与单滚动容器，无右键条目 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-02 |
-| C07 | 导航普通目录右键 > 在新标签页中打开 | 在新标签页中打开 | Open in new tab | 未接入 | 无上下文入口 | —（此上下文未定义） | Blink | DEFERRED | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-03 |
+| C07 | 导航普通目录右键 > 打开 | 打开 | Open | Fluent E8E5 | 捕获当前树节点Location，保持文件列表选择，进入目标 | TargetContextOpen | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI06；物理鼠标未验 |
+| C07 | 导航普通目录右键 > 展开/折叠 | 展开/折叠 | Expand / Collapse | Fluent E8BB | 按当前节点真实展开状态，复用lazy loader；reparse不列此项 | TargetContextExpandCollapse | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI04；不导航/不污染列表选择 |
+| C07 | 导航普通目录右键 > 在新标签页中打开 | 在新标签页中打开 | Open in new tab | Fluent E8A7 | 新标签直接导航捕获Location，原标签和选择保留 | TargetContextNewTab | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI05 |
 | C07 | 导航普通目录右键 > 剪切 | 剪切 | Cut | 未接入 | 有普通目录文件操作，TreeView节点未连接命令捕获 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-04 |
 | C07 | 导航普通目录右键 > 复制 | 复制 | Copy | 未接入 | 有普通目录文件操作，TreeView节点未连接命令捕获 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-05 |
 | C07 | 导航普通目录右键 > 粘贴 | 粘贴 | Paste | 未接入 | 有普通目录队列，不会自动把当前活动目录当树节点目标 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-06 |
 | C07 | 导航普通目录右键 > 新建文件夹 | 新建文件夹 | New folder | 未接入 | 新建后端存在，TreeView没有对应可见项 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-07 |
 | C07 | 导航普通目录右键 > 重命名 | 重命名 | Rename | 未接入 | 树节点与文件列表row context不同，未接入 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-08 |
 | C07 | 导航普通目录右键 > 删除 | 删除 | Delete | 未接入 | 无树节点删除菜单/确认入口 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-09 |
-| C07 | 导航普通目录右键 > 属性 | 属性 | Properties | 未接入 | 无树节点属性入口 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-10 |
+| C07 | 导航普通目录右键 > 属性 | 属性 | Properties | Fluent E946 | worker捕获点中目录的真实entry/parent，再走进程外properties-only | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 10项原生捕获及菜单enabled已验；真实属性页NOT RUN |
+| C07 | 导航普通目录右键 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B | 捕获点中目录Location，复用原后台文本剪贴板发布 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | enabled已验；本轮实际剪贴板写入NOT RUN |
 | C07 | 导航普通目录右键 > 更多系统选项 | 更多系统选项 | More system options | 未接入 | 无树节点host请求构建 | —（此上下文未定义） | Shell | DEFERRED | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-11 |
 
 ## C08 此电脑驱动器条目
 
 | 场景 | 菜单路径 | 中文 | 英文 | 图标 | 条件 | 命令ID | 实现方式 | 状态 | 源码证据 | 测试ID |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C08 | 驱动器条目实际右键 > 打开 | 打开 | Open | Fluent E8E5 | ThisPc单选本地fixed/removable条目且目标可解析；进入根目录 | FolderCommand::Open；UIA ContextOpen | Blink | IMPLEMENTED_VERIFIED | [F-MENU] [F-POLICY] [LOCATION] | command_open_selected_committed_row |
-| C08 | 驱动器条目实际右键 > 刷新 | 刷新 | Refresh | Fluent E72C | 刷新ThisPc独立枚举 | FolderCommand::Refresh；UIA ContextRefresh | Blink | IMPLEMENTED_VERIFIED | [F-MENU] [F-POLICY] [LOCATION] | command_this_pc_refresh_supported |
-| C08 | 驱动器目标专用右键 > 在新标签页打开 | 在新标签页打开 | Open in new tab | 未接入 | 目前只能已有单选Open进入根 | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-20 |
-| C08 | 驱动器目标专用右键 > 原生驱动器属性 | 原生驱动器属性 | Drive properties | 未接入 | 当前Properties禁用，未接盘符属性页 | —（尚未定义） | 系统跳转 | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-21 |
+| C08 | 驱动器条目实际右键 > 打开 | 打开 | Open | Fluent E8E5 | ThisPC行捕获真实根Location，当前标签进入根 | TargetContextOpen | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI01/02 |
+| C08 | 驱动器条目实际右键 > 刷新 | 刷新 | Refresh | 此菜单不显示 | G06a仅列目标动作；全页刷新仍在顶部/背景 | FolderCommand::Refresh（顶部/背景） | Blink | UNSUPPORTED_BY_DESIGN | [TARGET] | 专用菜单不混入全页刷新 |
+| C08 | 驱动器目标专用右键 > 在新标签页打开 | 在新标签页打开 | Open in new tab | Fluent E8A7 | 新标签直接进入捕获根，原ThisPC标签保持 | TargetContextNewTab | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI02 |
+| C08 | 驱动器目标专用右键 > 原生驱动器属性 | 属性 | Properties | Fluent E946 | 根entry和parent使用真实根身份；原有进程外properties协议 | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 根捕获/协议原生检查及enabled已验，实际属性页NOT RUN |
+| C08 | 驱动器目标专用右键 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B | 使用所点驱动器根Location，复用文本剪贴板发布 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | enabled已验，实际写入NOT RUN |
 | C08 | 驱动器目标专用右键 > 弹出 | 弹出 | Eject | 未接入 | 仅适用可弹出设备；当前无设备类型驱动的动作 | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-22 |
 | C08 | 驱动器目标专用右键 > 格式化 | 格式化 | Format | 未接入 | 需要设备适用性与显式确认；当前未接入 | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-23 |
 | C08 | 驱动器目标专用右键 > 管理 | 管理 | Manage | 未接入 | 未接Windows系统管理跳转 | —（尚未定义） | 系统跳转 | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-24 |
 | C08 | 驱动器目标专用右键 > 光驱菜单 | 光驱菜单 | Optical drive context menu | 未接入 | LogicalDriveRoots只枚举FIXED/REMOVABLE，不列CDROM | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-25 |
 | C08 | 驱动器目标专用右键 > 映射网络驱动器菜单 | 映射网络驱动器菜单 | Mapped network drive menu | 未接入 | LogicalDriveRoots排除DRIVE_REMOTE，未接入 | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-26 |
-| C08 | 驱动器条目实际右键 > 普通文件操作误复用 | 剪切/复制/粘贴/路径两项/重命名/删除/属性 | Cut / Copy / Paste / Paths / Rename / Delete / Properties | 见共用树；缺口未显示 | 实际普通行菜单仍显示，但ThisPc的is_folder=false使八项全部禁用；未接专用设备菜单 | 同C01对应FolderCommand/UIA ID | Blink | PARTIAL | [F-MENU] [F-POLICY] [LOCATION] | command_this_pc_rejects_filesystem_paste；NOT RUN: M-C08-DEVICE-MENU |
-| C08 | 驱动器条目实际右键 > 查看/排序 | 查看三项、排序六项 | View (3) / Sort (6) | 见共用树；缺口未显示 | 完整子树见C01；三视图可用、六排序项禁用；不是设备属性菜单 | 同C01 View/Sort命令ID | Blink | PARTIAL | [F-MENU] [F-POLICY] | command_this_pc_view_supported；command_this_pc_sort_disabled |
+| C08 | 驱动器条目实际右键 > 普通文件操作误复用 | 剪切/改名/删除等 | Cut / Rename / Delete | 不显示 | G06a目标菜单移除不适用普通行操作，不给盘根套普通文件命令 | ShowTargetContextMenu | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI01/02未出现这些入口 |
+| C08 | 驱动器条目实际右键 > 查看/排序 | 查看/排序 | View / Sort | 此菜单不显示 | 查看/排序保留顶部/背景；G06a为目标菜单 | ShowTargetContextMenu | Blink | UNSUPPORTED_BY_DESIGN | [TARGET] | G06a UI01/02目标菜单 |
 
 ## C09 此电脑背景与虚拟位置
 
@@ -359,7 +363,7 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C12 | 列头目标右键/列管理 > 调整列宽/自动适应 | 调整列宽/自动适应 | Resize / Size to fit | 未接入 | 当前固定四列Button，未注册列头ContextRequested/列配置 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-26 |
 | C12 | 列头目标右键/列管理 > 列重排 | 列重排 | Reorder columns | 未接入 | 当前固定四列Button，未注册列头ContextRequested/列配置 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-27 |
 | C12 | 列头目标右键/列管理 > 分组依据 | 分组依据 | Group by | 未接入 | 当前固定四列Button，未注册列头ContextRequested/列配置 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-28 |
-| C12 | Shift+F10/菜单键 > 普通目录及搜索结果 | 键盘上下文菜单 | Keyboard context menu | 沿对应WinUI菜单 | 仅列表有焦点且有适用目标；Search与Folder各自捕获代次 | ShowKeyboardFolderContextMenu / ShowKeyboardContextMenu | Blink | IMPLEMENTED_VERIFIED | [F-KEY] [SEARCH-INPUT] | H-FOLDER21；H-SEARCH18 |
+| C12 | Shift+F10/菜单键 > 文件列表/搜索/导航目标 | 键盘上下文菜单 | Keyboard context menu | 对应WinUI菜单 | 焦点范围内捕获当前列表、搜索或导航目标，虚拟对象仅列适用动作 | ShowKeyboardFolderContextMenu/ShowKeyboardContextMenu/ShowNavigationContextMenu | Blink | IMPLEMENTED_VERIFIED | [TARGET] [F-KEY] | G06a10窗口检查；旧H-FOLDER21/H-SEARCH18保持历史证据 |
 
 ## DYN 系统动态子菜单与执行机制
 
@@ -494,3 +498,5 @@ print("rows", sum(sum(values.values()) for values in counts.values()))
 [CB-OVERFLOW]: ../.build/explorer-command-bar/integration/ui-overflow-probe.json
 [CB-LIFECYCLE]: ../tests/Blink.Phase1.Tests/src/main.cpp
 [CB-UI]: ../.build/explorer-command-bar/integration/ui-command-bar-report.json
+
+- [TARGET]：main `TargetMenuContext/ShowTargetContextMenu/ShowNavigationContextMenu/ShowTargetProperties`，复用 `CaptureDirectoryShellMenuRequest`、原lazy loader与文本剪贴板发布；导航目标与当前文件列表选择独立。G06a只交付常用动作，树文件操作/其它对象菜单保持原缺口。

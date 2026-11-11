@@ -463,4 +463,7 @@
   <data name="AddressBar.ChildrenEmpty" xml:space="preserve"><value>没有可用的下级目录</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.ChildrenFailed" xml:space="preserve"><value>无法读取下级目录：{0}</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.Suggestions" xml:space="preserve"><value>目录建议</value><comment>Address completion list.</comment></data>
+  <data name="Nav.MenuNewTab" xml:space="preserve"><value>在新标签页中打开</value></data>
+  <data name="Nav.MenuExpand" xml:space="preserve"><value>展开</value></data>
+  <data name="Nav.MenuCollapse" xml:space="preserve"><value>折叠</value></data>
 </root>

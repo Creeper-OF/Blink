@@ -1,5 +1,13 @@
 # Blink Progress
 
+## G06a 导航与位置目标菜单交付 — 2026-11-11
+
+- 侧栏quick/TreeView与ThisPC目录/驱动器条目提供独立WinUI目标菜单，支持真实ContextRequested和焦点范围内Apps/Shift+F10。目录/盘根有Open、新标签、路径复制和原生属性入口；树展开/折叠走原lazy loader。虚拟ThisPC不编码文件系统路径，仅列适用动作；ThisPC条目不借普通文件行菜单显示Cut/Rename/Delete等不适用项。
+- 目标捕获node/quick/ThisPC行的Location，保留文件列表选择；新标签只向捕获位置发起原导航，保持原标签。文本路径发布复用原后台剪贴板逻辑；属性worker捕获目录/盘根entry与parent identity，沿用properties-only进程外host，无新服务、协议或本地防护平台。
+- 10项新原生检查覆盖真实Unicode目录、尾分隔符、extended目录/盘根、根身份和真实失败；Debug/Release单并发构建各1618 PASS/0 FAIL/4既有权限SKIP，249输入/386资源。一次编译发现嵌套dispatcher捕获遗漏，修正后重新构建；窗口复测又修正freshTab未提交空ThisPC覆盖共享导航树的问题。此前3a67e441f2d8候选出现过关窗AV，最终以同操作序列正常exit0复核，不从现有证据外推原生焦点机制；失败日志/报告留在恢复包，不计为通过。
+- 同一最终Release `ffea2fed03203f20b7cecae6c45a3394b091a62107ae0583f203cf3cc878d434` 的10项窗口检查全PASS，PID10400正常exit0/自有夹具清除；同镜像另跑完整10项并在选中标签实际获焦后关闭，PID44688亦exit0/夹具清除，未重复算不同场景，覆盖驱动器与树目标Open/NewTab、展开不导航/不污染文件选择、虚拟位置、Quick Home和Escape回焦。脚本使用真实UIA与目标HWND键盘消息；物理右键、真正剪贴板写入、原生属性页交互及IME/UNC/完整环境仍NOT RUN，不以入口enablement冒充动作验收。
+- 默认新版PID5736已发布可见，正式服务6848与在用索引/服务二进制不动；清理231575514字节本轮生成物/重复候选，保留有效缓存、15个依赖版本和最近两个成功恢复点。G06/P0仍未全部完成，树文件操作和其它对象菜单继续按README推进。见[交接](docs/EXPLORER_OBJECT_MENU_HANDOFF.md)。
+
 ## G03c 地址栏目录自动完成交付 — 2026-11-11
 
 - 保留原TextBox，输入停顿180ms后后台列直接目录候选，大小写不敏感、最多12项；沿用隐藏项/排序。方向键选择保留原文与实际编辑焦点，Tab补全绝对目录但不导航，显式选择Enter/点击导航，未选择Enter仍提交原输入，Esc维持恢复已提交地址，F4历史保留。

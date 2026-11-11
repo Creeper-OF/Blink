@@ -1029,6 +1029,8 @@ struct App : AppT<App>
         quick_panel.Children().Append(quick_heading);
 
         navigation_quick_list_ = ListView();
+        Automation::AutomationProperties::SetAutomationId(navigation_quick_list_, L"NavigationQuickList");
+        ConfigureNavigationContextMenu(navigation_quick_list_, false);
         navigation_quick_list_.SelectionMode(ListViewSelectionMode::Single);
         navigation_quick_list_.IsItemClickEnabled(true);
         // Quick locations are part of the outer navigation extent. Keep the
@@ -1076,6 +1078,8 @@ struct App : AppT<App>
         navigation_content.Children().Append(tree_heading);
 
         navigation_tree_ = TreeView();
+        Automation::AutomationProperties::SetAutomationId(navigation_tree_, L"NavigationTree");
+        ConfigureNavigationContextMenu(navigation_tree_, true);
         ConfigureNavigationTreeItemTemplate();
         navigation_tree_.SelectionMode(TreeViewSelectionMode::Single);
         navigation_tree_.ItemInvoked([this](
@@ -2056,6 +2060,11 @@ struct App : AppT<App>
                 text += blink::core::JoinPath(parent, row.name);
             }
         }
+        PublishPathText(std::move(text), parent_only);
+    }
+
+    void PublishPathText(std::wstring text, const bool parent_only = false)
+    {
         HWND owner{}; check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(&owner));
         const auto origin = blink::app::CaptureFileOperationOrigin(*ActiveTab());
         clipboard_work_pending_ = true;
@@ -3009,6 +3018,238 @@ struct App : AppT<App>
         });
     }
 
+    struct TargetMenuContext
+    {
+        blink::app::TabId tab_id{};
+        std::uint64_t epoch{};
+        std::uint64_t view_generation{};
+        blink::app::Location target;
+        std::optional<blink::app::NavigationTreeNodeId> node_id;
+        std::optional<std::size_t> quick_index;
+        std::optional<std::size_t> row_index;
+    };
+
+    void DismissTargetContextMenu() noexcept
+    {
+        ++target_menu_epoch_;
+        if (target_menu_) { try { target_menu_.Hide(); } catch (...) {} }
+    }
+
+    bool IsTargetMenuCurrent(const TargetMenuContext& context) const
+    {
+        if (window_style_closed_ || IsOperationDialogOpen() || !ActiveTab() ||
+            context.epoch != target_menu_epoch_ || context.tab_id != tab_window_state_.ActiveTabId() ||
+            context.view_generation != folder_view_generation_) { return false; }
+        if (context.node_id)
+        {
+            const auto* node = navigation_tree_model_.Find(*context.node_id);
+            return node && node->target == context.target;
+        }
+        if (context.quick_index)
+        {
+            return *context.quick_index < quick_navigation_items_.size() &&
+                quick_navigation_items_[*context.quick_index].target == context.target;
+        }
+        const auto* ui = ActiveTabUi();
+        return context.row_index && ui && ui->showing_this_pc && !ui->presentation_in_progress &&
+            !ActiveState().PresentationSnapshot().has_pending && *context.row_index < ui->this_pc_rows.size() &&
+            ui->this_pc_rows[*context.row_index].target == context.target;
+    }
+
+    void CancelTargetPropertiesWork() noexcept
+    {
+        ++target_properties_request_;
+        if (target_properties_action_) { try { target_properties_action_.Cancel(); } catch (...) {} }
+        target_properties_action_ = nullptr;
+    }
+
+    void ShowTargetProperties(const blink::app::Location& target)
+    {
+        if (!target.IsFolder() || window_style_closed_ || IsOperationDialogOpen()) { return; }
+        CancelTargetPropertiesWork();
+        const auto request_id = target_properties_request_;
+        const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+        HWND owner{}; check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(&owner));
+        const auto locale = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"zh-CN" : L"en-US";
+        try
+        {
+            target_properties_action_ = Windows::System::Threading::ThreadPool::RunAsync(
+                [weak, dispatcher, owner, locale, request_id, path = target.FolderPath()](auto&& action) {
+                    blink::app::ShellMenuRequest request;
+                    DWORD error{};
+                    try { error = blink::app::CaptureDirectoryShellMenuRequest(path, request); }
+                    catch (const std::bad_alloc&) { error = ERROR_NOT_ENOUGH_MEMORY; }
+                    catch (...) { error = ERROR_GEN_FAILURE; }
+                    if (action.Status() == Windows::Foundation::AsyncStatus::Canceled) { return; }
+                    request.owner = owner; request.locale = locale; request.verb = L"properties";
+                    (void)dispatcher.TryEnqueue([weak, dispatcher, request_id, error, request = std::move(request)]() mutable {
+                        const auto app = weak.get();
+                        if (!app || app->window_style_closed_ || request_id != app->target_properties_request_) { return; }
+                        const auto failure = [weak](const HRESULT hr) {
+                            if (const auto live = weak.get(); live && !live->window_style_closed_)
+                            {
+                                wchar_t code[16]{}; swprintf_s(code, L"0x%08X", static_cast<unsigned>(hr));
+                                live->status_.Text(hstring(live->localization_.Format(L"Search.MenuError", code)));
+                            }
+                        };
+                        if (error) { failure(HRESULT_FROM_WIN32(error)); return; }
+                        try
+                        {
+                            (void)app->shell_context_menu_.Show(std::move(request),
+                                [weak, dispatcher, failure](std::uint64_t generation, blink::app::ShellMenuResult result) {
+                                    (void)dispatcher.TryEnqueue([weak, generation, result, failure] {
+                                        if (const auto live = weak.get(); live && !live->window_style_closed_ &&
+                                            live->shell_context_menu_.IsCurrent(generation) &&
+                                            result.kind == blink::app::ShellMenuResultKind::Error) { failure(result.error); }
+                                    });
+                                });
+                        }
+                        catch (...) { failure(E_FAIL); }
+                    });
+                });
+        }
+        catch (...) { status_.Text(hstring(localization_.Format(L"Search.MenuError", L"0x80004005"))); }
+    }
+
+    void ShowTargetContextMenu(TargetMenuContext context, const FrameworkElement& anchor,
+        const Windows::Foundation::Point position)
+    {
+        if (window_style_closed_ || IsOperationDialogOpen() || !context.target.IsValid()) { return; }
+        DismissTargetContextMenu();
+        DismissSearchContextMenu();
+        DismissCommandBarMenus();
+        address_bar_.HideMenus();
+        if (folder_menu_) { folder_menu_.Hide(); }
+        context.epoch = target_menu_epoch_;
+        context.tab_id = tab_window_state_.ActiveTabId();
+        context.view_generation = folder_view_generation_;
+        target_menu_ = MenuFlyout();
+        blink::app::ApplyContextMenuAppearance(target_menu_, anchor,
+            context.row_index ? L"LocationContextMenu" : L"NavigationContextMenu");
+        const auto help = hstring(context.target.IsFolder() ? context.target.FolderPath() :
+            localization_.GetString(L"Location.ThisPC"));
+        target_menu_.MenuFlyoutPresenterStyle().Setters().Append(Setter(
+            Automation::AutomationProperties::HelpTextProperty(), box_value(help)));
+        const auto weak = get_weak();
+        const auto add = [&](const wchar_t* key, const wchar_t* id, const wchar_t* glyph,
+            std::function<void(App&)> action, const bool enabled = true) {
+            MenuFlyoutItem item;
+            item.Text(hstring(localization_.GetString(key)));
+            item.IsEnabled(enabled);
+            blink::app::StyleContextMenuItem(item, glyph);
+            Automation::AutomationProperties::SetAutomationId(item, id);
+            item.Click([weak, context, action = std::move(action)](auto&&, auto&&) {
+                if (const auto app = weak.get(); app && app->IsTargetMenuCurrent(context)) { action(*app.get()); }
+            });
+            target_menu_.Items().Append(item);
+        };
+        add(L"Command.Open", L"TargetContextOpen", L"\xE8E5",
+            [target = context.target](App& app) { app.NavigateToLocation(target); });
+        add(L"Nav.MenuNewTab", L"TargetContextNewTab", L"\xE8A7",
+            [target = context.target](App& app) { app.CreateAndActivateTab(target); });
+        if (context.node_id)
+        {
+            const auto* node = navigation_tree_model_.Find(*context.node_id);
+            const auto ui = navigation_tree_ui_nodes_.find(*context.node_id);
+            if (node && node->can_expand && !node->reparse_point && ui != navigation_tree_ui_nodes_.end())
+            {
+                const bool expanded = ui->second.IsExpanded();
+                add(expanded ? L"Nav.MenuCollapse" : L"Nav.MenuExpand", L"TargetContextExpandCollapse", L"\xE8BB",
+                    [node_id = *context.node_id, expanded](App& app) {
+                        const auto it = app.navigation_tree_ui_nodes_.find(node_id);
+                        if (it != app.navigation_tree_ui_nodes_.end()) { it->second.IsExpanded(!expanded); }
+                    });
+            }
+        }
+        if (context.target.IsFolder())
+        {
+            target_menu_.Items().Append(MenuFlyoutSeparator());
+            add(L"Search.MenuCopyPath", L"TargetContextCopyPath", L"\xE71B",
+                [target = context.target](App& app) { app.PublishPathText(target.FolderPath()); }, !FileDropBusy());
+            add(L"Command.Properties", L"TargetContextProperties", L"\xE946",
+                [target = context.target](App& app) { app.ShowTargetProperties(target); });
+        }
+        const auto epoch = context.epoch;
+        target_menu_.Closed([weak, epoch](auto&&, auto&&) {
+            if (const auto app = weak.get())
+            {
+                (void)app->dispatcher_.TryEnqueue([weak, epoch] {
+                    if (const auto live = weak.get(); live && live->target_menu_epoch_ == epoch) { ++live->target_menu_epoch_; }
+                });
+            }
+        });
+        Primitives::FlyoutShowOptions options; options.Position(position);
+        target_menu_.ShowAt(anchor, options);
+    }
+
+    void ShowNavigationContextMenu(const bool tree, const IInspectable& source,
+        const ContextRequestedEventArgs* args = nullptr)
+    {
+        auto current = source.try_as<DependencyObject>();
+        while (current)
+        {
+            FrameworkElement anchor{ nullptr };
+            TargetMenuContext context;
+            if (tree)
+            {
+                if (const auto item = current.try_as<TreeViewItem>())
+                {
+                    const auto node = navigation_tree_.NodeFromContainer(item);
+                    const auto id = node ? NavigationTreeNodeIdFromItem(node.Content()) : std::nullopt;
+                    const auto* model = id ? navigation_tree_model_.Find(*id) : nullptr;
+                    if (!model) { return; }
+                    context.node_id = *id; context.target = model->target; anchor = item;
+                }
+            }
+            else if (const auto item = current.try_as<ListViewItem>())
+            {
+                const auto value = navigation_quick_list_.ItemFromContainer(item).try_as<
+                    Windows::Foundation::Collections::PropertySet>();
+                if (!value || !value.HasKey(L"QuickId")) { return; }
+                const auto index = winrt::unbox_value<std::uint64_t>(value.Lookup(L"QuickId"));
+                if (index >= quick_navigation_items_.size()) { return; }
+                context.quick_index = static_cast<std::size_t>(index);
+                context.target = quick_navigation_items_[index].target; anchor = item;
+            }
+            if (anchor)
+            {
+                Windows::Foundation::Point point{ 16, static_cast<float>(anchor.ActualHeight() / 2) };
+                if (args) { (void)args->TryGetPosition(anchor, point); }
+                ShowTargetContextMenu(std::move(context), anchor, point);
+                return;
+            }
+            current = VisualTreeHelper::GetParent(current);
+        }
+    }
+
+    void ConfigureNavigationContextMenu(const Control& control, const bool tree)
+    {
+        const auto weak = get_weak();
+        const auto show_keyboard = [weak, tree] {
+            if (const auto app = weak.get(); app && app->root_.XamlRoot())
+            { app->ShowNavigationContextMenu(tree, FocusManager::GetFocusedElement(app->root_.XamlRoot())); }
+        };
+        AddAccelerator(control, Windows::System::VirtualKey::F10,
+            Windows::System::VirtualKeyModifiers::Shift, show_keyboard, true);
+        AddAccelerator(control, Windows::System::VirtualKey::Application,
+            Windows::System::VirtualKeyModifiers::None, show_keyboard, true);
+        control.ContextRequested([weak, tree](auto&&, const ContextRequestedEventArgs& args) {
+            if (const auto app = weak.get(); app && !app->window_style_closed_)
+            {
+                auto source = args.OriginalSource();
+                Windows::Foundation::Point point;
+                if (!args.TryGetPosition(tree ? app->navigation_tree_.as<UIElement>() :
+                    app->navigation_quick_list_.as<UIElement>(), point))
+                { source = FocusManager::GetFocusedElement(app->root_.XamlRoot()); }
+                app->ShowNavigationContextMenu(tree, source, &args);
+                args.Handled(true);
+            }
+        });
+        control.ContextCanceled([weak](auto&&, auto&&) {
+            if (const auto app = weak.get()) { app->DismissTargetContextMenu(); }
+        });
+    }
+
     struct FolderMenuContext
     {
         blink::app::TabId tab_id{};
@@ -3407,6 +3648,7 @@ struct App : AppT<App>
 
     void ShowFolderSystemContextMenu(const FolderMenuContext& context, const Windows::Foundation::Point position)
     {
+        CancelTargetPropertiesWork();
         if (!IsFolderMenuContextCurrent(context)) { return; }
         const auto rows = ActiveState().SelectedCommittedRows(blink::app::MaxClipboardFileCount);
         if (!rows || rows->empty() || !context.location.IsFolder()) { return; }
@@ -3599,6 +3841,16 @@ struct App : AppT<App>
                 entries_.SelectedItems().Append(item);
             }
         }
+        if (row_index && tab_ui && tab_ui->showing_this_pc && !tab_ui->presentation_in_progress &&
+            !ActiveState().PresentationSnapshot().has_pending && *row_index < tab_ui->this_pc_rows.size())
+        {
+            TargetMenuContext target;
+            target.row_index = row_index;
+            target.target = tab_ui->this_pc_rows[*row_index].target;
+            ShowTargetContextMenu(std::move(target), entries_, position);
+            return;
+        }
+        DismissTargetContextMenu();
         const auto context = CaptureFolderMenuContext(row_index);
         folder_menu_ = MenuFlyout();
         blink::app::ApplyContextMenuAppearance(folder_menu_, entries_, L"FolderContextMenu");
@@ -5410,6 +5662,7 @@ struct App : AppT<App>
     void ShowSearchSystemContextMenu(blink::app::SearchContextSelection selection,
         Windows::Foundation::Point point = {}, const bool properties = false)
     {
+        CancelTargetPropertiesWork();
         auto* tab = ActiveTab();
         if (!blink::app::IsSearchContextCurrent(selection, tab, window_style_closed_) || tab->search_action_pending) { return; }
         DismissSearchContextMenu();
@@ -6975,7 +7228,7 @@ struct App : AppT<App>
         PresentActiveTab();
     }
 
-    void CreateAndActivateTab()
+    void CreateAndActivateTab(const blink::app::Location& initial = blink::app::Location::ThisPC())
     {
         CloseOperationDialogs();
         const auto id = tab_window_state_.CreateTab();
@@ -6983,7 +7236,8 @@ struct App : AppT<App>
         tab_window_state_.ActivateTab(id);
         SyncTabViewItems();
         PresentActiveTab();
-        RefreshNavigation();
+        if (initial.IsThisPC()) { RefreshNavigation(); }
+        else { NavigateToLocation(initial); }
     }
 
     void CloseTab(const blink::app::TabId id)
@@ -7024,6 +7278,7 @@ struct App : AppT<App>
 
     void BindFolderViewToActiveTab()
     {
+        DismissTargetContextMenu();
         DismissCommandBarMenus();
         // Any tab/source presentation invalidates a delayed focus restore,
         // including A -> B -> A switches that reuse the same view control.
@@ -7069,13 +7324,16 @@ struct App : AppT<App>
     void PresentActiveTab()
     {
         const auto* tab = ActiveTab();
-        if (!tab || !ActiveTabUi() || !tab->state)
+        const auto* ui = ActiveTabUi();
+        if (!tab || !ui || !tab->state)
         {
             return;
         }
         ApplyFolderViewMode(tab->state->GetViewMode());
         SyncFolderViewCommands();
-        if (tab->state->PresentationSnapshot().committed_location.IsThisPC())
+        // A fresh tab defaults to ThisPC before any content has committed.
+        // Its empty snapshot must not erase the window's shared navigation.
+        if (ui->showing_this_pc && tab->state->PresentationSnapshot().committed_location.IsThisPC())
         {
             ApplyNavigationTreeContent(tab->state->CommittedThisPCSnapshot());
         }
@@ -7438,6 +7696,7 @@ struct App : AppT<App>
         if (window_style_closed_) { return; }
         try
         {
+            DismissTargetContextMenu();
             // Cancel a modal name edit before its focus host is destroyed.
             folder_name_dialog_.Close();
             if (search_surface_ && search_surface_.Visibility() == Visibility::Visible)
@@ -7453,6 +7712,8 @@ struct App : AppT<App>
     void OnWindowClosed() noexcept
     {
         window_style_closed_ = true;
+        DismissTargetContextMenu();
+        CancelTargetPropertiesWork();
         CancelAddressChildrenWork();
         CancelAddressSuggestionWork();
         address_bar_.Close();
@@ -8571,6 +8832,10 @@ struct App : AppT<App>
     std::vector<blink::app::TabId> tab_item_ids_;
     blink::app::TabWindowState tab_window_state_;
     std::unordered_map<blink::app::TabId, std::unique_ptr<TabUiState>> tab_ui_states_;
+    MenuFlyout target_menu_{ nullptr };
+    std::uint64_t target_menu_epoch_{};
+    std::uint64_t target_properties_request_{};
+    Windows::Foundation::IAsyncAction target_properties_action_{ nullptr };
     blink::app::NavigationTreeModel navigation_tree_model_;
     std::unordered_map<blink::app::NavigationTreeNodeId, TreeViewNode>
         navigation_tree_ui_nodes_;
