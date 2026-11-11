@@ -261,12 +261,12 @@ namespace blink::app
     }
 
     std::optional<NavigationTreeExpansionToken> NavigationTreeModel::BeginExpansion(
-        const NavigationTreeNodeId node_id)
+        const NavigationTreeNodeId node_id, const bool refresh)
     {
         auto* node = Find(node_id);
         if (shutdown_ || !node || !node->can_expand || node->reparse_point ||
-            node->load_state == NavigationTreeLoadState::Loading ||
-            node->load_state == NavigationTreeLoadState::Loaded ||
+            (!refresh && (node->load_state == NavigationTreeLoadState::Loading ||
+                node->load_state == NavigationTreeLoadState::Loaded)) ||
             !node->target.IsFolder())
         {
             return std::nullopt;

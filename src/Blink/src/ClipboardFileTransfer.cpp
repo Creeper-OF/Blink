@@ -367,4 +367,16 @@ namespace blink::app
         catch (...)
         { output.emplace<std::monostate>(); return ERROR_GEN_FAILURE; }
     }
+
+    DWORD CaptureDirectoryClipboardSource(const std::wstring& absolute_path, ClipboardCopySources& output,
+        const FileOperationCancellation& cancelled)
+    {
+        const auto error = CaptureClipboardCopySources({ &absolute_path, 1 }, output, cancelled);
+        if (error != ERROR_SUCCESS) { return error; }
+        if (cancelled && cancelled->load())
+        { output.emplace<std::monostate>(); return ERROR_CANCELLED; }
+        if (!std::holds_alternative<DirectoryCopyRequest>(output))
+        { output.emplace<std::monostate>(); return ERROR_DIRECTORY; }
+        return ERROR_SUCCESS;
+    }
 }

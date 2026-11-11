@@ -1,5 +1,7 @@
 # Explorer 菜单与命令矩阵
 
+G06b最新（2026-11-11）：目录目标Cut/Copy/Paste已接入原队列，根仅Paste、虚拟ThisPC无传输；双配置1636/0/4、13项不写Clipboard窗口检查PASS。实际传输UI SKIP，因此相应动作仍明确限定，见[交接](EXPLORER_NAVIGATION_TRANSFER_HANDOFF.md)。
+
 G06a最新（2026-11-11）：新增导航/ThisPC目标菜单，双配置1618/0/4、249输入/386资源及最终10项窗口检查通过；C07/C08仅升级本切片覆盖的动作。系统属性仅入口/真实目标捕获已验，实际属性页、剪贴板写入、鼠标及完整环境待验。下方G02等段为各自历史证据，见[交接](EXPLORER_OBJECT_MENU_HANDOFF.md)。
 
 阶段A只读审计基线为`7135a14`，审计文档提交为`e497600`。2026-11-09更新到G02标准CommandBar当前实现：240冻结输入哈希匹配、375套中英/fallback资源；Hidden/Search修正后Debug/Release完整构建成功，普通回归各1542 PASS / 0 FAIL / 4符号链接权限1314 SKIP。新增共26项检查：23项命令栏能力/选择模型、3项搜索生命周期。修正后Release完整18项GUI已18 PASS/0 FAIL/0 SKIP；只将实际覆盖的24条顶部入口升级，4个未点击排序叶仍`IMPLEMENTED_NEEDS_MANUAL`。
@@ -273,9 +275,9 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C07 | 导航普通目录右键 > 打开 | 打开 | Open | Fluent E8E5 | 捕获当前树节点Location，保持文件列表选择，进入目标 | TargetContextOpen | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI06；物理鼠标未验 |
 | C07 | 导航普通目录右键 > 展开/折叠 | 展开/折叠 | Expand / Collapse | Fluent E8BB | 按当前节点真实展开状态，复用lazy loader；reparse不列此项 | TargetContextExpandCollapse | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI04；不导航/不污染列表选择 |
 | C07 | 导航普通目录右键 > 在新标签页中打开 | 在新标签页中打开 | Open in new tab | Fluent E8A7 | 新标签直接导航捕获Location，原标签和选择保留 | TargetContextNewTab | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI05 |
-| C07 | 导航普通目录右键 > 剪切 | 剪切 | Cut | 未接入 | 有普通目录文件操作，TreeView节点未连接命令捕获 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-04 |
-| C07 | 导航普通目录右键 > 复制 | 复制 | Copy | 未接入 | 有普通目录文件操作，TreeView节点未连接命令捕获 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-05 |
-| C07 | 导航普通目录右键 > 粘贴 | 粘贴 | Paste | 未接入 | 有普通目录队列，不会自动把当前活动目录当树节点目标 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-06 |
+| C07 | 导航普通目录右键 > 剪切 | 剪切 | Cut | Fluent E8C6 | 普通目录独立worker捕获，MOVE只发布意图；Search/pending/busy不可用 | TargetContextCut | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | 目录来源10项新增原生检查/菜单enabled通过；实际UI SKIP |
+| C07 | 导航普通目录右键 > 复制 | 复制 | Copy | Fluent E8C8 | 单目录CF_HDROP/COPY，保持文件区选择 | TargetContextCopy | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | 菜单/真实目录来源模型通过；实际UI SKIP |
+| C07 | 导航普通目录右键 > 粘贴 | 粘贴 | Paste | Fluent E77F | 读取点中目录真实identity，复用原CopyItems/MOVE队列与冲突/取消/重试 | TargetContextPaste | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | enablement=真实CF_HDROP；实际传输UI SKIP |
 | C07 | 导航普通目录右键 > 新建文件夹 | 新建文件夹 | New folder | 未接入 | 新建后端存在，TreeView没有对应可见项 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-07 |
 | C07 | 导航普通目录右键 > 重命名 | 重命名 | Rename | 未接入 | 树节点与文件列表row context不同，未接入 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-08 |
 | C07 | 导航普通目录右键 > 删除 | 删除 | Delete | 未接入 | 无树节点删除菜单/确认入口 | —（此上下文未定义） | Blink | PARTIAL | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-09 |
@@ -292,6 +294,7 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C08 | 驱动器目标专用右键 > 在新标签页打开 | 在新标签页打开 | Open in new tab | Fluent E8A7 | 新标签直接进入捕获根，原ThisPC标签保持 | TargetContextNewTab | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI02 |
 | C08 | 驱动器目标专用右键 > 原生驱动器属性 | 属性 | Properties | Fluent E946 | 根entry和parent使用真实根身份；原有进程外properties协议 | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 根捕获/协议原生检查及enabled已验，实际属性页NOT RUN |
 | C08 | 驱动器目标专用右键 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B | 使用所点驱动器根Location，复用文本剪贴板发布 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | enabled已验，实际写入NOT RUN |
+| C08 | 驱动器目标专用右键 > 粘贴 | 粘贴 | Paste | Fluent E77F | 根是实际目录目标，仅在浏览owner可用且有CF_HDROP时启用；不提供根Cut/Copy | TargetContextPaste | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | readonly13核对适用性；真实盘根写入NOT RUN |
 | C08 | 驱动器目标专用右键 > 弹出 | 弹出 | Eject | 未接入 | 仅适用可弹出设备；当前无设备类型驱动的动作 | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-22 |
 | C08 | 驱动器目标专用右键 > 格式化 | 格式化 | Format | 未接入 | 需要设备适用性与显式确认；当前未接入 | —（尚未定义） | Shell | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-23 |
 | C08 | 驱动器目标专用右键 > 管理 | 管理 | Manage | 未接入 | 未接Windows系统管理跳转 | —（尚未定义） | 系统跳转 | DEFERRED | [LOCATION] [F-MENU] | NOT RUN: M-C08-24 |
@@ -500,3 +503,5 @@ print("rows", sum(sum(values.values()) for values in counts.values()))
 [CB-UI]: ../.build/explorer-command-bar/integration/ui-command-bar-report.json
 
 - [TARGET]：main `TargetMenuContext/ShowTargetContextMenu/ShowNavigationContextMenu/ShowTargetProperties`，复用 `CaptureDirectoryShellMenuRequest`、原lazy loader与文本剪贴板发布；导航目标与当前文件列表选择独立。G06a只交付常用动作，树文件操作/其它对象菜单保持原缺口。
+
+- [NAV-TRANSFER]：main CopyTargetDirectory/PasteTargetDirectory/PublishFileCopySources，CaptureDirectoryClipboardSource及FileDropOrigin，复用原CopyItems/MOVE/cache；已加载树按真实目录操作与F5串行刷新。真实Clipboard传输报告=SKIP，不可将未执行动作等同入口检查。

@@ -1588,6 +1588,90 @@ namespace
             (void)tree.FailExpansion(*retry_expansion, ERROR_OPERATION_ABORTED);
         }
 
+        {
+            using blink::app::NavigationTreeLoadState;
+            using blink::app::NavigationTreeNodeKind;
+            blink::app::NavigationTreeModel refresh_tree;
+            const auto refresh_root = refresh_tree.ResetTopLevel(L"This PC", {
+                { NavigationTreeNodeKind::Volume, L"D:", Location::Folder(L"D:\\"), true, false },
+                { NavigationTreeNodeKind::Volume, L"E:", Location::Folder(L"E:\\"), false, false },
+                { NavigationTreeNodeKind::Volume, L"F:", Location::Folder(L"F:\\"), true, true },
+            });
+            const auto refresh_volume = refresh_tree.FindExact(Location::Folder(L"D:\\"));
+            const auto seed = refresh_tree.BeginExpansion(refresh_volume);
+            const bool seeded = seed && refresh_tree.CompleteExpansion(*seed, {
+                { L"Keep", Location::Folder(L"D:\\Keep"), true, false },
+                { L"Remove", Location::Folder(L"D:\\Remove"), true, false },
+            });
+            const auto keep_id = refresh_tree.FindChild(refresh_volume, Location::Folder(L"D:\\Keep"));
+            const auto remove_id = refresh_tree.FindChild(refresh_volume, Location::Folder(L"D:\\Remove"));
+            const auto keep_seed = refresh_tree.BeginExpansion(keep_id);
+            const bool keep_loaded = keep_seed && refresh_tree.CompleteExpansion(*keep_seed, {
+                { L"Grandchild", Location::Folder(L"D:\\Keep\\Grandchild"), true, false },
+            });
+            const auto grandchild_id = refresh_tree.FindChild(keep_id, Location::Folder(L"D:\\Keep\\Grandchild"));
+            const auto remove_seed = refresh_tree.BeginExpansion(remove_id);
+            const bool remove_loaded = remove_seed && refresh_tree.CompleteExpansion(*remove_seed, {
+                { L"Gone", Location::Folder(L"D:\\Remove\\Gone"), true, false },
+            });
+            const auto removed_grandchild_id = refresh_tree.FindChild(remove_id, Location::Folder(L"D:\\Remove\\Gone"));
+            const auto* before = refresh_tree.Find(refresh_volume);
+            const auto old_ids = before ? before->child_ids : std::vector<blink::app::NavigationTreeNodeId>{};
+            const auto first_refresh = refresh_tree.BeginExpansion(refresh_volume, true);
+            passed &= Check(seeded && first_refresh && seed && first_refresh->generation > seed->generation &&
+                    refresh_tree.IsExpansionCurrent(*first_refresh) && !refresh_tree.BeginExpansion(refresh_volume),
+                "navigation_tree_explicit_refresh_starts_new_loaded_generation_while_default_loading_expansion_stays_rejected");
+            const auto* pending = refresh_tree.Find(refresh_volume);
+            const auto* kept = refresh_tree.Find(keep_id);
+            passed &= Check(pending && pending->load_state == NavigationTreeLoadState::Loading &&
+                    pending->child_ids == old_ids && keep_loaded && remove_loaded && kept &&
+                    kept->load_state == NavigationTreeLoadState::Loaded && refresh_tree.Find(grandchild_id) &&
+                    refresh_tree.Find(removed_grandchild_id),
+                "navigation_tree_refresh_keeps_previous_children_and_loaded_descendants_visible_until_commit");
+            const auto second_refresh = refresh_tree.BeginExpansion(refresh_volume, true);
+            passed &= Check(first_refresh && second_refresh && second_refresh->generation > first_refresh->generation &&
+                    !refresh_tree.IsExpansionCurrent(*first_refresh) && refresh_tree.IsExpansionCurrent(*second_refresh) &&
+                    !refresh_tree.CompleteExpansion(*first_refresh, {}) &&
+                    !refresh_tree.FailExpansion(*first_refresh, ERROR_ACCESS_DENIED) &&
+                    refresh_tree.Find(refresh_volume)->child_ids == old_ids &&
+                    refresh_tree.Find(refresh_volume)->error == ERROR_SUCCESS,
+                "navigation_tree_refresh_supersedes_inflight_generation_and_rejects_old_success_and_failure");
+            const bool completed = second_refresh && refresh_tree.CompleteExpansion(*second_refresh, {
+                { L"Preserved", Location::Folder(L"d:\\KEEP"), true, false },
+                { L"Added", Location::Folder(L"D:\\Added"), true, false },
+            });
+            kept = refresh_tree.Find(keep_id);
+            passed &= Check(completed && refresh_tree.FindChild(refresh_volume, Location::Folder(L"D:\\Keep")) == keep_id &&
+                    kept && kept->label == L"Preserved" && kept->load_state == NavigationTreeLoadState::Loaded &&
+                    refresh_tree.FindChild(keep_id, Location::Folder(L"D:\\Keep\\Grandchild")) == grandchild_id,
+                "navigation_tree_refresh_reuses_case_insensitive_child_id_and_its_loaded_grandchildren");
+            const auto added_id = refresh_tree.FindChild(refresh_volume, Location::Folder(L"D:\\Added"));
+            passed &= Check(completed && added_id && added_id != keep_id && added_id != remove_id &&
+                    refresh_tree.Find(added_id)->load_state == NavigationTreeLoadState::Unloaded &&
+                    !refresh_tree.Find(remove_id) && !refresh_tree.Find(removed_grandchild_id) &&
+                    refresh_tree.Find(refresh_volume)->child_ids.size() == 2,
+                "navigation_tree_refresh_applies_added_children_and_removes_obsolete_subtrees");
+            const auto committed_ids = refresh_tree.Find(refresh_volume)->child_ids;
+            const auto failed_refresh = refresh_tree.BeginExpansion(refresh_volume, true);
+            passed &= Check(failed_refresh && refresh_tree.FailExpansion(*failed_refresh, ERROR_ACCESS_DENIED) &&
+                    refresh_tree.Find(refresh_volume)->load_state == NavigationTreeLoadState::Failed &&
+                    refresh_tree.Find(refresh_volume)->error == ERROR_ACCESS_DENIED &&
+                    refresh_tree.Find(refresh_volume)->child_ids == committed_ids && refresh_tree.Find(grandchild_id),
+                "navigation_tree_failed_refresh_reports_error_without_discarding_the_previous_snapshot");
+            passed &= Check(!refresh_tree.BeginExpansion(refresh_root, true) &&
+                    !refresh_tree.BeginExpansion(refresh_tree.FindExact(Location::Folder(L"E:\\")), true) &&
+                    !refresh_tree.BeginExpansion(refresh_tree.FindExact(Location::Folder(L"F:\\")), true) &&
+                    !refresh_tree.BeginExpansion(0, true) && !refresh_tree.BeginExpansion(keep_id),
+                "navigation_tree_refresh_preserves_virtual_nonexpandable_reparse_and_default_loaded_boundaries");
+            const auto closing_refresh = refresh_tree.BeginExpansion(refresh_volume, true);
+            refresh_tree.Shutdown();
+            passed &= Check(closing_refresh && !refresh_tree.IsExpansionCurrent(*closing_refresh) &&
+                    !refresh_tree.CompleteExpansion(*closing_refresh, {}) &&
+                    !refresh_tree.BeginExpansion(refresh_volume, true) && !refresh_tree.BeginExpansion(refresh_volume) &&
+                    refresh_tree.RootId() == 0,
+                "navigation_tree_shutdown_retires_explicit_refresh_as_well_as_ordinary_expansion");
+        }
+
         tree.Shutdown();
         passed &= Check(tree.RootId() == 0 && !tree.BeginExpansion(volume).has_value(),
             "navigation_tree_shutdown_invalidates_async_work");
@@ -1756,7 +1840,7 @@ namespace
                 expansion_end != std::string::npos ?
             text.substr(expansion_start, expansion_end - expansion_start) : std::string{};
         passed &= Check(
-            expansion_region.find("navigation_tree_model_.BeginExpansion(node_id)") !=
+            expansion_region.find("navigation_tree_model_.BeginExpansion(node_id, refresh)") !=
                 std::string::npos &&
             expansion_region.find("navigation_tree_pending_expansions_") !=
                 std::string::npos &&

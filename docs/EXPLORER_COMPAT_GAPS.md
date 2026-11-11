@@ -1,5 +1,7 @@
 # Explorer 兼容差距与切片顺序
 
+G06b最新（2026-11-11）：目录Cut/Copy/Paste、已加载树分支事件/F5刷新已接入，双配置1636/0/4、249输入/386资源；13项不写Clipboard窗口检查通过，实际传输UI为SKIP（0项）。其余对象菜单/完整G06/P0待续。见[交接](EXPLORER_NAVIGATION_TRANSFER_HANDOFF.md)。
+
 G06a最新（2026-11-11）：导航/位置常用目标菜单已接入；双配置1618/0/4、249输入/386资源，最终Release10项窗口检查通过。树文件操作/其它对象菜单仍待做，真实属性页/鼠标/剪贴板与环境待验，完整G06/P0未完。见[交接](EXPLORER_OBJECT_MENU_HANDOFF.md)。
 
 G03c最新（2026-11-11）：目录自动完成已接入；双配置1608/0/4、249输入/383资源，同Release自动完成15+地址20项通过。以下G03a/G03b为历史快照，当前地址剩余以G03行和[交接](EXPLORER_ADDRESS_COMPLETION_HANDOFF.md)为准。
@@ -33,14 +35,14 @@ G03b最新记录（2026-11-11）：逐级下级目录菜单已实现；两配置
 | G03 | P0，功能已接入/组合待验 | 编辑/面包屑、历史、逐级目录、前缀候选与键盘已接入 | IMPLEMENTED_NEEDS_MANUAL | AddressBarModel/Presentation、StartAddressSuggestions，复用Location/枚举/隐藏项与原导航 | 双配置1608/0/4、383资源，最终同Release补全15+地址20项；实物鼠标/真实IME/UNC及完整环境仍待验，不标完整G03/P0完成 |
 | G04 | P0，G04a所列子项已验 | F3共享搜索入口；F6/Shift+F6显式六区域切换，标准TabView/ListView快捷键保留 | PARTIAL（所列子项IMPLEMENTED_VERIFIED） | main `CanUseFocusShortcut/CurrentFocusRegion/CycleWindowFocus`；原生文本组合事件 | 双配置1583/0/4、最终23项窗口全PASS，零结果页原生“更多”入口已补并复测；真实IME/读屏及全部组合仍待验 |
 | G05 | P0，G05a/G05b所列场景已验 | 文件主名初选，目录及新建等全选；保留ContentDialog，改名后选中并滚动到精确新行 | PARTIAL（实测子项IMPLEMENTED_VERIFIED） | `ShowFileNameDialog`、`TabState::CommitBrowse`、`RestoreRenderedSelection`；搜索仍先定位父目录 | 双配置1583/0/4、最终17项窗口检查，覆盖同身份其他链接不误选、仅改大小写、分批列表滚动和编辑中正常关闭。真实IME与完整区域焦点组合仍待续，Ctrl+A可编辑全名 |
-| G06 | P0，G06a所列常用动作已接入 | 导航目录/驱动器/quick常用目标菜单、树展开与新标签已接入；树文件操作及其它对象菜单待续 | PARTIAL（G06a所列动作IMPLEMENTED_NEEDS_MANUAL） | ShowTargetContextMenu/ShowNavigationContextMenu/CaptureDirectoryShellMenuRequest，复用Location、lazy loader与进程外properties | 双配置1618/0/4、最终10项窗口检查；物理鼠标/真实属性页/剪贴板与全矩阵待验，不能把入口可用当整项验收 |
+| G06 | P0，G06a/G06b所列入口已接入 | 导航常用菜单与目录剪切复制粘贴、事件/F5树刷新已接；新建/改名/删除及其它对象菜单待续 | PARTIAL（新传输动作IMPLEMENTED_NEEDS_MANUAL） | TargetMenuContext/CopyTargetDirectory/PasteTargetDirectory、FileDropOrigin、原唯一queue | 双配置1636/0/4；13项不写Clipboard窗口检查通过，实际传输UI SKIP；物理鼠标及完整矩阵待验 |
 | G07 | P0，后续 | Shell菜单单/同父多选与2/3消息转发已做；host无wall-clock deadline，现代IExplorerCommand未对接 | PARTIAL | `ShellContextMenuController::Dispatch`、`Blink.ShellMenuHost` | 进程隔离不等于超时已覆盖；先验证实际挂起/取消边界再做必要处理；动态扩展按系统返回，不硬编码软件名，不进Blink主进程 |
 | G08 | P0，后续 | 标准COPY/MOVE剪贴板有Preferred；外部performed完成回传与剪切淡化闭环不足 | PARTIAL | `ClipboardFileTransfer`、main剪贴板缓存及唯一coordinator；OLE拖放现有完成反馈另计 | 保留真实sequence/源身份与部分完成；Explorer双向互操作必须实测，不能把“已发布剪贴板”写成已移动 |
 | G09 | P0，后续 | 同/跨卷拖放、Ctrl/Shift与OLE完成已有；link、右键拖放选择菜单、虚拟文件未接 | PARTIAL | `FileDragDropController/Model/Data`与 `FileDragDropTests` | 现有操作如实验证；未支持的effect返回NONE。FileDescriptor/FileContents不是CF_HDROP的既有能力 |
 | G10 | P0，后续验证 | 文件操作真实partial/取消/冲突已有，组合状态和更直观进度仍需验收 | IMPLEMENTED_NEEDS_MANUAL | `FileOperationCoordinator/MoveTransferPresentation`及既有对话框 | 继续唯一任务队列，不增加假暂停/剩余时间；失败重试不能重放成功前缀，回收站失败不降级永久删除 |
 | G11 | P1 | 搜索与G06a侧栏/ThisPC目录/盘根已接系统属性；普通目录/多选仍未统一 | PARTIAL | PropertiesDialog/ItemProperties、ShellHost properties及单目录捕获 | 本轮目录/盘根捕获10项原生检查、菜单适用性通过；新目标实际属性页未验，普通目录只读详情仍作补充 |
 | G12 | P1 | 三视图已有，其余图标尺寸/平铺/内容、分组和列宽/重排/选择列缺失 | PARTIAL | `FolderViewPresentation/Formatting`、`SortDescriptor`、详情列头 | 分组不是排序，不显示尚未实现视图；排序状态继续每标签持有，逐个功能单独验证 |
-| G13 | P1 | 导航单滚动、lazy目录树已有；图片/音乐/视频、固定管理/主页、导航菜单不完整 | PARTIAL | `NavigationPane/Tree/Model`、main单ScrollViewer | 不重复遍历整盘、不造假的Shell文件夹；只扩充实际KnownFolder或明确系统跳转，个人固定位置需自己的数据模型 |
+| G13 | P1 | 单滚动/lazy树、常用导航菜单和目录操作/F5刷新已接；图片音乐视频、固定管理/主页及其它菜单待续 | PARTIAL | NavigationTree BeginExpansion(refresh)、增量TreeViewNode复用、串行已加载branch更新 | G06b原生刷新8项和窗口F5增删/容器/展开保持通过；不重复全盘枚举，KnownFolder/固定模型保持实际范围 |
 | G14 | P1 | 详情窗格/预览/缩略图未产品化，属性库/Provider原型不能代替前台功能 | DEFERRED | `Blink.Properties`、`PropertiesDialog`；未来独立metadata/preview边界 | 不提前开放无处理能力菜单，第三方预览不在主UI无限等待；格式与故障处理按实际后端落实 |
 | G15 | P1 | 标题/Mica/浅深色与基础UIA已做，激活、高对比、全部缩放/多屏/文本放大未完成矩阵 | IMPLEMENTED_NEEDS_MANUAL | main `BuildWindowFrame/SyncWindowFrameTheme`、App.xaml、现有框架检查 | 保留系统caption按钮/Snap/命中测试，不用自绘替换；本轮125%观察不能代替所有倍率和读屏验收 |
 | G16 | P1 | 每标签有路径/历史/排序/视图/选择/search；G03a地址草稿在切Tab时取消，同Tab自动刷新保留；滚动offset与完整会话持久化未完成 | PARTIAL | `TabRecord/TabUiState/TabWindowState`、`AddressBarState`、`PresentActiveTab` | 地址草稿不跨Tab或重启持久化；不把UI控件变成唯一真相源；用户切标签/关闭不能复活异步结果；会话落盘另立切片 |

@@ -158,6 +158,49 @@ bool RunClipboardCopySourceTests()
             passed &= Check(error == ERROR_SUCCESS && captured && DirectoryRequestMatches(*captured, directory),
                 "typed_capture_reusing_file_output_for_directory_replaces_the_variant_instead_of_appending_modes");
         }
+        {
+            auto error = CaptureDirectoryClipboardSource(directory.wstring(), output);
+            const auto* captured = std::get_if<DirectoryCopyRequest>(&output);
+            passed &= Check(error == ERROR_SUCCESS && captured && DirectoryRequestMatches(*captured, directory) &&
+                captured->source.identity == directory_identity && captured->source_parent_identity == Entry(parent_a).identity,
+                "navigation_directory_capture_uses_actual_clicked_directory_and_parent_ids_without_paste_destination");
+            const auto payload = captured ? EncodeClipboardFilePath(captured->source.full_path) : std::vector<std::byte>{};
+            const auto decoded = DecodeClipboardFilePath(payload);
+            passed &= Check(!decoded.error && decoded.path == directory.wstring() && decoded.path != file_a.wstring() &&
+                preserved(),
+                "navigation_directory_capture_payload_is_the_target_directory_and_preserves_source_bytes_and_streams");
+            error = CaptureDirectoryClipboardSource(file_a.wstring(), output);
+            passed &= Check(error == ERROR_DIRECTORY && Empty(output) && preserved(),
+                "navigation_directory_capture_file_is_rejected_and_clears_old_directory_payload");
+            output = std::vector<FileCopyRequest>{ FileCopyRequest{} };
+            error = CaptureDirectoryClipboardSource((parent_b / L"missing-directory").wstring(), output);
+            passed &= Check(error == ERROR_FILE_NOT_FOUND && Empty(output) && preserved(),
+                "navigation_directory_capture_missing_target_returns_real_error_and_clears_prior_file_mode");
+            const auto drive_root = root.root_path().wstring();
+            const auto root_error = CaptureDirectoryClipboardSource(drive_root, output);
+            const bool root_empty = Empty(output);
+            output = DirectoryCopyRequest{};
+            const auto extended_root_error = CaptureDirectoryClipboardSource(Extended(root.root_path()).wstring(), output);
+            passed &= Check(root_error == ERROR_NOT_SUPPORTED && root_empty && extended_root_error == ERROR_NOT_SUPPORTED &&
+                Empty(output) && preserved(),
+                "navigation_directory_capture_rejects_normal_and_extended_drive_roots_without_a_transferable_parent_link");
+            const auto cancelled = std::make_shared<std::atomic_bool>(true);
+            output = DirectoryCopyRequest{};
+            error = CaptureDirectoryClipboardSource((parent_b / L"not-opened-after-cancel").wstring(), output, cancelled);
+            passed &= Check(error == ERROR_CANCELLED && Empty(output) && preserved(),
+                "navigation_directory_capture_precancel_clears_old_payload_before_missing_target_io");
+            const auto replaced = parent_b / L"原目录现为文件", retained = parent_b / L"原目录已移开";
+            std::filesystem::create_directory(replaced);
+            const auto original_identity = Entry(replaced).identity;
+            const auto original_error = CaptureDirectoryClipboardSource(replaced.wstring(), output);
+            std::filesystem::rename(replaced, retained);
+            Write(replaced, "owned-directory-replaced-by-file");
+            const auto replacement = Oracle(replaced);
+            error = CaptureDirectoryClipboardSource(replaced.wstring(), output);
+            passed &= Check(original_error == ERROR_SUCCESS && error == ERROR_DIRECTORY && Empty(output) &&
+                replacement.Matches() && Entry(retained).identity == original_identity && preserved(),
+                "navigation_directory_capture_observes_a_directory_replaced_by_file_instead_of_publishing_stale_directory_intent");
+        }
         for (const auto& selection : std::vector<std::vector<std::wstring>>{
             { file_a.wstring(), directory.wstring() }, { directory.wstring(), file_a.wstring() },
             { directory.wstring(), other_directory.wstring() }, { directory.wstring(), directory.wstring() } })
@@ -207,9 +250,17 @@ bool RunClipboardCopySourceTests()
                 const auto* captured = std::get_if<DirectoryCopyRequest>(&output);
                 passed &= Check(error == ERROR_SUCCESS && captured && DirectoryRequestMatches(*captured, directory) && sentinel.Matches() && preserved(),
                     "typed_capture_classifies_only_normal_root_without_scanning_or_following_unsupported_descendant_tree");
+                error = CaptureDirectoryClipboardSource(directory.wstring(), output);
+                captured = std::get_if<DirectoryCopyRequest>(&output);
+                passed &= Check(error == ERROR_SUCCESS && captured && DirectoryRequestMatches(*captured, directory) &&
+                    sentinel.Matches() && preserved(),
+                    "navigation_directory_capture_does_not_scan_or_follow_a_descendant_junction");
                 error = CaptureClipboardCopySources(std::vector<std::wstring>{ descendant_link.wstring() }, output);
                 passed &= Check(ReparseRejected(error) && Empty(output) && sentinel.Matches(),
                     "typed_capture_leaf_directory_junction_is_rejected_with_native_reparse_error_and_empty_output");
+                error = CaptureDirectoryClipboardSource(descendant_link.wstring(), output);
+                passed &= Check(ReparseRejected(error) && Empty(output) && sentinel.Matches() && preserved(),
+                    "navigation_directory_capture_inherits_leaf_reparse_rejection_and_clears_payload");
                 error = CaptureClipboardCopySources(std::vector<std::wstring>{ (descendant_link / L"保留.txt").wstring() }, output);
                 passed &= Check(ReparseRejected(error) && Empty(output) && sentinel.Matches(),
                     "typed_capture_parent_chain_junction_is_rejected_without_returning_its_target_file");
@@ -267,6 +318,10 @@ bool RunClipboardCopySourceTests()
             const auto* captured = std::get_if<DirectoryCopyRequest>(&output);
             passed &= Check(error == ERROR_SUCCESS && captured && DirectoryRequestMatches(*captured, long_directory) && oracle.Matches(),
                 "typed_capture_actual_extended_long_directory_keeps_type_and_both_ids_without_scanning_children");
+            error = CaptureDirectoryClipboardSource(long_directory.wstring(), output);
+            captured = std::get_if<DirectoryCopyRequest>(&output);
+            passed &= Check(error == ERROR_SUCCESS && captured && DirectoryRequestMatches(*captured, long_directory) && oracle.Matches(),
+                "navigation_directory_capture_preserves_extended_long_directory_and_parent_identities");
             passed &= Check(RenameRoundTrip(long_file, long_parent / L"released-long-file.txt") &&
                 RenameRoundTrip(long_directory, long_parent / L"released-long-directory"),
                 "typed_capture_long_path_success_releases_source_metadata_handles");

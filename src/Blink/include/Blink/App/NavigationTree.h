@@ -118,8 +118,10 @@ namespace blink::app
         [[nodiscard]] NavigationTreeNodeId FindBestAncestor(
             const Location& target) const noexcept;
 
+        // Explicit refresh supersedes a loaded/in-flight expansion, retaining
+        // the current child snapshot until a new result is committed.
         [[nodiscard]] std::optional<NavigationTreeExpansionToken> BeginExpansion(
-            NavigationTreeNodeId node_id);
+            NavigationTreeNodeId node_id, bool refresh = false);
 
         [[nodiscard]] bool CompleteExpansion(
             const NavigationTreeExpansionToken& token,

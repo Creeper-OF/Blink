@@ -1,5 +1,7 @@
 # Explorer 交互能力与验证矩阵
 
+G06b补充（2026-11-11）：最终同Release13项不写Clipboard的导航/菜单/F5增删与UI容器/展开保持检查PASS、exit0/夹具清理；双配置1636/0/4、249输入/386资源。实际Clipboard传输报告SKIP（0项），单独保留原始报告，不将预检SKIP计为通过。见[交接](EXPLORER_NAVIGATION_TRANSFER_HANDOFF.md)。
+
 G06a补充（2026-11-11）：同一最终Release通过10项对象菜单窗口检查，SUT正常exit0/夹具清理；双配置1618/0/4、249输入/386资源。真实Apps/Shift+F10、驱动器/树Open与NewTab、展开、虚拟语义、保留列表选择和取消回焦已验；原生属性页、剪贴板写入与物理鼠标仍待验。见[交接](EXPLORER_OBJECT_MENU_HANDOFF.md)。
 
 G03c补充（2026-11-11）：同一最终Release自动完成15项和既有地址20项通过，两SUT正常exit0、夹具已清；双配置1608/0/4，249输入/383资源。保留原编辑焦点/原文，包含Tab/选中及未选Enter、真实Invoke、cap12、隐藏、标签与watcher；真实鼠标/IME/UNC和完整环境仍待验。见[自动完成交接](EXPLORER_ADDRESS_COMPLETION_HANDOFF.md)。

@@ -633,6 +633,13 @@ struct App : AppT<App>
         friend bool operator==(const QuickNavigationItem&, const QuickNavigationItem&) = default;
     };
 
+    struct DirectoryTreeRefreshRequest
+    {
+        std::uint64_t operation_id{};
+        std::vector<blink::app::Location> parents;
+        std::vector<blink::app::Location> subtrees;
+    };
+
     struct PendingNavigationTreeExpansion
     {
         std::uint64_t generation{};
@@ -1358,6 +1365,10 @@ struct App : AppT<App>
         }
         using Stage = blink::app::FileOperationStage;
         const auto snapshot = file_operations_.Snapshot();
+        if (directory_tree_changes_ && (directory_tree_changes_->operation_id != snapshot.operation_id ||
+            (blink::app::FileOperationIsTerminal(snapshot.stage) &&
+             (!snapshot.copy_batch || !snapshot.copy_batch->resumable) &&
+             (!snapshot.move_batch || !snapshot.move_batch->resumable)))) { FlushDirectoryTreeChanges(); }
         operation_panel_.Visibility(snapshot.operation_id ? Visibility::Visible : Visibility::Collapsed);
         if (!snapshot.operation_id) { return; }
         if (snapshot.kind == blink::app::FileOperationKind::Delete) { RenderDeleteStatus(snapshot); return; }
@@ -1994,6 +2005,13 @@ struct App : AppT<App>
             expected = std::move(requests);
         }
         for (const auto& source : *sources) { paths.push_back(blink::core::JoinPath(parent, source.name)); }
+        PublishFileCopySources(origin, std::move(expected), std::move(paths), intent);
+    }
+
+    void PublishFileCopySources(const FileOperationOrigin& origin, blink::app::ClipboardCopySources expected,
+        std::vector<std::wstring> paths, const blink::app::ClipboardTransferIntent intent,
+        const bool directory_target = false)
+    {
         HWND owner{};
         check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(&owner));
         clipboard_work_pending_ = true;
@@ -2004,13 +2022,16 @@ struct App : AppT<App>
         try
         {
             clipboard_work_ = Windows::System::Threading::ThreadPool::RunAsync(
-                [weak, dispatcher, owner, origin, cancellation, intent, expected = std::move(expected), paths = std::move(paths)](auto&&) {
+                [weak, dispatcher, owner, origin, cancellation, intent, directory_target, expected = std::move(expected), paths = std::move(paths)](auto&&) {
                     DWORD sequence{}, error = ERROR_GEN_FAILURE;
                     blink::app::ClipboardCopySources validated;
                     try
                     {
-                        error = blink::app::CaptureClipboardCopySources(paths, validated, cancellation);
-                        if (error == ERROR_SUCCESS && !blink::app::SameCapturedCopySources(expected, validated))
+                        error = directory_target ?
+                            (paths.size() == 1 ? blink::app::CaptureDirectoryClipboardSource(paths.front(), validated, cancellation) : ERROR_INVALID_PARAMETER) :
+                            blink::app::CaptureClipboardCopySources(paths, validated, cancellation);
+                        if (error == ERROR_SUCCESS && !std::holds_alternative<std::monostate>(expected) &&
+                            !blink::app::SameCapturedCopySources(expected, validated))
                         { error = ERROR_FILE_INVALID; }
                         if (error == ERROR_SUCCESS && cancellation->load()) { error = ERROR_CANCELLED; }
                         if (error == ERROR_SUCCESS) { error = blink::app::PublishClipboardFilesTransfer(owner, paths, intent, sequence); }
@@ -2028,7 +2049,7 @@ struct App : AppT<App>
                                 // Publication already happened: preserve original IDs even if a
                                 // departure/cancel raced after the clipboard call began.
                                 app->clipboard_copy_cache_ = { std::move(captured), std::move(published_paths), sequence, intent };
-                                if (cancellation->load() || !app->IsFileOperationOriginCurrent(origin))
+                                if (cancellation->load() || !blink::app::IsFileOperationOwnerCurrent(origin, app->ActiveTab(), app->window_style_closed_))
                                 { app->ShowClipboardCopyError(ERROR_CANCELLED); return; }
                                 app->status_.Text(hstring(app->localization_.Format(intent == blink::app::ClipboardTransferIntent::Move ? L"Clipboard.CutItems" : L"Clipboard.CopiedItems", std::to_wstring(count))));
                             }
@@ -2098,9 +2119,12 @@ struct App : AppT<App>
         catch (...) { clipboard_work_pending_ = false; RenderFileOperationStatus(); ShowClipboardCopyError(ERROR_GEN_FAILURE); }
     }
 
-    void PasteClipboardFile(const FileOperationOrigin& origin)
+    void PasteClipboardFile(FileOperationOrigin origin)
     {
-        if (!IsFileOperationOriginCurrent(origin)) { return; }
+        if (!blink::app::IsFileOperationOwnerCurrent(origin, ActiveTab(), window_style_closed_)) { return; }
+        // Detached directory targets resolve their own identity on the worker.
+        // Ordinary file-list paste retains its already captured directory ID.
+        if (!origin.owner_location && !IsFileOperationOriginCurrent(origin)) { return; }
         clipboard_work_pending_ = true;
         clipboard_cancellation_ = std::make_shared<std::atomic_bool>(false);
         const auto cancellation = clipboard_cancellation_;
@@ -2110,13 +2134,19 @@ struct App : AppT<App>
         try
         {
             clipboard_work_ = Windows::System::Threading::ThreadPool::RunAsync(
-                [weak, dispatcher, origin, cancellation, own](auto&&) {
+                [weak, dispatcher, origin, cancellation, own](auto&&) mutable {
                     blink::app::ClipboardCopySources requests;
                     blink::app::ClipboardFilePaths payload;
                     DWORD error = ERROR_GEN_FAILURE;
                     try
                     {
-                        payload = blink::app::ReadClipboardFilesTransfer(); error = payload.error;
+                        error = cancellation->load() ? ERROR_CANCELLED : ERROR_SUCCESS;
+                        if (!error && origin.owner_location && !origin.identity.valid)
+                        {
+                            const auto result = blink::app::ReadFileDropTarget(origin.location.FolderPath(), origin.identity);
+                            if (FAILED(result)) { error = HRESULT_CODE(result); }
+                        }
+                        if (!error) { payload = blink::app::ReadClipboardFilesTransfer(); error = payload.error; }
                         if (error == ERROR_SUCCESS)
                         {
                             // Already-submitted MOVE data is resolved through its
@@ -2139,15 +2169,18 @@ struct App : AppT<App>
                         {
                             app->clipboard_work_pending_ = false; app->RenderFileOperationStatus();
                             if (cancellation->load()) { app->ShowClipboardCopyError(ERROR_CANCELLED); return; }
-                            if (!app->IsFileOperationOriginCurrent(origin))
+                            if (!blink::app::IsFileOperationOwnerCurrent(origin, app->ActiveTab(), app->window_style_closed_))
                             { app->status_.Text(hstring(app->localization_.GetString(L"Status.CommandStale"))); return; }
                             if (error != ERROR_SUCCESS) { app->ShowClipboardCopyError(error); return; }
+                            if (!app->IsFileOperationOriginCurrent(origin))
+                            { app->status_.Text(hstring(app->localization_.GetString(L"Status.CommandStale"))); return; }
                             if (payload.intent == blink::app::ClipboardTransferIntent::Move)
                             {
                                 std::vector<blink::app::MoveRequest> moves;
                                 const auto prepared = blink::app::PrepareMoveDestination(requests,
                                     origin.location.FolderPath(), origin.identity, moves);
                                 if (prepared) { app->ShowClipboardCopyError(prepared); return; }
+                                if (origin.owner_location) { app->drop_retry_origin_ = origin; }
                                 if (app->StartMoves(origin, std::move(moves)))
                                 {
                                     // Keep the original sequence/IDs even for external
@@ -2156,6 +2189,13 @@ struct App : AppT<App>
                                     app->clipboard_copy_cache_ = { std::move(requests), std::move(payload.paths), payload.sequence,
                                         blink::app::ClipboardTransferIntent::Move, true };
                                 }
+                                return;
+                            }
+                            if (origin.owner_location)
+                            {
+                                // The existing item queue also owns detached
+                                // directory conflicts, cancellation and retries.
+                                (void)app->SubmitFileDrop(origin, requests, DROPEFFECT_COPY);
                                 return;
                             }
                             blink::app::ClipboardCopySources bound;
@@ -2387,7 +2427,11 @@ struct App : AppT<App>
         { status_.Text(hstring(localization_.GetString(L"Status.CommandBusy"))); return; }
         request.destination_parent = origin.location.FolderPath();
         if (retry) { directory_copy_history_.Observe(file_operations_.Snapshot()); }
+        DirectoryTreeRefreshRequest changes;
+        AddDirectoryTreeChange(changes, request.source_parent, request.source.name, origin.location.FolderPath(),
+            request.destination_name, false);
         const auto id = file_operations_.CopyDirectory(std::move(request), DirectoryCopyPublication(origin));
+        RememberDirectoryTreeChanges(std::move(changes), id);
         if (!id) { status_.Text(hstring(localization_.GetString(L"Status.CommandBusy"))); }
         else if (!retry) { directory_copy_history_.Reset(); }
         RenderFileOperationStatus();
@@ -2688,8 +2732,15 @@ struct App : AppT<App>
             { status_.Text(hstring(localization_.GetString(L"Move.TargetChanged"))); return 0; }
             request.destination_parent = origin.location.FolderPath();
         }
+        DirectoryTreeRefreshRequest changes;
+        for (const auto& request : requests)
+        {
+            if (request.source.is_directory) { AddDirectoryTreeChange(changes, request.source_parent, request.source.name,
+                origin.location.FolderPath(), request.destination_name, true); }
+        }
         auto prerequisites = PrepareOperationWatches(MoveWatchSources(requests));
         const auto id = file_operations_.MoveEntries(std::move(requests), MovePublication(origin), std::move(prerequisites));
+        RememberDirectoryTreeChanges(std::move(changes), id);
         operation_watch_id_ = id;
         if (!id) { RestoreOperationWatches(0); }
         if (!id) { status_.Text(hstring(localization_.Format(L"Status.CommandBusy", localization_.GetString(L"Command.Paste")))); }
@@ -2717,7 +2768,7 @@ struct App : AppT<App>
             std::vector<blink::app::Location>{} : MoveWatchSources(remaining));
         const auto id = file_operations_.ResumeMoveBatch(operation_id, policy, std::move(name), MovePublication(origin), origin.location.FolderPath(),
             std::move(prerequisites));
-        file_drag_drop_.Advance(operation_id, id, file_operations_.Snapshot());
+        AdvanceTransferOperation(operation_id, id, file_operations_.Snapshot());
         operation_watch_id_ = id;
         if (!id) { RestoreOperationWatches(0); }
         if (!id) { status_.Text(hstring(localization_.GetString(L"Status.CommandStale"))); }
@@ -2797,7 +2848,16 @@ struct App : AppT<App>
             }, item);
             if (!bound) { status_.Text(hstring(localization_.GetString(L"Copy.TargetChanged"))); return 0; }
         }
+        DirectoryTreeRefreshRequest changes;
+        for (const auto& item : requests)
+        {
+            std::visit([&](const auto& request) {
+                if (request.source.is_directory) { AddDirectoryTreeChange(changes, request.source_parent, request.source.name,
+                    origin.location.FolderPath(), request.destination_name, false); }
+            }, item);
+        }
         const auto id = file_operations_.CopyItems(std::move(requests), FileCopyPublication(origin));
+        RememberDirectoryTreeChanges(std::move(changes), id);
         if (!id) { status_.Text(hstring(localization_.Format(L"Status.CommandBusy", localization_.GetString(L"Command.Paste")))); }
         RenderFileOperationStatus(); return id;
     }
@@ -2815,15 +2875,25 @@ struct App : AppT<App>
             const auto policy = new_name ? blink::app::FileCopyConflictPolicy::Fail : request.conflict_policy;
             const auto id = file_operations_.ResumeCopyBatch(operation_id, policy, std::move(new_name),
                 FileCopyPublication(origin), origin.location.FolderPath());
-            file_drag_drop_.Advance(operation_id, id, file_operations_.Snapshot());
+            AdvanceTransferOperation(operation_id, id, file_operations_.Snapshot());
             if (!id) { status_.Text(hstring(localization_.Format(L"Status.CommandBusy", localization_.GetString(L"Command.Paste")))); }
             RenderFileOperationStatus();
         }
         else if (!last.copy_batch || last.copy_batch->items.size() == 1)
         {
-            // A cancelled single-file attempt can still be explicitly retried by name.
+            // A cancelled single item can be retried by name without losing
+            // its directory type or the original directory-copy limits.
             if (new_name) { request.destination_name = std::move(*new_name); request.conflict_policy = blink::app::FileCopyConflictPolicy::Fail; }
-            StartFileCopy(origin, std::move(request));
+            if (request.source.is_directory)
+            {
+                auto directory = blink::app::DirectoryCopyProjection(request);
+                if (last.directory_copy_request) { directory.limits = last.directory_copy_request->limits; }
+                else if (last.copy_batch && !last.copy_batch->items.empty() && last.copy_batch->items.front().directory_limits)
+                { directory.limits = *last.copy_batch->items.front().directory_limits; }
+                blink::app::CopyItemRequests items; items.emplace_back(std::move(directory));
+                (void)StartCopyItems(origin, std::move(items));
+            }
+            else { StartFileCopy(origin, std::move(request)); }
         }
     }
 
@@ -3063,6 +3133,26 @@ struct App : AppT<App>
         target_properties_action_ = nullptr;
     }
 
+    bool CanTransferTargetDirectory() const
+    {
+        const auto* tab = ActiveTab();
+        return tab && !tab->search_visible && !tab->state->PresentationSnapshot().has_pending && !FileDropBusy();
+    }
+
+    void CopyTargetDirectory(const blink::app::Location& target, const blink::app::ClipboardTransferIntent intent)
+    {
+        const auto parent = target.Up();
+        if (!target.IsFolder() || !parent || !parent->IsFolder() || !CanTransferTargetDirectory()) { return; }
+        const auto owner = blink::app::CaptureFileOperationOrigin(*ActiveTab());
+        PublishFileCopySources(blink::app::FileDropOrigin(owner, target), {}, { target.FolderPath() }, intent, true);
+    }
+
+    void PasteTargetDirectory(const blink::app::Location& target)
+    {
+        if (!target.IsFolder() || !CanTransferTargetDirectory()) { return; }
+        PasteClipboardFile(blink::app::FileDropOrigin(blink::app::CaptureFileOperationOrigin(*ActiveTab()), target));
+    }
+
     void ShowTargetProperties(const blink::app::Location& target)
     {
         if (!target.IsFolder() || window_style_closed_ || IsOperationDialogOpen()) { return; }
@@ -3163,6 +3253,20 @@ struct App : AppT<App>
         }
         if (context.target.IsFolder())
         {
+            target_menu_.Items().Append(MenuFlyoutSeparator());
+            const auto parent = context.target.Up();
+            if (parent && parent->IsFolder())
+            {
+                add(L"Command.Cut", L"TargetContextCut", L"\xE8C6",
+                    [target = context.target](App& app) { app.CopyTargetDirectory(target, blink::app::ClipboardTransferIntent::Move); },
+                    CanTransferTargetDirectory());
+                add(L"Command.Copy", L"TargetContextCopy", L"\xE8C8",
+                    [target = context.target](App& app) { app.CopyTargetDirectory(target, blink::app::ClipboardTransferIntent::Copy); },
+                    CanTransferTargetDirectory());
+            }
+            add(L"Command.Paste", L"TargetContextPaste", L"\xE77F",
+                [target = context.target](App& app) { app.PasteTargetDirectory(target); },
+                CanTransferTargetDirectory() && IsClipboardFormatAvailable(CF_HDROP));
             target_menu_.Items().Append(MenuFlyoutSeparator());
             add(L"Search.MenuCopyPath", L"TargetContextCopyPath", L"\xE71B",
                 [target = context.target](App& app) { app.PublishPathText(target.FolderPath()); }, !FileDropBusy());
@@ -4630,33 +4734,171 @@ struct App : AppT<App>
         iterator->second.HasUnrealizedChildren(has_unrealized_children);
     }
 
-    void MaterializeNavigationTreeChildren(
-        const blink::app::NavigationTreeNodeId parent_id)
+    void MaterializeNavigationTreeChildren(const blink::app::NavigationTreeNodeId parent_id)
     {
         const auto* parent = navigation_tree_model_.Find(parent_id);
-        const auto iterator = navigation_tree_ui_nodes_.find(parent_id);
-        if (!parent || iterator == navigation_tree_ui_nodes_.end())
+        const auto found = navigation_tree_ui_nodes_.find(parent_id);
+        if (!parent || found == navigation_tree_ui_nodes_.end()) { return; }
+        const auto ids = parent->child_ids;
+        startup_.Stage(std::string("navigation-tree.children-materialization.begin.parent=") +
+            std::to_string(parent_id) + ".count=" + std::to_string(ids.size()));
+        auto node = found->second;
+        // Clear only selection of nodes actually removed by the new snapshot.
+        bool lost_selection = false;
+        for (const auto& selected : navigation_tree_.SelectedNodes())
         {
+            const auto id = NavigationTreeNodeIdFromItem(selected.Content());
+            if (id && !navigation_tree_model_.Find(*id)) { lost_selection = true; break; }
+        }
+        if (lost_selection) { ClearNavigationTreeSelection(); }
+        for (std::uint32_t index = node.Children().Size(); index > 0; --index)
+        {
+            const auto id = NavigationTreeNodeIdFromItem(node.Children().GetAt(index - 1).Content());
+            if (!id || std::find(ids.begin(), ids.end(), *id) == ids.end()) { node.Children().RemoveAt(index - 1); }
+        }
+        for (std::uint32_t index = 0; index < ids.size(); ++index)
+        {
+            const auto cached = navigation_tree_ui_nodes_.find(ids[index]);
+            auto child = cached == navigation_tree_ui_nodes_.end() ? MaterializeNavigationTreeNode(ids[index]) : cached->second;
+            UpdateNavigationTreeNodeVisual(ids[index]);
+            if (const auto* model = navigation_tree_model_.Find(ids[index]); model && (model->reparse_point || !model->can_expand))
+            {
+                child.Children().Clear(); SetNavigationTreeExpanded(child, false);
+            }
+            if (index < node.Children().Size() && node.Children().GetAt(index) == child) { continue; }
+            std::uint32_t old_index{};
+            if (node.Children().IndexOf(child, old_index)) { node.Children().RemoveAt(old_index); }
+            node.Children().InsertAt(index, child);
+        }
+        for (auto it = navigation_tree_ui_nodes_.begin(); it != navigation_tree_ui_nodes_.end();)
+        {
+            if (!navigation_tree_model_.Find(it->first)) { it = navigation_tree_ui_nodes_.erase(it); }
+            else { ++it; }
+        }
+        for (auto it = navigation_tree_expansion_work_.begin(); it != navigation_tree_expansion_work_.end();)
+        {
+            if (!navigation_tree_model_.Find(it->first))
+            {
+                if (it->second) { try { it->second.Cancel(); } catch (...) {} }
+                navigation_tree_pending_expansions_.erase(it->first);
+                FinishNavigationTreeRefresh(it->first);
+                it = navigation_tree_expansion_work_.erase(it);
+            }
+            else { ++it; }
+        }
+        node.HasUnrealizedChildren(false);
+        startup_.Stage(std::string("navigation-tree.children-materialization.end.parent=") +
+            std::to_string(parent_id) + ".count=" + std::to_string(ids.size()));
+    }
+
+    void QueueNavigationTreeRefresh(const std::vector<blink::app::Location>& parents,
+        const std::vector<blink::app::Location>& subtrees = {})
+    {
+        if (window_style_closed_) { return; }
+        for (const auto& [id, visual] : navigation_tree_ui_nodes_)
+        {
+            (void)visual;
+            const auto* node = navigation_tree_model_.Find(id);
+            if (!node || !node->target.IsFolder() || node->reparse_point || !node->can_expand ||
+                (node->load_state != blink::app::NavigationTreeLoadState::Loaded &&
+                 node->load_state != blink::app::NavigationTreeLoadState::Loading)) { continue; }
+            const bool affected = std::any_of(parents.begin(), parents.end(), [&](const auto& root) {
+                    return blink::app::IsFolderAtOrBelow(node->target, root) &&
+                        blink::app::IsFolderAtOrBelow(root, node->target);
+                }) || std::any_of(subtrees.begin(), subtrees.end(), [&](const auto& root) {
+                    return blink::app::IsFolderAtOrBelow(node->target, root);
+                });
+            if (affected && std::find(navigation_tree_refresh_queue_.begin(), navigation_tree_refresh_queue_.end(),
+                node->target) == navigation_tree_refresh_queue_.end()) { navigation_tree_refresh_queue_.push_back(node->target); }
+        }
+        std::stable_sort(navigation_tree_refresh_queue_.begin(), navigation_tree_refresh_queue_.end(),
+            [](const auto& left, const auto& right) { return left.FolderPath().size() < right.FolderPath().size(); });
+        StartNextNavigationTreeRefresh();
+    }
+
+    void StartNextNavigationTreeRefresh()
+    {
+        if (window_style_closed_ || navigation_tree_refresh_active_) { return; }
+        while (!navigation_tree_refresh_queue_.empty())
+        {
+            const auto target = navigation_tree_refresh_queue_.front();
+            navigation_tree_refresh_queue_.erase(navigation_tree_refresh_queue_.begin());
+            const auto id = navigation_tree_model_.FindExact(target);
+            const auto* node = navigation_tree_model_.Find(id);
+            if (!node || node->reparse_point || !node->can_expand ||
+                (node->load_state != blink::app::NavigationTreeLoadState::Loaded &&
+                 node->load_state != blink::app::NavigationTreeLoadState::Loading)) { continue; }
+            navigation_tree_refresh_active_ = id;
+            StartNavigationTreeExpansion(id, true);
             return;
         }
+        SyncNavigationPaneToCommittedLocation();
+    }
 
-        const auto child_count = parent->child_ids.size();
-        startup_.Stage(
-            std::string("navigation-tree.children-materialization.begin.parent=") +
-            std::to_string(parent_id) + ".count=" + std::to_string(child_count));
-        // Copy the WinRT value before recursive materialization. Each child
-        // insertion may rehash navigation_tree_ui_nodes_, invalidating the
-        // iterator into that unordered_map.
-        auto parent_tree_node = iterator->second;
-        parent_tree_node.Children().Clear();
-        for (const auto child_id : parent->child_ids)
+    void FinishNavigationTreeRefresh(const blink::app::NavigationTreeNodeId id)
+    {
+        if (navigation_tree_refresh_active_ != id) { return; }
+        navigation_tree_refresh_active_ = 0;
+        const auto weak = get_weak();
+        (void)dispatcher_.TryEnqueue([weak] {
+            if (const auto app = weak.get(); app && !app->window_style_closed_) { app->StartNextNavigationTreeRefresh(); }
+        });
+    }
+
+    void FlushDirectoryTreeChanges()
+    {
+        if (!directory_tree_changes_) { return; }
+        auto changes = std::move(*directory_tree_changes_); directory_tree_changes_.reset();
+        QueueNavigationTreeRefresh(changes.parents, changes.subtrees);
+    }
+
+    void AddDirectoryTreeChange(DirectoryTreeRefreshRequest& changes, const std::wstring& source_parent,
+        const std::wstring& source_name, const std::wstring& destination_parent,
+        const std::wstring& destination_name, const bool moving)
+    {
+        const auto append = [](auto& values, const blink::app::Location& location) {
+            if (std::find(values.begin(), values.end(), location) == values.end()) { values.push_back(location); }
+        };
+        append(changes.parents, blink::app::Location::Folder(destination_parent));
+        append(changes.subtrees, blink::app::Location::Folder(blink::core::JoinPath(destination_parent,
+            destination_name.empty() ? source_name : destination_name)));
+        if (moving)
         {
-            parent_tree_node.Children().Append(MaterializeNavigationTreeNode(child_id));
+            append(changes.parents, blink::app::Location::Folder(source_parent));
+            append(changes.subtrees, blink::app::Location::Folder(blink::core::JoinPath(source_parent, source_name)));
         }
-        parent_tree_node.HasUnrealizedChildren(false);
-        startup_.Stage(
-            std::string("navigation-tree.children-materialization.end.parent=") +
-            std::to_string(parent_id) + ".count=" + std::to_string(child_count));
+    }
+
+    void RememberDirectoryTreeChanges(DirectoryTreeRefreshRequest changes, const std::uint64_t id)
+    {
+        if (!id || changes.parents.empty()) { return; }
+        FlushDirectoryTreeChanges();
+        changes.operation_id = id; directory_tree_changes_ = std::move(changes);
+    }
+
+    void AdvanceTransferOperation(const std::uint64_t previous, const std::uint64_t next,
+        const blink::app::FileOperationSnapshot& snapshot)
+    {
+        file_drag_drop_.Advance(previous, next, snapshot);
+        if (next && directory_tree_changes_ && directory_tree_changes_->operation_id == previous)
+        {
+            directory_tree_changes_->operation_id = next;
+            const auto remember = [&](const auto& request, const bool moving) {
+                if (request.source.is_directory) { AddDirectoryTreeChange(*directory_tree_changes_, request.source_parent,
+                    request.source.name, request.destination_parent, request.destination_name, moving); }
+            };
+            if (snapshot.directory_copy_request) { remember(*snapshot.directory_copy_request, false); }
+            else if (snapshot.copy_request) { remember(*snapshot.copy_request, false); }
+            else if (snapshot.copy_batch && snapshot.copy_batch->current_index < snapshot.copy_batch->items.size())
+            { remember(snapshot.copy_batch->items[snapshot.copy_batch->current_index].request, false); }
+            if (snapshot.move_request) { remember(*snapshot.move_request, true); }
+            // A resumed worker can already have advanced beyond the renamed
+            // item by this read. The batch retains every actual item request.
+            if (snapshot.copy_batch)
+            { for (const auto& item : snapshot.copy_batch->items) { remember(item.request, false); } }
+            if (snapshot.move_batch)
+            { for (const auto& item : snapshot.move_batch->items) { remember(item.request, true); } }
+        }
     }
 
     void ResetNavigationTreeUi()
@@ -5354,6 +5596,8 @@ struct App : AppT<App>
     void RefreshNavigation()
     {
         if (const auto* tab = ActiveTab(); tab && tab->search_visible) { SubmitSearch(false, true); return; }
+        const auto location = ActiveState().PresentationSnapshot().committed_location;
+        if (location.IsFolder()) { QueueNavigationTreeRefresh({ location }); }
         if (const auto request = ActiveState().Refresh(); request.has_value())
         {
             StartNavigation(*request);
@@ -6114,6 +6358,7 @@ struct App : AppT<App>
 
     void CancelTreeExpansionWork() noexcept
     {
+        navigation_tree_refresh_queue_.clear(); navigation_tree_refresh_active_ = 0;
         for (auto& [node_id, work] : navigation_tree_expansion_work_)
         {
             (void)node_id;
@@ -6144,7 +6389,7 @@ struct App : AppT<App>
     }
 
     void StartNavigationTreeExpansion(
-        const blink::app::NavigationTreeNodeId node_id)
+        const blink::app::NavigationTreeNodeId node_id, const bool refresh = false)
     {
         const auto* node_before = navigation_tree_model_.Find(node_id);
         startup_.Stage(
@@ -6153,7 +6398,7 @@ struct App : AppT<App>
                 std::to_string(static_cast<int>(node_before->load_state)) : "unknown") +
             ".generation=" + (node_before ?
                 std::to_string(node_before->expansion_generation) : "unknown"));
-        const auto token = navigation_tree_model_.BeginExpansion(node_id);
+        const auto token = navigation_tree_model_.BeginExpansion(node_id, refresh);
         if (!token.has_value())
         {
             const auto* rejected = navigation_tree_model_.Find(node_id);
@@ -6161,14 +6406,22 @@ struct App : AppT<App>
                 std::string("navigation-tree.expansion.rejected.node=") +
                 std::to_string(node_id) + ".state=" + (rejected ?
                     std::to_string(static_cast<int>(rejected->load_state)) : "unknown"));
+            if (refresh) { FinishNavigationTreeRefresh(node_id); }
             return;
+        }
+        if (refresh)
+        {
+            const auto previous = navigation_tree_expansion_work_.find(node_id);
+            if (previous != navigation_tree_expansion_work_.end() && previous->second) { previous->second.Cancel(); }
         }
         startup_.Stage(
             std::string("navigation-tree.expansion.accepted.node=") +
             std::to_string(node_id) + ".generation=" +
             std::to_string(token->generation));
+        const auto visual = navigation_tree_ui_nodes_.find(node_id);
+        const bool expand_after = !refresh || (visual != navigation_tree_ui_nodes_.end() && visual->second.IsExpanded());
         navigation_tree_pending_expansions_[node_id] =
-            PendingNavigationTreeExpansion{ token->generation, 1, true };
+            PendingNavigationTreeExpansion{ token->generation, 1, expand_after };
         startup_.Stage(
             std::string("navigation-tree.expansion.intent-recorded.node=") +
             std::to_string(node_id) + ".generation=" +
@@ -6181,7 +6434,7 @@ struct App : AppT<App>
         try
         {
             const auto work = winrt::Windows::System::Threading::ThreadPool::RunAsync(
-                 [weak_app, dispatcher, lifetime_generation, visibility_policy, token = *token](
+                 [weak_app, dispatcher, lifetime_generation, visibility_policy, refresh, token = *token](
                      winrt::Windows::Foundation::IAsyncAction const& action) mutable {
                      if (action.Status() == winrt::Windows::Foundation::AsyncStatus::Canceled)
                      {
@@ -6235,6 +6488,7 @@ struct App : AppT<App>
                         (void)dispatcher.TryEnqueue(
                             [weak_app,
                                 lifetime_generation,
+                                refresh,
                                 token,
                                 error,
                                 children = std::move(children)]() mutable {
@@ -6329,13 +6583,14 @@ struct App : AppT<App>
                                             std::to_string(token.node_id) + ".is_expanded=" +
                                             (ui_iterator->second.IsExpanded() ? "true" : "false"));
                                     }
-                                    else if (error != ERROR_SUCCESS || !completed)
+                                    else if (!refresh && (error != ERROR_SUCCESS || !completed))
                                     {
                                         if (ui_iterator != app->navigation_tree_ui_nodes_.end())
                                         {
                                             app->SetNavigationTreeExpanded(ui_iterator->second, false);
                                         }
                                     }
+                                    if (refresh) { app->FinishNavigationTreeRefresh(token.node_id); }
                                 }
                             });
                     }
@@ -6352,10 +6607,11 @@ struct App : AppT<App>
             (void)navigation_tree_model_.FailExpansion(*token, ERROR_GEN_FAILURE);
             UpdateNavigationTreeNodeVisual(node_id);
             if (const auto iterator = navigation_tree_ui_nodes_.find(node_id);
-                iterator != navigation_tree_ui_nodes_.end())
+                !refresh && iterator != navigation_tree_ui_nodes_.end())
             {
                 SetNavigationTreeExpanded(iterator->second, false);
             }
+            if (refresh) { FinishNavigationTreeRefresh(node_id); }
         }
     }
 
@@ -8836,6 +9092,9 @@ struct App : AppT<App>
     std::uint64_t target_menu_epoch_{};
     std::uint64_t target_properties_request_{};
     Windows::Foundation::IAsyncAction target_properties_action_{ nullptr };
+    std::optional<DirectoryTreeRefreshRequest> directory_tree_changes_;
+    std::vector<blink::app::Location> navigation_tree_refresh_queue_;
+    blink::app::NavigationTreeNodeId navigation_tree_refresh_active_{};
     blink::app::NavigationTreeModel navigation_tree_model_;
     std::unordered_map<blink::app::NavigationTreeNodeId, TreeViewNode>
         navigation_tree_ui_nodes_;

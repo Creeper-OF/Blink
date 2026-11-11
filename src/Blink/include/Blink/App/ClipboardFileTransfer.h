@@ -67,4 +67,10 @@ namespace blink::app
     // capture APIs continue to reject every directory source.
     [[nodiscard]] DWORD CaptureClipboardCopySources(std::span<const std::wstring> paths,
         ClipboardCopySources& output, const FileOperationCancellation& cancelled = {});
+    // Worker-only single directory source capture for navigation targets.
+    // Reuses the ordinary source backend; roots have no transferable parent
+    // link, files/reparse points keep their real rejection, and failures or
+    // cancellation clear output. No clipboard access or descendant scan.
+    [[nodiscard]] DWORD CaptureDirectoryClipboardSource(const std::wstring& absolute_path,
+        ClipboardCopySources& output, const FileOperationCancellation& cancelled = {});
 }

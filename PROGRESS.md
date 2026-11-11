@@ -1,5 +1,13 @@
 # Blink Progress
 
+## G06b 导航目录剪贴板与树刷新交付 — 2026-11-11
+
+- 导航目录/quick/ThisPC普通目录目标有Cut/Copy/Paste，根仅有适用Paste、虚拟ThisPC无传输动作，Search/pending/busy沿原owner/队列限制。worker只捕获点中目录而非列表选中项，CF_HDROP/effect与实际source IDs进入原缓存；Paste解析独立目标identity，COPY/MOVE沿原唯一队列并保留move_submitted。
+- 修正detached目标metadata错误被误报stale；取消single-directory后改名Retry保留目录类型和原limits。目录操作terminal与F5仅重读相关已加载分支，父先/串行；重试改名、尾分隔符、已替代operation及被移除active节点保持正确范围/推进。Model保旧snapshot和同Location ID/孙节点；UI按ID增量复用，保留展开/折叠，无新watcher/轮询/全盘扫描。
+- 新增10项目录来源与8项刷新模型原生检查；最终Debug/Release单并发各1636 PASS/0 FAIL/4既有权限SKIP，249输入/386资源。一次Release编译发现const引用复制捕获无法填入目标identity，修为worker持有可写origin副本后重新构建；失败日志留恢复包，不计通过。
+- 最终Release `fd13f367c9bc6708e677e4689ab9518582d93eb604e40d1e73534c8218660907`，PID31692的13项不写Clipboard窗口检查PASS、正常exit0/夹具清理，包含F5新增/删除唯一自有目录、未变child runtimeId/已展开孙节点保持、collapsed连续观察、原Open/NewTab/选择与回焦。实际剪贴板传输因原图片/OLE等内容无法完整恢复，在启动SUT/任何写入前SKIP，0项传输UI通过，原内容未改。两类报告/脚本SHA分别保留，不混计；真实鼠标/系统属性/外部Explorer反馈/IME/UNC和完整矩阵仍待验。
+- 默认PID15036已发布可见并核对关键SHA；正式索引/服务6848不动。清理223777586字节本轮生成物/重复候选，保留有效缓存/15依赖/最近2成功恢复点；新建/改名/删除等对象菜单及外部剪贴板仍按README推进，完整G06/P0未完。见[交接](docs/EXPLORER_NAVIGATION_TRANSFER_HANDOFF.md)。
+
 ## G06a 导航与位置目标菜单交付 — 2026-11-11
 
 - 侧栏quick/TreeView与ThisPC目录/驱动器条目提供独立WinUI目标菜单，支持真实ContextRequested和焦点范围内Apps/Shift+F10。目录/盘根有Open、新标签、路径复制和原生属性入口；树展开/折叠走原lazy loader。虚拟ThisPC不编码文件系统路径，仅列适用动作；ThisPC条目不借普通文件行菜单显示Cut/Rename/Delete等不适用项。
