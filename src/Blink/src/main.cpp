@@ -4003,6 +4003,7 @@ struct App : AppT<App>
         }
 
         tab_window_state_.SetVisibilityPolicy(policy);
+        address_bar_.HideMenus();
         ++folder_view_generation_;
         for (const auto id : tab_window_state_.TabIds())
         {
@@ -7104,6 +7105,15 @@ struct App : AppT<App>
             if (auto app = weak.get(); app && !app->window_style_closed_)
             { app->SyncAddressBar(true); }
         };
+        callbacks.children_requested = [weak](const std::uint64_t owner, const std::uint64_t request,
+            blink::app::Location parent) {
+            if (auto app = weak.get(); app && !app->window_style_closed_ && !app->IsOperationDialogOpen())
+            { app->StartAddressChildren(owner, request, std::move(parent)); }
+        };
+        callbacks.children_cancelled = [weak](const std::uint64_t request) {
+            if (auto app = weak.get(); app && app->address_children_request_ == request)
+            { app->CancelAddressChildrenWork(); }
+        };
         const auto surface = address_bar_.Build(localization_, std::move(callbacks));
         address_focus_root_ = surface;
         // Escape after dismissing the native history popup also returns to
@@ -7120,6 +7130,68 @@ struct App : AppT<App>
         navigation_bar.Children().Append(surface);
         Grid::SetColumn(surface, 4);
         SyncAddressBar();
+    }
+
+    void CancelAddressChildrenWork() noexcept
+    {
+        address_children_request_ = 0;
+        try { if (address_children_work_) { address_children_work_.Cancel(); } } catch (...) {}
+        address_children_work_ = nullptr;
+    }
+
+    void StartAddressChildren(const std::uint64_t owner, const std::uint64_t request,
+        blink::app::Location parent)
+    {
+        CancelAddressChildrenWork();
+        address_children_request_ = request;
+        const auto weak = get_weak();
+        const auto dispatcher = dispatcher_;
+        const auto policy = tab_window_state_.GetVisibilityPolicy();
+        const auto localization = localization_;
+        address_children_work_ = Windows::System::Threading::ThreadPool::RunAsync(
+            [weak, dispatcher, owner, request, parent = std::move(parent), policy, localization](
+                const Windows::Foundation::IAsyncAction& action) {
+                std::vector<blink::app::AddressBreadcrumb> children;
+                std::wstring error;
+                try
+                {
+                    if (action.Status() == Windows::Foundation::AsyncStatus::Canceled) { return; }
+                    if (parent.IsThisPC())
+                    {
+                        const auto content = blink::app::EnumerateThisPcContent();
+                        children.reserve(content.items.size());
+                        for (const auto& item : content.items)
+                        {
+                            children.push_back({ item.label_key.empty() ? item.display_name :
+                                localization.GetString(item.label_key), item.target });
+                        }
+                    }
+                    else
+                    {
+                        const auto listing = blink::core::EnumerateDirectory(parent.FolderPath());
+                        if (listing.error != ERROR_SUCCESS) { error = blink::core::Win32ErrorMessage(listing.error); }
+                        else
+                        {
+                            const auto entries = blink::app::FilterNavigationTreeChildren(listing, policy);
+                            children.reserve(entries.size());
+                            for (const auto& entry : entries) { children.push_back({ entry.label, entry.target }); }
+                        }
+                    }
+                }
+                catch (...)
+                { error = blink::core::Win32ErrorMessage(static_cast<DWORD>(winrt::to_hresult())); }
+                if (action.Status() == Windows::Foundation::AsyncStatus::Canceled) { return; }
+                (void)dispatcher.TryEnqueue([weak, owner, request, parent,
+                    children = std::move(children), error = std::move(error)]() mutable {
+                    if (const auto app = weak.get(); app && !app->window_style_closed_ &&
+                        app->address_children_request_ == request && app->tab_window_state_.ActiveTabId() == owner)
+                    {
+                        if (app->IsOperationDialogOpen()) { app->address_bar_.HideMenus(); return; }
+                        app->address_children_work_ = nullptr;
+                        app->address_bar_.CompleteChildren(owner, request, parent, std::move(children), std::move(error));
+                    }
+                });
+            });
     }
 
     void SyncAddressBar(const bool preserve_draft = false)
@@ -7289,6 +7361,7 @@ struct App : AppT<App>
     void OnWindowClosed() noexcept
     {
         window_style_closed_ = true;
+        CancelAddressChildrenWork();
         address_bar_.Close();
         DismissSearchContextMenu();
         shell_context_menu_.Shutdown(); search_menu_selection_.reset(); pending_search_folder_command_.reset();
@@ -8369,6 +8442,8 @@ struct App : AppT<App>
     blink::app::FolderViewMode rendered_view_mode_{ blink::app::FolderViewMode::Details };
     std::uint64_t folder_view_generation_{};
     blink::app::AddressBarPresentation address_bar_;
+    Windows::Foundation::IAsyncAction address_children_work_{ nullptr };
+    std::uint64_t address_children_request_{};
     TextBox path_box_{ nullptr };
     Button back_button_{ nullptr };
     Button forward_button_{ nullptr };

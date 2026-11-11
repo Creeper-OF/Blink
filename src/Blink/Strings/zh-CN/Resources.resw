@@ -458,4 +458,8 @@
   <data name="AddressBar.Name" xml:space="preserve"><value>地址栏</value><comment>Address bar navigation.</comment></data>
   <data name="AddressBar.Edit" xml:space="preserve"><value>编辑地址</value><comment>Address bar navigation.</comment></data>
   <data name="AddressBar.History" xml:space="preserve"><value>最近访问的位置</value><comment>Address bar navigation.</comment></data>
+  <data name="AddressBar.Children" xml:space="preserve"><value>查看 {0} 的下级目录</value><comment>Address child folder menu.</comment></data>
+  <data name="AddressBar.ChildrenLoading" xml:space="preserve"><value>正在读取下级目录…</value><comment>Address child folder menu.</comment></data>
+  <data name="AddressBar.ChildrenEmpty" xml:space="preserve"><value>没有可用的下级目录</value><comment>Address child folder menu.</comment></data>
+  <data name="AddressBar.ChildrenFailed" xml:space="preserve"><value>无法读取下级目录：{0}</value><comment>Address child folder menu.</comment></data>
 </root>

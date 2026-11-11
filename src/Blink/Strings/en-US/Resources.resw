@@ -458,4 +458,8 @@
   <data name="AddressBar.Name" xml:space="preserve"><value>Address bar</value><comment>Address bar navigation.</comment></data>
   <data name="AddressBar.Edit" xml:space="preserve"><value>Edit address</value><comment>Address bar navigation.</comment></data>
   <data name="AddressBar.History" xml:space="preserve"><value>Recent locations</value><comment>Address bar navigation.</comment></data>
+  <data name="AddressBar.Children" xml:space="preserve"><value>Show child folders in {0}</value><comment>Address child folder menu.</comment></data>
+  <data name="AddressBar.ChildrenLoading" xml:space="preserve"><value>Loading child folders…</value><comment>Address child folder menu.</comment></data>
+  <data name="AddressBar.ChildrenEmpty" xml:space="preserve"><value>No child folders</value><comment>Address child folder menu.</comment></data>
+  <data name="AddressBar.ChildrenFailed" xml:space="preserve"><value>Could not read child folders: {0}</value><comment>Address child folder menu.</comment></data>
 </root>

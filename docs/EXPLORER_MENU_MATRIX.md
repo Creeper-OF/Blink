@@ -342,9 +342,9 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C12 | 标签栏 > 右键 > 关闭其他 | 右键 > 关闭其他 | Context > Close other tabs | 未接入 | 未定义批量关闭规则；Explorer目标版本行为待核 | —（尚未定义） | Blink | DEFERRED | [TABS] | NOT RUN: M-C12-04 |
 | C12 | 标签栏 > 右键 > 关闭右侧 | 右键 > 关闭右侧 | Context > Close tabs to the right | 未接入 | 未定义批量关闭规则；Explorer目标版本行为待核 | —（尚未定义） | Blink | DEFERRED | [TABS] | NOT RUN: M-C12-05 |
 | C12 | 标签栏 > 右键 > 复制标签/新窗口 | 右键 > 复制标签/新窗口 | Context > Duplicate / New window | 未接入 | 不能以TabView拖动或当前导航能力冒充已实现 | —（尚未定义） | Blink | DEFERRED | [TABS] | NOT RUN: M-C12-06 |
-| C12 | 地址栏 > 层级段跳转/下级目录 | 层级段跳转/下级目录 | Breadcrumb segment / Child folders | 未接入 | 当前只有TextBox和Enter导航，无BreadcrumbBar及层级右键 | —（尚未定义） | Blink | DEFERRED | [ADDRESS] | NOT RUN: M-C12-07 |
-| C12 | 地址栏 > 收缩/路径菜单 | 收缩/路径菜单 | Collapsed breadcrumb / Path menu | 未接入 | 当前只有TextBox和Enter导航，无BreadcrumbBar及层级右键 | —（尚未定义） | Blink | DEFERRED | [ADDRESS] | NOT RUN: M-C12-08 |
-| C12 | 地址栏 > 地址历史/候选 | 地址历史/候选 | Address history / Suggestions | 未接入 | 当前只有TextBox和Enter导航，无BreadcrumbBar及层级右键 | —（尚未定义） | Blink | DEFERRED | [ADDRESS] | NOT RUN: M-C12-09 |
+| C12 | 地址栏 > 层级段跳转/下级目录 | 层级段跳转/下级目录 | Breadcrumb segment / Child folders | 原生BreadcrumbBar + MenuFlyout | G03a层级跳转，G03b按需枚举直接子目录；真实隐藏/空/失败反馈，不含普通文件 | AddressBarPresentation / StartAddressChildren / NavigateToLocation | Blink | IMPLEMENTED_NEEDS_MANUAL | [ADDRESS] | G03b菜单15 + 地址20项；实物鼠标/完整矩阵待验 |
+| C12 | 地址栏 > 收缩/路径菜单 | 收缩/路径菜单 | Collapsed breadcrumb / Path menu | 原生overflow | 保留原生收缩；collapsed项的独立子按钮支持真实Enter及后续菜单选择 | BreadcrumbBar / IElementFactory | Blink | IMPLEMENTED_NEEDS_MANUAL | [ADDRESS] | G03b#11及地址既有overflow通过；全环境待验 |
+| C12 | 地址栏 > 地址历史/候选 | 地址历史/候选 | Address history / Suggestions | 已提交历史MenuFlyout | G03a历史仅current/back/forward已提交值；自动完成候选尚未接入 | BuildAddressHistory / OpenHistory | Blink | PARTIAL | [ADDRESS] | 既有地址20项通过；自动完成NOT RUN |
 | C12 | 地址/搜索输入框默认文本右键 > 撤销 | 撤销 | Undo | WinUI默认文本菜单 | 当前两个TextBox均保留默认文本命令；按焦点与编辑状态决定，未在本轮UIA专项验证 | TextBox默认文本命令（非FolderCommand） | Blink | OS_DEPENDENT | [ADDRESS] | NOT RUN: M-C12-TEXT-地址编辑框-UNDO |
 | C12 | 地址/搜索输入框默认文本右键 > 剪切 | 剪切 | Cut | WinUI默认文本菜单 | 当前两个TextBox均保留默认文本命令；按焦点与编辑状态决定，未在本轮UIA专项验证 | TextBox默认文本命令（非FolderCommand） | Blink | OS_DEPENDENT | [ADDRESS] | NOT RUN: M-C12-TEXT-地址编辑框-CUT |
 | C12 | 地址/搜索输入框默认文本右键 > 复制 | 复制 | Copy | WinUI默认文本菜单 | 当前两个TextBox均保留默认文本命令；按焦点与编辑状态决定，未在本轮UIA专项验证 | TextBox默认文本命令（非FolderCommand） | Blink | OS_DEPENDENT | [ADDRESS] | NOT RUN: M-C12-TEXT-地址编辑框-COPY |

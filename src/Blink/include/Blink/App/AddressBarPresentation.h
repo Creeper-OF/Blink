@@ -23,6 +23,8 @@ namespace blink::app
             std::function<void(Location)> navigate;
             std::function<void()> cancel;
             std::function<void()> history_opening;
+            std::function<void(std::uint64_t, std::uint64_t, Location)> children_requested;
+            std::function<void(std::uint64_t)> children_cancelled;
         };
 
         AddressBarPresentation() = default;
@@ -43,6 +45,9 @@ namespace blink::app
         // history_opening runs before the menu is created, so the owner may
         // synchronously Present a fresh history snapshot from that callback.
         void OpenHistory();
+        void CompleteChildren(std::uint64_t owner, std::uint64_t request,
+            const Location& parent, std::vector<AddressBreadcrumb> children,
+            std::wstring error = {});
         void HideMenus() noexcept;
         // Retire callbacks when the window closes; never rebuild its visual tree.
         // Finish the native text edit while its window and focus host are live.

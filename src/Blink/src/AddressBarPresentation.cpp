@@ -6,6 +6,7 @@
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.Primitives.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
+#include <winrt/Microsoft.UI.Xaml.Markup.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.System.h>
@@ -18,6 +19,32 @@ namespace blink::app
     using namespace Microsoft::UI::Xaml;
     using namespace Microsoft::UI::Xaml::Controls;
 
+    namespace
+    {
+        // BreadcrumbBar accepts IElementFactory for both inline and overflow
+        // items. Prepare fresh native containers before their template wires
+        // Enter/Space, so child actions work in either presentation.
+        struct BreadcrumbItemFactory : implements<BreadcrumbItemFactory, IElementFactory>
+        {
+            DataTemplate content_template;
+            std::function<void(const BreadcrumbBarItem&, const Windows::Foundation::IInspectable&)> prepare;
+
+            BreadcrumbItemFactory(DataTemplate value, decltype(prepare) callback)
+                : content_template(std::move(value)), prepare(std::move(callback)) {}
+
+            UIElement GetElement(const ElementFactoryGetArgs& args)
+            {
+                BreadcrumbBarItem item;
+                item.Content(args.Data());
+                item.ContentTemplate(content_template);
+                prepare(item, args.Data());
+                return item;
+            }
+
+            void RecycleElement(const ElementFactoryRecycleArgs&) {}
+        };
+    }
+
     struct AddressBarPresentation::Ui : std::enable_shared_from_this<Ui>
     {
         ContentControl host{ nullptr };
@@ -27,6 +54,9 @@ namespace blink::app
         TextBox editor{ nullptr };
         Button history_button{ nullptr };
         MenuFlyout history_menu{ nullptr };
+        MenuFlyout children_menu{ nullptr };
+        Location children_parent;
+        Localization localization;
         AddressBarState state;
         std::vector<AddressBreadcrumb> breadcrumbs;
         std::vector<Location> history;
@@ -35,6 +65,9 @@ namespace blink::app
         Callbacks callbacks;
         std::uint64_t breadcrumb_revision{};
         std::uint64_t history_revision{};
+        std::uint64_t children_revision{};
+        bool children_open{};
+        bool children_loading{};
         bool composing{};
         bool enabled{ true };
         bool retired{};
@@ -70,6 +103,105 @@ namespace blink::app
             try { if (history_menu) { history_menu.Hide(); } } catch (...) {}
         }
 
+        void HideChildren() noexcept
+        {
+            const auto request = children_revision++;
+            children_open = false;
+            children_loading = false;
+            try { if (children_menu) { children_menu.Hide(); } } catch (...) {}
+            try { if (callbacks.children_cancelled) { callbacks.children_cancelled(request); } } catch (...) {}
+        }
+
+        void AddChildrenStatus(const wchar_t* id, const std::wstring& text)
+        {
+            MenuFlyoutItem item;
+            item.Text(hstring(text));
+            item.IsEnabled(false);
+            StyleContextMenuItem(item);
+            Automation::AutomationProperties::SetAutomationId(item, id);
+            children_menu.Items().Append(item);
+        }
+
+        void OpenChildren(FrameworkElement anchor, const Location& parent)
+        {
+            if (retired || !enabled || state.IsEditing() || !anchor) { return; }
+            HideHistory();
+            HideChildren();
+            // An overflow item's template belongs to a native popup. Dismiss
+            // it before opening our menu, and use the stable address host.
+            DependencyObject ancestor = anchor;
+            for (; ancestor && ancestor != breadcrumb_host; ancestor = Media::VisualTreeHelper::GetParent(ancestor)) {}
+            if (!ancestor)
+            {
+                RebuildBreadcrumbs();
+                anchor = host;
+            }
+            const auto request = ++children_revision;
+            const auto owner = state.Owner();
+            children_parent = parent;
+            children_open = true;
+            children_loading = true;
+            children_menu = MenuFlyout();
+            ApplyContextMenuAppearance(children_menu, host, L"AddressChildrenMenu");
+            AddChildrenStatus(L"AddressChildrenLoading", localization.GetString(L"AddressBar.ChildrenLoading"));
+            const std::weak_ptr<Ui> weak = shared_from_this();
+            children_menu.Closed([weak, request](auto&&, auto&&) {
+                const auto live = weak.lock();
+                if (!live || live->children_revision != request) { return; }
+                live->children_open = false;
+                // Closing while loading retires the result. A loaded menu's
+                // Closed may precede its Click, so retain its action snapshot.
+                if (live->children_loading) { ++live->children_revision; }
+                live->children_loading = false;
+                if (live->callbacks.children_cancelled) { live->callbacks.children_cancelled(request); }
+            });
+            children_menu.ShowAt(anchor);
+            const auto requested = callbacks.children_requested;
+            if (requested) { requested(owner, request, parent); }
+        }
+
+        void CompleteChildren(const std::uint64_t owner, const std::uint64_t request,
+            const Location& parent, std::vector<AddressBreadcrumb> children, const std::wstring& error)
+        {
+            if (retired || !enabled || !children_open || !children_loading ||
+                children_revision != request || state.Owner() != owner || children_parent != parent)
+            { return; }
+            children_loading = false;
+            children_menu.Items().Clear();
+            if (!error.empty())
+            {
+                AddChildrenStatus(L"AddressChildrenFailed", localization.Format(L"AddressBar.ChildrenFailed", error));
+                return;
+            }
+            if (children.empty())
+            {
+                AddChildrenStatus(L"AddressChildrenEmpty", localization.GetString(L"AddressBar.ChildrenEmpty"));
+                return;
+            }
+            const std::weak_ptr<Ui> weak = shared_from_this();
+            for (std::size_t index = 0; index < children.size(); ++index)
+            {
+                const auto target = children[index].location;
+                MenuFlyoutItem item;
+                item.Text(hstring(children[index].label));
+                StyleContextMenuItem(item, L"\xE8B7");
+                Automation::AutomationProperties::SetAutomationId(item, hstring(L"AddressChild" + std::to_wstring(index)));
+                Automation::AutomationProperties::SetHelpText(item, hstring(TextFor(target)));
+                item.Click([weak, owner, request, target](auto&&, auto&&) {
+                    if (const auto live = weak.lock(); live && !live->retired && live->enabled &&
+                        live->children_revision == request && live->state.Owner() == owner)
+                    {
+                        const auto navigate = live->callbacks.navigate;
+                        if (navigate) { navigate(target); }
+                    }
+                });
+                children_menu.Items().Append(item);
+            }
+            // Loading has no focusable row. Give keyboard navigation a real
+            // starting item while this menu still owns the interaction.
+            children_menu.Items().GetAt(0).Focus(FocusState::Programmatic);
+        }
+
         void RebuildBreadcrumbs()
         {
             const auto revision = ++breadcrumb_revision;
@@ -89,20 +221,80 @@ namespace blink::app
             Automation::AutomationProperties::SetAutomationId(bar, L"AddressBreadcrumbs");
             Automation::AutomationProperties::SetName(bar, hstring(address_name));
 
-            // Each rendering owns distinct boxed labels. A native overflow
-            // item reports that same content object, never a mutable index.
+            const auto content_template = Markup::XamlReader::Load(LR"(<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                <StackPanel Orientation="Horizontal" Spacing="2" AutomationProperties.Name="{Binding [Label]}">
+                    <TextBlock Text="{Binding [Label]}" VerticalAlignment="Center" />
+                    <Button Command="{Binding [ChildrenCommand]}" CommandParameter="{Binding RelativeSource={RelativeSource Self}}"
+                        AutomationProperties.AutomationId="{Binding [ChildrenId]}" AutomationProperties.Name="{Binding [ChildrenName]}"
+                        AutomationProperties.HelpText="{Binding [Path]}" ToolTipService.ToolTip="{Binding [ChildrenName]}"
+                        MinWidth="20" MinHeight="24" Padding="2,0" BorderThickness="0" Background="Transparent">
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70D;" FontSize="10" />
+                    </Button>
+                </StackPanel>
+            </DataTemplate>)").as<DataTemplate>();
+            // Native inline and overflow containers get separate visuals from
+            // the template, while retaining the same immutable data target.
             auto items = single_threaded_observable_vector<Windows::Foundation::IInspectable>();
             std::vector<std::pair<Windows::Foundation::IInspectable, Location>> targets;
             targets.reserve(breadcrumbs.size());
-            for (const auto& breadcrumb : breadcrumbs)
+            const auto owner = state.Owner();
+            const std::weak_ptr<Ui> weak = shared_from_this();
+            for (std::size_t index = 0; index < breadcrumbs.size(); ++index)
             {
-                auto item = box_value(hstring(breadcrumb.label));
+                const auto& breadcrumb = breadcrumbs[index];
+                const auto target = breadcrumb.location;
+                Input::XamlUICommand command;
+                // WinUI copies command descriptions into button HelpText.
+                // Keep the immutable location available to assistive tools.
+                command.Description(hstring(TextFor(target)));
+                command.ExecuteRequested([weak, revision, owner, target](auto&&, const Input::ExecuteRequestedEventArgs& args) {
+                    if (const auto live = weak.lock(); live && !live->retired && live->enabled &&
+                        live->breadcrumb_revision == revision && live->state.Owner() == owner)
+                    { live->OpenChildren(args.Parameter().try_as<FrameworkElement>(), target); }
+                });
+                Windows::Foundation::Collections::PropertySet item;
+                item.Insert(L"Label", box_value(hstring(breadcrumb.label)));
+                item.Insert(L"Path", box_value(hstring(TextFor(target))));
+                item.Insert(L"ChildrenName", box_value(hstring(localization.Format(L"AddressBar.Children", breadcrumb.label))));
+                item.Insert(L"ChildrenId", box_value(hstring(L"AddressChildren" + std::to_wstring(index))));
+                item.Insert(L"ChildrenCommand", command);
                 items.Append(item);
                 targets.emplace_back(std::move(item), breadcrumb.location);
             }
             bar.ItemsSource(items);
-            const auto owner = state.Owner();
-            const std::weak_ptr<Ui> weak = shared_from_this();
+            bar.ItemTemplate(make<BreadcrumbItemFactory>(content_template,
+                [weak, revision, owner](const BreadcrumbBarItem& crumb, const Windows::Foundation::IInspectable& data) {
+                    const auto values = data.try_as<Windows::Foundation::Collections::IMap<hstring, Windows::Foundation::IInspectable>>();
+                    if (!values) { return; }
+                    Automation::AutomationProperties::SetName(crumb, unbox_value<hstring>(values.Lookup(L"Label")));
+                    Automation::AutomationProperties::SetHelpText(crumb, unbox_value<hstring>(values.Lookup(L"Path")));
+                    const auto command = values.Lookup(L"ChildrenCommand").as<Input::XamlUICommand>();
+                    const auto child_id = unbox_value<hstring>(values.Lookup(L"ChildrenId"));
+                    crumb.PreviewKeyDown([weak, revision, owner, command, child_id](auto&& sender, const Input::KeyRoutedEventArgs& args) {
+                        const auto live = weak.lock();
+                        if (!live || live->retired || !live->enabled || live->breadcrumb_revision != revision || live->state.Owner() != owner)
+                        { return; }
+                        if (args.Key() == Windows::System::VirtualKey::Down)
+                        {
+                            args.Handled(true);
+                            command.Execute(sender);
+                            return;
+                        }
+                        if (args.Key() != Windows::System::VirtualKey::Enter && args.Key() != Windows::System::VirtualKey::Space)
+                        { return; }
+                        auto source = args.OriginalSource().try_as<DependencyObject>();
+                        for (; source && source != sender; source = Media::VisualTreeHelper::GetParent(source))
+                        {
+                            if (const auto button = source.try_as<Button>(); button &&
+                                Automation::AutomationProperties::GetAutomationId(button) == child_id)
+                            {
+                                args.Handled(true);
+                                command.Execute(button);
+                                return;
+                            }
+                        }
+                    });
+                }));
             bar.ItemClicked([weak, revision, owner, targets = std::move(targets)](
                 auto&&, const BreadcrumbBarItemClickedEventArgs& args) {
                 const auto live = weak.lock();
@@ -128,6 +320,7 @@ namespace blink::app
         void HideMenus() noexcept
         {
             HideHistory();
+            HideChildren();
             // Replacing the native control also dismisses its overflow popup.
             // Its old event closure keeps its own values and is now retired.
             try { RebuildBreadcrumbs(); } catch (...) {}
@@ -208,6 +401,7 @@ namespace blink::app
             composing = false;
             callbacks = {};
             HideHistory();
+            HideChildren();
             ++breadcrumb_revision;
             // Window.Closed may be unloading XAML. The native tree owns its
             // teardown; only retire late events and dismiss an existing menu.
@@ -226,6 +420,7 @@ namespace blink::app
         const auto ui = std::make_shared<Ui>();
         ui_ = ui;
         ui->callbacks = std::move(callbacks);
+        ui->localization = localization;
         ui->this_pc_label = localization.GetString(L"Location.ThisPC");
         ui->address_name = localization.GetString(L"AddressBar.Name");
         ui->state.Present(0, ui->this_pc_label);
@@ -361,12 +556,15 @@ namespace blink::app
             const auto text = ui_->editor.Text();
             ui_->state.SetDraft(std::wstring(text.c_str(), text.size()));
         }
+        const bool keep_children = preserve_draft && ui_->children_open && ui_->state.Owner() == owner &&
+            ui_->state.CommittedText() == ui_->TextFor(committed);
         ui_->HideHistory();
+        if (!keep_children) { ui_->HideChildren(); }
         ui_->state.Present(owner, ui_->TextFor(committed), preserve_draft);
         if (!ui_->state.IsEditing()) { ui_->composing = false; }
         ui_->breadcrumbs = std::move(breadcrumbs);
         ui_->history = std::move(history);
-        ui_->RebuildBreadcrumbs();
+        if (!keep_children) { ui_->RebuildBreadcrumbs(); }
         ui_->SyncVisuals();
     }
 
@@ -382,6 +580,10 @@ namespace blink::app
     void AddressBarPresentation::OpenHistory()
     { if (ui_) { ui_->OpenHistory(); } }
 
+    void AddressBarPresentation::CompleteChildren(const std::uint64_t owner, const std::uint64_t request,
+        const Location& parent, std::vector<AddressBreadcrumb> children, std::wstring error)
+    { if (ui_) { ui_->CompleteChildren(owner, request, parent, std::move(children), error); } }
+
     void AddressBarPresentation::HideMenus() noexcept
     { if (ui_ && !ui_->retired) { ui_->HideMenus(); } }
 
@@ -392,6 +594,7 @@ namespace blink::app
         ui_->state.Cancel();
         ui_->SyncVisuals();
         ui_->HideHistory();
+        ui_->HideChildren();
     }
 
     void AddressBarPresentation::Close() noexcept
