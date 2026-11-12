@@ -19,6 +19,9 @@ namespace blink::app
         std::uint32_t limit{ 200 };
         std::wstring selected_volumes;
         bool include_subfolders{ true };
+        // Neutral callers retain include-all semantics; TabRecord binds the
+        // current window policy before a user-visible search is submitted.
+        DWORD excluded_attributes{};
         friend bool operator==(const SearchQuery&, const SearchQuery&) = default;
     };
     struct SearchResult

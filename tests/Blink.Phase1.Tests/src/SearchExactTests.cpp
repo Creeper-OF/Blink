@@ -1,6 +1,7 @@
 #include "SearchExactTests.h"
 #include "Blink/App/SearchCoordinator.h"
 #include "Blink/App/SearchViewModel.h"
+#include "Blink/App/TabWindowState.h"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -390,5 +391,329 @@ bool RunSearchResponseTests()
         cancelled_snapshot.volumes.empty(),
         "search_response_cancelled_query_neither_publishes_nor_submits_a_later_volume");
     (void)blocked.Shutdown();
+    return passed;
+}
+
+bool RunSearchVisibilityTests()
+{
+    using namespace blink::app;
+    bool passed = true;
+    constexpr DWORD visible_only = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+    const auto attributed = [](std::wstring name, const DWORD attributes, const std::uint8_t id) {
+        auto hit = Hit(std::move(name)); hit.attributes = attributes; hit.identity.file_id[0] = id; return hit;
+    };
+    const auto hidden = attributed(L"needle-hidden.txt", FILE_ATTRIBUTE_HIDDEN, 10);
+    const auto system = attributed(L"needle-system.txt", FILE_ATTRIBUTE_SYSTEM, 11);
+    const auto normal = attributed(L"needle-visible.txt", FILE_ATTRIBUTE_NORMAL, 12);
+    const auto both = attributed(L"needle-both.txt", visible_only, 13);
+    SearchQuery query{ L"needle" }; query.limit = 4;
+    passed &= Check(query.excluded_attributes == 0 && ValidateSearchQuery(query) == ERROR_SUCCESS &&
+        MakeSearchRequest(query, L"D:\\").type == ipc::RequestType::Search,
+        "search_visibility_neutral_model_query_preserves_legacy_include_all");
+    bool masks_valid = true;
+    for (const DWORD mask : { DWORD{}, DWORD{ FILE_ATTRIBUTE_SYSTEM }, visible_only })
+    { auto test = query; test.excluded_attributes = mask; masks_valid &= ValidateSearchQuery(test) == ERROR_SUCCESS; }
+    passed &= Check(masks_valid, "search_visibility_accepts_neutral_system_only_and_visible_only_policies");
+    bool masks_rejected = true;
+    for (const DWORD mask : { DWORD{ FILE_ATTRIBUTE_HIDDEN }, DWORD{ FILE_ATTRIBUTE_READONLY }, DWORD{ 0xffffffffu } })
+    { auto test = query; test.excluded_attributes = mask; masks_rejected &= ValidateSearchQuery(test) == ERROR_INVALID_PARAMETER; }
+    passed &= Check(masks_rejected, "search_visibility_rejects_masks_without_a_matching_wire_command");
+
+    struct CommandCase { DWORD mask; bool direct; ipc::RequestType type, legacy; const char* name; };
+    const CommandCase commands[]{
+        { 0, false, ipc::RequestType::Search, ipc::RequestType::Search, "neutral_recursive" },
+        { 0, true, ipc::RequestType::SearchDirectChildren, ipc::RequestType::SearchDirectChildren, "neutral_direct" },
+        { visible_only, false, ipc::RequestType::SearchVisible, ipc::RequestType::Search, "visible_recursive" },
+        { visible_only, true, ipc::RequestType::SearchVisibleDirectChildren, ipc::RequestType::SearchDirectChildren, "visible_direct" },
+        { FILE_ATTRIBUTE_SYSTEM, false, ipc::RequestType::SearchWithHidden, ipc::RequestType::Search, "with_hidden_recursive" },
+        { FILE_ATTRIBUTE_SYSTEM, true, ipc::RequestType::SearchWithHiddenDirectChildren, ipc::RequestType::SearchDirectChildren, "with_hidden_direct" },
+    };
+    const auto command_query = [&](const CommandCase& test) {
+        auto value = query; value.excluded_attributes = test.mask; value.scope = SearchScope::SelectedFolder;
+        value.folder = L"D:\\Folder"; value.include_subfolders = !test.direct; value.mode = SearchMode::Prefix; return value;
+    };
+    const auto same_payload = [](const ipc::Request& left, const ipc::Request& right) {
+        return left.protocol_version == right.protocol_version && left.request_id == right.request_id &&
+            left.operation_id == right.operation_id && left.volume_root == right.volume_root && left.text == right.text &&
+            left.extension == right.extension && left.path_prefix == right.path_prefix &&
+            left.prefix == right.prefix && left.limit == right.limit;
+    };
+    for (const auto& test : commands)
+    {
+        const auto request = MakeSearchRequest(command_query(test), L"D:\\");
+        const auto name = std::string("search_visibility_request_") + test.name;
+        passed &= Check(request.type == test.type && request.protocol_version == ipc::kProtocolVersion &&
+            request.volume_root == L"D:\\" && request.path_prefix == L"D:\\Folder\\" && request.prefix &&
+            request.limit == query.limit && request.text == query.text && request.extension.empty() && request.operation_id == 0,
+            name.c_str());
+    }
+    bool exact_preserved = true, extension_preserved = true;
+    for (const auto& test : commands)
+    {
+        auto value = command_query(test); value.mode = SearchMode::Exact; value.text = L"target.txt";
+        const auto exact = MakeSearchRequest(value, L"D:\\");
+        exact_preserved &= exact.type == test.type && exact.prefix && exact.limit == kSearchCandidateLimit &&
+            exact.text == value.text && exact.path_prefix == L"D:\\Folder\\";
+        value.mode = SearchMode::Extension; value.text = L"txt";
+        const auto extension = MakeSearchRequest(value, L"D:\\");
+        extension_preserved &= extension.type == test.type && !extension.prefix && extension.text.empty() &&
+            extension.extension == L".txt" && extension.limit == value.limit;
+    }
+    passed &= Check(exact_preserved, "search_visibility_all_policies_preserve_exact_candidate_cap_and_folder_scope");
+    passed &= Check(extension_preserved, "search_visibility_all_policies_preserve_extension_payload_and_display_cap");
+    auto drive_query = query; drive_query.scope = SearchScope::CurrentVolume; drive_query.folder = L"D:\\";
+    drive_query.excluded_attributes = visible_only; drive_query.include_subfolders = false;
+    const auto drive_request = MakeSearchRequest(drive_query, L"D:\\");
+    passed &= Check(drive_request.type == ipc::RequestType::SearchVisible && drive_request.path_prefix.empty(),
+        "search_visibility_current_volume_does_not_become_direct_child_search");
+
+    {
+        TabWindowState window; auto* tab = window.ActiveTab(); tab->search_draft = L"submitted";
+        const auto initial = tab->SearchIntent(false);
+        passed &= Check(!window.GetVisibilityPolicy().show_hidden_items && initial.excluded_attributes == visible_only &&
+            MakeSearchRequest(initial, L"D:\\").type == ipc::RequestType::SearchVisible,
+            "search_visibility_new_tab_binds_default_window_policy_before_submission");
+        window.SetVisibilityPolicy({ true });
+        auto current = tab->SearchIntent(false);
+        passed &= Check(current.excluded_attributes == FILE_ATTRIBUTE_SYSTEM &&
+            MakeSearchRequest(current, L"D:\\").type == ipc::RequestType::SearchWithHidden,
+            "search_visibility_show_hidden_still_excludes_system_items_before_limit");
+        const auto other_id = window.CreateTab(); const auto* other = window.Find(other_id);
+        passed &= Check(other && other->SearchIntent(false).excluded_attributes == FILE_ATTRIBUTE_SYSTEM &&
+            tab->SearchIntent(false).text == L"submitted",
+            "search_visibility_new_tabs_inherit_policy_without_replacing_other_tab_drafts");
+        current.scope = SearchScope::SelectedFolder; current.folder = L"D:\\Pinned";
+        current.include_subfolders = false; current.mode = SearchMode::Prefix;
+        auto committed = std::make_shared<SearchSnapshot>(); committed->query = current; tab->search_snapshot = committed;
+        tab->search_draft = L"unsubmitted"; tab->search_mode = SearchMode::Extension;
+        const auto reuse = tab->SearchIntent(true);
+        passed &= Check(reuse == current && tab->SearchIntent(false).text == L"unsubmitted",
+            "search_visibility_retry_preserves_committed_text_mode_scope_and_current_policy");
+        const auto staged = tab->SearchIntent(false); const auto generation = tab->search_state->Begin(staged);
+        tab->search_visible = true; window.SetVisibilityPolicy({ false });
+        const auto changed = tab->SearchIntent(true); const auto cancelled = tab->search_state->Snapshot();
+        passed &= Check(generation && !tab->search_visible && cancelled.stage == SearchStage::Idle &&
+            cancelled.generation > generation && changed.text == current.text && changed.folder == current.folder &&
+            changed.mode == current.mode && !changed.include_subfolders && changed.excluded_attributes == visible_only &&
+            other->SearchIntent(false).excluded_attributes == visible_only,
+            "search_visibility_policy_change_cancels_old_work_and_rebinds_cached_committed_intent");
+        tab->search_snapshot.reset();
+        passed &= Check(tab->SearchIntent(true).text == staged.text &&
+            tab->SearchIntent(true).excluded_attributes == visible_only,
+            "search_visibility_state_snapshot_reuse_also_binds_latest_window_policy");
+    }
+
+    query.excluded_attributes = visible_only;
+    auto reply = Reply({ hidden, system, normal, both });
+    auto volume = MapSearchReply(query, L"D:\\", reply);
+    passed &= Check(volume.searched && volume.results.size() == 1 && volume.results.front().hit.name == normal.name &&
+        !volume.query_incomplete, "search_visibility_mapper_matches_default_view_policy_after_validating_hits");
+    reply.legacy_search_visibility = true; volume = MapSearchReply(query, L"D:\\", reply);
+    passed &= Check(volume.searched && volume.results.size() == 1 && volume.query_incomplete && volume.limit_reached,
+        "search_visibility_capped_legacy_reply_preserves_visible_prefix_and_incomplete_status");
+    reply = Reply({ hidden, system, both, hidden }); reply.legacy_search_visibility = true;
+    volume = MapSearchReply(query, L"D:\\", reply);
+    passed &= Check(volume.searched && volume.results.empty() && volume.query_incomplete,
+        "search_visibility_all_hidden_capped_legacy_reply_is_not_a_known_empty_search");
+    reply.response.results.pop_back(); volume = MapSearchReply(query, L"D:\\", reply);
+    passed &= Check(volume.searched && volume.results.empty() && !volume.query_incomplete && !volume.limit_reached,
+        "search_visibility_short_legacy_reply_can_confirm_no_visible_matches");
+    auto with_hidden = query; with_hidden.excluded_attributes = FILE_ATTRIBUTE_SYSTEM;
+    volume = MapSearchReply(with_hidden, L"D:\\", Reply({ hidden, system, normal, both }));
+    passed &= Check(volume.searched && volume.results.size() == 2 && volume.results[0].hit.name == hidden.name &&
+        volume.results[1].hit.name == normal.name && ItemVisibilityPolicy{ true }.Includes(hidden.attributes) &&
+        !ItemVisibilityPolicy{ true }.Includes(system.attributes),
+        "search_visibility_show_hidden_mapping_keeps_hidden_but_never_system_rows");
+    auto neutral = query; neutral.excluded_attributes = 0;
+    reply = Reply({ hidden, system, normal, both }); reply.legacy_search_visibility = true;
+    volume = MapSearchReply(neutral, L"D:\\", reply);
+    passed &= Check(volume.searched && volume.results.size() == 4 && !volume.query_incomplete,
+        "search_visibility_neutral_mapping_preserves_old_include_all_contract");
+    auto exact_query = query; exact_query.mode = SearchMode::Exact; exact_query.text = L"target.txt"; exact_query.limit = 1;
+    auto hidden_exact = hidden; hidden_exact.name = L"target.txt"; hidden_exact.full_path = L"D:\\Folder\\target.txt";
+    volume = MapSearchReply(exact_query, L"D:\\", Reply({ hidden_exact, Hit(L"target.txt.bak"), Hit(L"target.txt") }));
+    passed &= Check(volume.searched && volume.results.size() == 1 && volume.results.front().hit.name == L"target.txt" &&
+        (volume.results.front().hit.attributes & visible_only) == 0 && volume.limit_reached && !volume.query_incomplete,
+        "search_visibility_exact_mapping_filters_before_visible_display_cap");
+    auto scoped = query; scoped.scope = SearchScope::SelectedFolder; scoped.folder = L"D:\\Folder"; scoped.include_subfolders = false;
+    auto nested = normal; nested.name = L"nested.txt"; nested.full_path = L"D:\\Folder\\deep\\nested.txt";
+    auto outside = normal; outside.name = L"outside.txt"; outside.full_path = L"D:\\Folder-old\\outside.txt";
+    volume = MapSearchReply(scoped, L"D:\\", Reply({ hidden, nested, normal, outside }));
+    passed &= Check(volume.searched && volume.results.size() == 1 && volume.results.front().hit.name == normal.name,
+        "search_visibility_filter_does_not_relax_direct_child_or_sibling_boundaries");
+    bool malformed_rejected = true;
+    for (const bool legacy : { false, true })
+    {
+        auto malformed = hidden; malformed.identity.valid = false;
+        auto bad = Reply({ malformed, normal }); bad.legacy_search_visibility = legacy;
+        const auto failed = MapSearchReply(query, L"D:\\", bad);
+        malformed_rejected &= !failed.searched && failed.error == ERROR_INVALID_DATA && failed.results.empty();
+    }
+    passed &= Check(malformed_rejected, "search_visibility_hidden_malformed_hit_cannot_hide_real_payload_failure");
+    auto failed_reply = Reply({}); failed_reply.response.status = ipc::ResponseStatus::Failed;
+    failed_reply.response.error = ERROR_ACCESS_DENIED; failed_reply.legacy_search_visibility = true;
+    volume = MapSearchReply(query, L"D:\\", failed_reply);
+    passed &= Check(!volume.searched && volume.error == ERROR_ACCESS_DENIED && volume.results.empty(),
+        "search_visibility_legacy_marker_never_turns_access_denied_into_empty_success");
+    failed_reply.response.status = ipc::ResponseStatus::Busy; failed_reply.response.error = ERROR_IO_PENDING;
+    failed_reply.response.index_state = ipc::IndexState::CatchingUp; volume = MapSearchReply(query, L"D:\\", failed_reply);
+    passed &= Check(!volume.searched && volume.error == ERROR_IO_PENDING && volume.results.empty(),
+        "search_visibility_busy_reply_remains_unconfirmed_without_results");
+    reply = Reply({ hidden, system, normal, both, normal }); reply.legacy_search_visibility = true;
+    volume = MapSearchReply(query, L"D:\\", reply);
+    passed &= Check(!volume.searched && volume.error == ERROR_INVALID_DATA && volume.results.empty(),
+        "search_visibility_legacy_fallback_does_not_accept_an_oversized_wire_reply");
+    volume = MapSearchReply(query, L"D:\\", Reply({}));
+    passed &= Check(volume.searched && volume.results.empty() && !volume.query_incomplete && !volume.limit_reached,
+        "search_visibility_supported_filtered_search_can_confirm_known_empty");
+
+    {
+        SearchState state; const auto generation = state.Begin(query);
+        SearchSnapshot snapshot; snapshot.query = query; snapshot.stage = SearchStage::Partial;
+        SearchVolumeResult capped; capped.root = L"C:\\"; capped.searched = true; capped.query_incomplete = true;
+        SearchVolumeResult complete; complete.root = L"D:\\"; complete.searched = true;
+        SearchVolumeResult pending; pending.root = L"E:\\";
+        snapshot.volumes = { capped, complete, pending };
+        const bool committed = state.Complete(generation, snapshot);
+        auto changed = query; changed.excluded_attributes = FILE_ATTRIBUTE_SYSTEM;
+        const bool policy_rejected = !state.Begin(changed, true);
+        const auto retry = state.Begin(query, true); const auto retried = state.Snapshot();
+        passed &= Check(committed && policy_rejected && retry > generation && retried.volumes.size() == 3 &&
+            !retried.volumes[0].searched && retried.volumes[1].searched && !retried.volumes[2].searched,
+            "search_visibility_retry_rechecks_incomplete_volumes_and_retains_complete_policy_matched_volumes");
+    }
+
+    struct Rejection { ipc::ResponseStatus status; DWORD error; const char* name; };
+    const Rejection rejections[]{
+        { ipc::ResponseStatus::Unsupported, ERROR_NOT_SUPPORTED, "unsupported" },
+        { ipc::ResponseStatus::Unsupported, ERROR_INVALID_FUNCTION, "invalid_function" },
+        { ipc::ResponseStatus::InvalidRequest, ERROR_INVALID_PARAMETER, "legacy_invalid_request" },
+    };
+    for (const auto& test : commands)
+    {
+        if (!test.mask) { continue; }
+        for (const auto& rejection : rejections)
+        {
+            const auto state = std::make_shared<SearchState>(); const auto value = command_query(test);
+            (void)state->Begin(value); std::vector<ipc::Request> requests;
+            const auto exchange = MakeSearchExchange(state, [&](ipc::Request request) {
+                requests.push_back(std::move(request)); auto answer = Reply({ hidden, normal });
+                if (requests.size() == 1) { answer.response.status = rejection.status; answer.response.error = rejection.error; }
+                return answer;
+            });
+            const auto request = MakeSearchRequest(value, L"D:\\"); const auto answer = exchange(request);
+            const auto name = std::string("search_visibility_factory_") + test.name + "_" + rejection.name;
+            passed &= Check(requests.size() == 2 && requests[0].type == test.type && requests[1].type == test.legacy &&
+                same_payload(request, requests[0]) && same_payload(request, requests[1]) &&
+                answer.received && answer.response.status == ipc::ResponseStatus::Ok && answer.legacy_search_visibility &&
+                answer.response.results.size() == 2, name.c_str());
+        }
+    }
+    struct NoFallback { ipc::ResponseStatus status; DWORD error; const char* name; bool received{ true }; };
+    const NoFallback unchanged[]{
+        { ipc::ResponseStatus::Busy, ERROR_IO_PENDING, "busy" },
+        { ipc::ResponseStatus::Failed, ERROR_ACCESS_DENIED, "access_denied" },
+        { ipc::ResponseStatus::Unsupported, ERROR_REVISION_MISMATCH, "revision_mismatch" },
+        { ipc::ResponseStatus::InvalidRequest, ERROR_ACCESS_DENIED, "invalid_request_access_denied" },
+        { ipc::ResponseStatus::Failed, ERROR_BROKEN_PIPE, "broken_transport", false },
+    };
+    for (const auto& test : unchanged)
+    {
+        const auto state = std::make_shared<SearchState>(); (void)state->Begin(query); unsigned calls{};
+        const auto exchange = MakeSearchExchange(state, [&](ipc::Request) {
+            ++calls; auto answer = Reply({}); answer.received = test.received;
+            answer.error = test.received ? ERROR_SUCCESS : test.error;
+            answer.response.status = test.status; answer.response.error = test.error; return answer;
+        });
+        const auto answer = exchange(MakeSearchRequest(query, L"D:\\"));
+        const auto name = std::string("search_visibility_factory_does_not_fallback_on_") + test.name;
+        passed &= Check(calls == 1 && answer.received == test.received && answer.response.error == test.error &&
+            !answer.legacy_search_visibility, name.c_str());
+    }
+    {
+        const auto state = std::make_shared<SearchState>(); (void)state->Begin(query); unsigned calls{};
+        const auto exchange = MakeSearchExchange(state, [&](ipc::Request) {
+            ++calls; auto answer = Reply({}); answer.response.status = ipc::ResponseStatus::Unsupported;
+            answer.response.error = ERROR_NOT_SUPPORTED; ++answer.expected_request_id; return answer;
+        });
+        const auto answer = exchange(MakeSearchRequest(query, L"D:\\"));
+        passed &= Check(calls == 1 && ValidateIndexReply(answer) == ERROR_REVISION_MISMATCH && !answer.legacy_search_visibility,
+            "search_visibility_factory_never_uses_uncorrelated_rejection_for_fallback");
+    }
+    {
+        const auto state = std::make_shared<SearchState>(); (void)state->Begin(neutral); unsigned calls{};
+        const auto exchange = MakeSearchExchange(state, [&](ipc::Request) {
+            ++calls; auto answer = Reply({}); answer.response.status = ipc::ResponseStatus::Unsupported;
+            answer.response.error = ERROR_NOT_SUPPORTED; return answer;
+        });
+        const auto answer = exchange(MakeSearchRequest(neutral, L"D:\\"));
+        passed &= Check(calls == 1 && !answer.legacy_search_visibility && answer.response.error == ERROR_NOT_SUPPORTED,
+            "search_visibility_factory_does_not_retry_an_unsupported_legacy_command");
+    }
+    {
+        const auto state = std::make_shared<SearchState>(); (void)state->Begin(query); unsigned calls{};
+        const auto exchange = MakeSearchExchange(state, [&](ipc::Request) {
+            ++calls; state->Cancel(); auto answer = Reply({});
+            answer.response.status = ipc::ResponseStatus::Unsupported; answer.response.error = ERROR_NOT_SUPPORTED; return answer;
+        });
+        const auto answer = exchange(MakeSearchRequest(query, L"D:\\"));
+        passed &= Check(calls == 1 && !answer.received && answer.error == ERROR_CANCELLED && !answer.legacy_search_visibility,
+            "search_visibility_factory_cancellation_after_rejection_prevents_legacy_followup");
+    }
+    {
+        const auto state = std::make_shared<SearchState>(); (void)state->Begin(query); unsigned calls{};
+        const auto exchange = MakeSearchExchange(state, [&](ipc::Request) {
+            ++calls; auto answer = Reply({}); answer.response.status = ipc::ResponseStatus::Unsupported;
+            answer.response.error = ERROR_NOT_SUPPORTED; return answer;
+        });
+        const auto answer = exchange(MakeSearchRequest(query, L"D:\\"));
+        passed &= Check(calls == 2 && answer.legacy_search_visibility && answer.response.error == ERROR_NOT_SUPPORTED,
+            "search_visibility_factory_retries_rejected_new_command_at_most_once");
+    }
+    {
+        const auto state = std::make_shared<SearchState>(); (void)state->Begin(query); unsigned calls{};
+        const auto exchange = MakeSearchExchange(state, [&](ipc::Request) { ++calls; return Reply({ normal }); });
+        const auto answer = exchange(MakeSearchRequest(query, L"D:\\"));
+        passed &= Check(calls == 1 && answer.received && !answer.legacy_search_visibility && answer.response.results.size() == 1,
+            "search_visibility_supported_service_gets_one_request_without_legacy_marker");
+    }
+    {
+        struct Probe { std::atomic_bool upgraded{}; std::vector<ipc::Request> requests; };
+        const auto probe = std::make_shared<Probe>(); const auto state = std::make_shared<SearchState>();
+        auto exchange = MakeSearchExchange(state, [probe, normal, hidden](ipc::Request request) {
+            probe->requests.push_back(request);
+            if (request.volume_root == L"C:\\")
+            {
+                auto hit = normal; hit.full_path = L"C:\\Folder\\" + hit.name; return Reply({ hit });
+            }
+            if (!probe->upgraded.load() && request.type == ipc::RequestType::SearchVisible)
+            {
+                auto answer = Reply({}); answer.response.status = ipc::ResponseStatus::InvalidRequest;
+                answer.response.error = ERROR_INVALID_PARAMETER; return answer;
+            }
+            if (!probe->upgraded.load()) { return Reply({ hidden, hidden, hidden, hidden }); }
+            return Reply({ normal });
+        });
+        SearchCoordinator coordinator(state, std::move(exchange), [] { return std::vector<std::wstring>{ L"C:\\", L"D:\\" }; },
+            [](const auto& path) { return SearchFolderScope{ path, { 77, { 1 }, true }, ERROR_SUCCESS }; });
+        const auto generation = coordinator.Search(query, {}); const bool done = generation && Finished(coordinator.CurrentAction());
+        const auto initial = state->Snapshot();
+        passed &= Check(done && initial.stage == SearchStage::Partial && initial.error == ERROR_MORE_DATA &&
+            initial.volumes.size() == 2 && initial.volumes[0].searched && initial.volumes[0].results.size() == 1 &&
+            initial.volumes[1].searched && initial.volumes[1].query_incomplete && initial.volumes[1].results.empty() &&
+            probe->requests.size() == 3,
+            "search_visibility_capped_old_service_publishes_healthy_volume_and_honest_partial_search");
+        probe->upgraded.store(true);
+        const auto retry = coordinator.Search(query, {}, true); const bool retried = retry && Finished(coordinator.CurrentAction());
+        const auto final = state->Snapshot();
+        passed &= Check(done && retried && retry > generation && final.stage == SearchStage::Complete &&
+            final.error == ERROR_SUCCESS && final.volumes.size() == 2 && final.volumes[0].results.size() == 1 &&
+            final.volumes[1].searched && !final.volumes[1].query_incomplete && final.volumes[1].results.size() == 1 &&
+            SameSearchLink(initial.volumes[0].results.front(), final.volumes[0].results.front()) &&
+            probe->requests.size() == 4 && probe->requests.back().volume_root == L"D:\\" &&
+            probe->requests.back().type == ipc::RequestType::SearchVisible,
+            "search_visibility_retry_after_service_upgrade_requeries_only_incomplete_volume_using_new_command");
+        (void)coordinator.Shutdown();
+    }
     return passed;
 }

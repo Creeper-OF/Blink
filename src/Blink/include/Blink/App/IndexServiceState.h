@@ -20,6 +20,9 @@ namespace blink::app
         // supply it explicitly to test correlation without changing the ABI.
         std::uint64_t expected_request_id{};
         blink::index::ipc::Response response;
+        // App-local: an older service only accepted the unfiltered search.
+        // A capped legacy reply cannot confirm all visible matches were read.
+        bool legacy_search_visibility{};
     };
 
     struct VolumeIndexStatus

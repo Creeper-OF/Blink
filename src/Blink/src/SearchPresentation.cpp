@@ -40,7 +40,7 @@ namespace blink::app
         std::uint64_t generation{}, tab_id{}, data_generation{};
         SearchStage data_stage{ SearchStage::Closed };
         ItemVisibilityPolicy policy;
-        bool queued{}, syncing{}, closed{}, active{}, action_pending{}, selection_changed{}, query_incomplete{}, context_menu_open{};
+        bool queued{}, syncing{}, closed{}, active{}, action_pending{}, selection_changed{}, query_incomplete{}, exact_incomplete{}, context_menu_open{};
 
         static constexpr SearchScope ScopeChoices[]{ SearchScope::FollowLocation, SearchScope::AllLocalVolumes,
             SearchScope::SelectedVolumes, SearchScope::CurrentFolder, SearchScope::SelectedFolder };
@@ -475,15 +475,18 @@ namespace blink::app
             ui->rows = std::move(data.rows); ui->restore_selection = data.selected_index;
             ui->selection_changed = false; ui->next = 0;
             ui->query_incomplete = data.query_incomplete;
+            ui->exact_incomplete = data.query_incomplete && snapshot.query.mode == SearchMode::Exact;
             ui->limit.Visibility(data.limit_reached || data.query_incomplete ? Visibility::Visible : Visibility::Collapsed);
-            ui->limit.Text(hstring(localization.Format(data.query_incomplete ? L"Search.ExactLimit" : L"Search.Limit",
-                std::to_wstring(data.query_incomplete ? kSearchCandidateLimit : snapshot.query.limit))));
+            const auto limit_key = data.query_incomplete ?
+                (ui->exact_incomplete ? L"Search.ExactLimit" : L"Search.IncompleteLimit") : L"Search.Limit";
+            ui->limit.Text(hstring(localization.Format(limit_key,
+                std::to_wstring(ui->exact_incomplete ? kSearchCandidateLimit : snapshot.query.limit))));
             if (options.selection && !data.selected_index && ui->callbacks.selection_changed)
             { ui->callbacks.selection_changed({}); }
             ui->Append();
         }
         const auto key = options.queued ? L"Search.Queued" : snapshot.stage == SearchStage::Searching ? L"Search.Searching" :
-            ui->query_incomplete ? L"Search.ExactPartial" :
+            ui->query_incomplete ? (ui->exact_incomplete ? L"Search.ExactPartial" : L"Search.IncompletePartial") :
             snapshot.error == ERROR_IO_PENDING ? L"Search.Preparing" :
             snapshot.stage == SearchStage::Partial ? L"Search.Partial" : snapshot.stage == SearchStage::Unavailable ?
             L"Search.Unavailable" : L"Search.Results";
@@ -499,7 +502,7 @@ namespace blink::app
         ui->action.Visibility(options.action_pending || options.action_error != ERROR_SUCCESS ? Visibility::Visible : Visibility::Collapsed);
         ui->action.Text(hstring(localization.Format(action_key, std::to_wstring(options.action_error))));
         const auto retryable = std::any_of(snapshot.volumes.begin(), snapshot.volumes.end(),
-            [](const auto& volume) { return !volume.searched; });
+            [](const auto& volume) { return !volume.searched || volume.query_incomplete; });
         ui->retry.IsEnabled(!options.queued && snapshot.stage != SearchStage::Searching && retryable);
         std::wstring volumes;
         for (const auto& volume : snapshot.volumes)

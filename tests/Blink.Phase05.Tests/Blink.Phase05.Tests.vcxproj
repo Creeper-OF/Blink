@@ -24,7 +24,11 @@
     </ClCompile>
     <Link><SubSystem>Console</SubSystem></Link>
   </ItemDefinitionGroup>
-  <ItemGroup><ClCompile Include="src\main.cpp" /></ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\SearchVisibilityWireTests.cpp" />
+    <ClInclude Include="src\SearchVisibilityWireTests.h" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Blink.Core\Blink.Core.vcxproj"><Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB101}</Project></ProjectReference>
     <ProjectReference Include="..\..\src\Blink.Index.Contracts\Blink.Index.Contracts.vcxproj"><Project>{A3D2F970-5B58-4CB9-8B8D-4F4D1BFBB10B}</Project></ProjectReference>

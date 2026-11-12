@@ -102,6 +102,9 @@ namespace blink::index
         bool use_derived_extension_index{ true };
         // Restrict path_prefix to the immediate parent before applying limit.
         bool direct_children{};
+        // Exclude these attribute bits before path resolution and result limit.
+        // Zero retains the existing unfiltered Search contract.
+        DWORD excluded_attributes{};
     };
 
     struct FastSearchResult

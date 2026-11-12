@@ -444,6 +444,10 @@ namespace blink::index::ipc
         case RequestType::Search: return L"Search";
         case RequestType::StopOperation: return L"StopOperation";
         case RequestType::SearchDirectChildren: return L"SearchDirectChildren";
+        case RequestType::SearchVisible: return L"SearchVisible";
+        case RequestType::SearchVisibleDirectChildren: return L"SearchVisibleDirectChildren";
+        case RequestType::SearchWithHidden: return L"SearchWithHidden";
+        case RequestType::SearchWithHiddenDirectChildren: return L"SearchWithHiddenDirectChildren";
         default: return L"Unknown";
         }
     }

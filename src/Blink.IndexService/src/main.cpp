@@ -1298,7 +1298,11 @@ namespace blink::index::service
                     static_cast<std::uint32_t>(request.type));
 
                 const bool is_search = request.type == ipc::RequestType::Search ||
-                    request.type == ipc::RequestType::SearchDirectChildren;
+                    request.type == ipc::RequestType::SearchDirectChildren ||
+                    request.type == ipc::RequestType::SearchVisible ||
+                    request.type == ipc::RequestType::SearchVisibleDirectChildren ||
+                    request.type == ipc::RequestType::SearchWithHidden ||
+                    request.type == ipc::RequestType::SearchWithHiddenDirectChildren;
                 std::shared_ptr<FastSearchTiming> search_timing;
                 std::shared_ptr<std::atomic_bool> stop_search_observer;
                 std::shared_ptr<std::atomic_uint32_t> emitted_search_stages;
@@ -1896,6 +1900,10 @@ namespace blink::index::service
 
             case ipc::RequestType::Search:
             case ipc::RequestType::SearchDirectChildren:
+            case ipc::RequestType::SearchVisible:
+            case ipc::RequestType::SearchVisibleDirectChildren:
+            case ipc::RequestType::SearchWithHidden:
+            case ipc::RequestType::SearchWithHiddenDirectChildren:
                 return SearchRequest(request, response, search_timing);
 
             default:
@@ -2158,7 +2166,10 @@ namespace blink::index::service
             ipc::Response response,
             FastSearchTiming* search_timing = nullptr)
         {
-            if (request.type == ipc::RequestType::SearchDirectChildren && request.path_prefix.empty())
+            const bool direct_children = request.type == ipc::RequestType::SearchDirectChildren ||
+                request.type == ipc::RequestType::SearchVisibleDirectChildren ||
+                request.type == ipc::RequestType::SearchWithHiddenDirectChildren;
+            if (direct_children && request.path_prefix.empty())
             {
                 response.status = ipc::ResponseStatus::InvalidRequest;
                 response.error = ERROR_INVALID_PARAMETER;
@@ -2190,7 +2201,13 @@ namespace blink::index::service
             options.prefix = request.prefix;
             options.extension = request.extension;
             options.path_prefix = request.path_prefix;
-            options.direct_children = request.type == ipc::RequestType::SearchDirectChildren;
+            options.direct_children = direct_children;
+            if (request.type == ipc::RequestType::SearchVisible ||
+                request.type == ipc::RequestType::SearchVisibleDirectChildren)
+            { options.excluded_attributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM; }
+            else if (request.type == ipc::RequestType::SearchWithHidden ||
+                request.type == ipc::RequestType::SearchWithHiddenDirectChildren)
+            { options.excluded_attributes = FILE_ATTRIBUTE_SYSTEM; }
             options.limit = std::min<std::size_t>(request.limit == 0 ? 1000 : request.limit, 1000);
             const auto hits = loaded->Search(options, search_timing);
             response.results.reserve(hits.size());

@@ -2,8 +2,10 @@
 #include "Blink/Index/FastIndex.h"
 #include "Blink/IndexService/PipeImpersonationGuard.h"
 #include "Blink/IndexService/ProgressSnapshot.h"
+#include "SearchVisibilityWireTests.h"
 
 #include <Windows.h>
+#include <winioctl.h>
 #include <aclapi.h>
 #include <sddl.h>
 
@@ -111,6 +113,17 @@ namespace blink::index
             link.attributes = spec.attributes;
             link.last_usn = spec.last_usn;
             return index.RemoveLinkUnlocked(link);
+        }
+
+        static bool Apply(FastIndex& index, const Spec& spec, const DWORD reason)
+        {
+            std::scoped_lock lock(index.mutex_);
+            UsnRecordSummary record;
+            record.major_version = 2; record.usn = spec.last_usn; record.reason = reason;
+            record.attributes = spec.attributes; record.name = spec.name;
+            std::memcpy(&record.file_reference, spec.identity.file_id.data(), sizeof(record.file_reference));
+            std::memcpy(&record.parent_reference, spec.parent_identity.file_id.data(), sizeof(record.parent_reference));
+            return index.ApplyRecordUnlocked(record);
         }
     };
 }
@@ -636,6 +649,243 @@ namespace
             L" save_error=" + std::to_wstring(save_error) +
             L" load_error=" + std::to_wstring(load_error));
         return passed ? 0 : 92;
+    }
+
+    [[nodiscard]] bool RunSearchCorrectnessTests()
+    {
+        namespace fs = std::filesystem;
+        using blink::index::FastIndex;
+        using blink::index::FastIndexTestAccess;
+        using blink::index::FastSearchOptions;
+        using Spec = FastIndexTestAccess::Spec;
+        bool passed = true;
+        std::size_t checks{};
+        const auto check = [&](const bool value, const wchar_t* name) {
+            ++checks; passed = value && passed;
+            WriteUtf8Line(std::wstring(value ? L"PASS " : L"FAIL ") + name);
+        };
+        DWORD serial{};
+        const bool local_volume = GetVolumeInformationW(L"D:\\", nullptr, 0, &serial, nullptr, nullptr, nullptr, 0) != FALSE;
+        check(local_volume, L"index_search_correctness_local_fixture_volume_available");
+        if (!local_volume) { return false; }
+        const auto identity = [serial](const std::uint64_t number) {
+            blink::core::FileIdentity value; value.volume_serial = serial; value.valid = true;
+            std::memcpy(value.file_id.data(), &number, sizeof(number)); return value;
+        };
+        const auto root_id = identity(1);
+        const auto names = [](FastIndex& index, const FastSearchOptions& options) {
+            std::vector<std::wstring> values;
+            for (const auto& hit : index.Search(options)) { values.push_back(hit.name); }
+            std::sort(values.begin(), values.end()); return values;
+        };
+        const auto visible = [](const auto& hits, const std::size_t count, const DWORD excluded) {
+            return hits.size() == count && std::all_of(hits.begin(), hits.end(), [excluded](const auto& hit) {
+                return (hit.attributes & excluded) == 0;
+            });
+        };
+        constexpr DWORD excluded = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+        FastIndex crowded;
+        FastIndexTestAccess::Reset(crowded, root_id, serial);
+        std::vector<Spec> records;
+        for (std::uint64_t index{}; index < 2050; ++index)
+        { records.push_back({ identity(1000 + index), root_id, L"Needle-" + std::to_wstring(index) + L".txt", FILE_ATTRIBUTE_ARCHIVE, 2 }); }
+        FastIndexTestAccess::Seed(crowded, records);
+        FastSearchOptions options; options.text = L"needle"; options.extension = L".TXT"; options.limit = 2010;
+        const auto first_candidates = crowded.Search(options);
+        bool seeded = first_candidates.size() == 2010;
+        for (std::size_t index{}; index < first_candidates.size(); ++index)
+        {
+            const auto& hit = first_candidates[index];
+            seeded &= FastIndexTestAccess::Add(crowded, { hit.identity, hit.parent_identity, hit.name,
+                static_cast<DWORD>(FILE_ATTRIBUTE_ARCHIVE | (index < 1005 ? FILE_ATTRIBUTE_HIDDEN : FILE_ATTRIBUTE_SYSTEM)), 3 });
+        }
+        options.limit = 16;
+        const auto old_cap = crowded.Search(options);
+        check(seeded && old_cap.size() == 16 && std::all_of(old_cap.begin(), old_cap.end(), [](const auto& hit) {
+            return (hit.attributes & excluded) != 0;
+        }), L"index_visibility_fixture_has_over_1000_hidden_and_system_hits_before_legacy_cap");
+        options.excluded_attributes = excluded;
+        check(visible(crowded.Search(options), 16, excluded),
+            L"index_visibility_hidden_and_system_do_not_consume_visible_result_limit");
+        options.excluded_attributes = FILE_ATTRIBUTE_HIDDEN;
+        const auto hidden_only = crowded.Search(options);
+        check(visible(hidden_only, 16, FILE_ATTRIBUTE_HIDDEN) && std::any_of(hidden_only.begin(), hidden_only.end(), [](const auto& hit) {
+            return (hit.attributes & FILE_ATTRIBUTE_SYSTEM) != 0;
+        }), L"index_visibility_hidden_mask_leaves_system_matches_available");
+        options.excluded_attributes = FILE_ATTRIBUTE_SYSTEM;
+        const auto system_only = crowded.Search(options);
+        check(visible(system_only, 16, FILE_ATTRIBUTE_SYSTEM) && std::any_of(system_only.begin(), system_only.end(), [](const auto& hit) {
+            return (hit.attributes & FILE_ATTRIBUTE_HIDDEN) != 0;
+        }), L"index_visibility_system_mask_can_include_hidden_matches");
+        options.excluded_attributes = 0;
+        check(names(crowded, options) == [&] {
+            std::vector<std::wstring> result; for (const auto& hit : old_cap) { result.push_back(hit.name); }
+            std::sort(result.begin(), result.end()); return result;
+        }(), L"index_visibility_zero_mask_preserves_legacy_capped_search");
+        options.excluded_attributes = excluded; options.limit = 0;
+        const auto all_visible = crowded.Search(options);
+        check(visible(all_visible, 40, excluded) && SameSearchResults(crowded, options),
+            L"index_visibility_extension_bucket_and_full_scan_keep_same_complete_visible_set");
+        options.limit = 16; options.prefix = true;
+        check(visible(crowded.Search(options), 16, excluded),
+            L"index_visibility_prefix_filter_applies_before_result_limit");
+        options.prefix = false; options.text = L"EEDLE-";
+        check(visible(crowded.Search(options), 16, excluded),
+            L"index_visibility_substring_filter_applies_before_result_limit");
+        const auto exact_name = all_visible.empty() ? std::wstring{ L"Needle-missing.txt" } : all_visible.front().name;
+        const bool exact_ready = !all_visible.empty() && FastIndexTestAccess::Add(crowded,
+            { identity(9999), root_id, exact_name + L".extra", FILE_ATTRIBUTE_HIDDEN, 4 });
+        options.text = exact_name; options.prefix = true; options.extension.clear(); options.limit = 1;
+        check(exact_ready && names(crowded, options) == std::vector<std::wstring>{ exact_name },
+            L"index_visibility_exact_search_prefix_candidates_exclude_hidden_before_cap");
+        options.text = L"NEEDLE"; options.prefix = false; options.limit = 200;
+        check(visible(crowded.Search(options), 40, excluded),
+            L"index_visibility_sparse_visible_matches_do_not_borrow_excluded_rows");
+
+        FastIndex scoped;
+        FastIndexTestAccess::Reset(scoped, root_id, serial);
+        const auto chosen = identity(10), nested = identity(11), sibling = identity(12), unicode_parent = identity(13);
+        const auto unicode_child = identity(14), hard = identity(20), mutable_id = identity(21);
+        FastIndexTestAccess::Seed(scoped, {
+            { chosen, root_id, L"Chosen", FILE_ATTRIBUTE_DIRECTORY, 1 },
+            { nested, chosen, L"Nested", FILE_ATTRIBUTE_DIRECTORY, 1 },
+            { sibling, root_id, L"ChosenSibling", FILE_ATTRIBUTE_DIRECTORY, 1 },
+            { unicode_parent, root_id, L"Ångström", FILE_ATTRIBUTE_DIRECTORY, 1 },
+            { unicode_child, unicode_parent, L"Каталог", FILE_ATTRIBUTE_DIRECTORY, 1 },
+            { identity(30), chosen, L"scope-hit-visible.txt", FILE_ATTRIBUTE_ARCHIVE, 2 },
+            { identity(31), chosen, L"scope-hit-hidden.txt", FILE_ATTRIBUTE_HIDDEN, 2 },
+            { identity(32), chosen, L"scope-hit-system.txt", FILE_ATTRIBUTE_SYSTEM, 2 },
+            { identity(33), nested, L"scope-hit-nested.txt", FILE_ATTRIBUTE_ARCHIVE, 2 },
+            { identity(34), sibling, L"scope-hit-sibling.txt", FILE_ATTRIBUTE_ARCHIVE, 2 },
+            { hard, chosen, L"hard-source.txt", FILE_ATTRIBUTE_ARCHIVE, 2 },
+            { hard, chosen, L"hard-alias.txt", FILE_ATTRIBUTE_ARCHIVE, 2 },
+            { mutable_id, chosen, L"mutable.txt", FILE_ATTRIBUTE_ARCHIVE, 2 },
+            { identity(35), unicode_child, L"unicode-parent-hit.txt", FILE_ATTRIBUTE_ARCHIVE, 2 } });
+        FastSearchOptions scope; scope.text = L"scope-hit"; scope.path_prefix = L"d:\\chosen\\"; scope.limit = 20;
+        scope.excluded_attributes = excluded;
+        check(names(scoped, scope) == std::vector<std::wstring>{ L"scope-hit-nested.txt", L"scope-hit-visible.txt" },
+            L"index_visibility_recursive_scope_filters_attributes_without_sibling_prefix_leak");
+        scope.direct_children = true;
+        check(names(scoped, scope) == std::vector<std::wstring>{ L"scope-hit-visible.txt" },
+            L"index_visibility_direct_children_filter_preserves_scope_before_limit");
+        scope.path_prefix = L"D:\\ChosenSibling\\";
+        check(names(scoped, scope) == std::vector<std::wstring>{ L"scope-hit-sibling.txt" },
+            L"index_visibility_sibling_scope_does_not_return_other_folder_matches");
+        scope.path_prefix = L"D:\\";
+        check(scoped.Search(scope).empty(), L"index_visibility_direct_drive_root_excludes_nested_matches");
+        scope = {}; scope.text = L"hard-"; scope.excluded_attributes = excluded;
+        const auto hard_hits = scoped.Search(scope);
+        check(hard_hits.size() == 2 && hard_hits[0].identity == hard_hits[1].identity && hard_hits[0].name != hard_hits[1].name,
+            L"index_visibility_retains_distinct_hard_links_for_same_file_identity");
+        scope.text = L"mutable";
+        const bool before_attribute = scoped.Search(scope).size() == 1;
+        const bool became_hidden = FastIndexTestAccess::Apply(scoped,
+            { mutable_id, chosen, L"mutable.txt", FILE_ATTRIBUTE_HIDDEN, 3 }, USN_REASON_BASIC_INFO_CHANGE);
+        check(before_attribute && became_hidden && scoped.Search(scope).empty(),
+            L"index_visibility_usn_attribute_change_hides_previously_cached_name");
+        check(FastIndexTestAccess::Apply(scoped, { mutable_id, chosen, L"mutable.txt", FILE_ATTRIBUTE_ARCHIVE, 4 },
+            USN_REASON_BASIC_INFO_CHANGE) && scoped.Search(scope).size() == 1,
+            L"index_visibility_usn_attribute_change_restores_visible_match");
+
+        FastIndex unicode;
+        FastIndexTestAccess::Reset(unicode, root_id, serial);
+        const std::vector<std::wstring> unicode_names{ L"Ångström.TXT", L"ΟΣ.TXT", L"ПрИвЕт.ТХТ", L"Straße.txt",
+            L"STRASSE.txt", L"éclair.txt", L"e\u0301clair.txt", L"Istanbul.txt", L"İstanbul.txt", L"ıstanbul.txt" };
+        std::vector<Spec> unicode_records;
+        for (std::size_t index{}; index < unicode_names.size(); ++index)
+        { unicode_records.push_back({ identity(100 + index), root_id, unicode_names[index], FILE_ATTRIBUTE_ARCHIVE, 2 }); }
+        FastIndexTestAccess::Seed(unicode, unicode_records);
+        FastSearchOptions query; query.text = L"ångSTRÖM"; query.prefix = true;
+        check(names(unicode, query) == std::vector<std::wstring>{ L"Ångström.TXT" },
+            L"index_unicode_latin_casefold_does_not_depend_on_crt_c_locale");
+        const auto sigma_expected = [&](const std::wstring& text) {
+            std::vector<std::wstring> expected;
+            if (CompareStringOrdinal(unicode_names[1].data(), static_cast<int>(text.size()),
+                text.data(), static_cast<int>(text.size()), TRUE) == CSTR_EQUAL)
+            { expected.push_back(unicode_names[1]); }
+            return expected;
+        };
+        query.text = L"ος";
+        const bool final_sigma = names(unicode, query) == sigma_expected(query.text);
+        query.text = L"οσ";
+        const auto ordinary_sigma = names(unicode, query);
+        check(final_sigma && ordinary_sigma == sigma_expected(query.text) &&
+            ordinary_sigma == std::vector<std::wstring>{ L"ΟΣ.TXT" },
+            L"index_unicode_greek_sigma_variants_follow_windows_ordinal_oracle");
+        query.text = L"привет"; query.extension = L".тхт";
+        check(names(unicode, query) == std::vector<std::wstring>{ L"ПрИвЕт.ТХТ" } && SameSearchResults(unicode, query),
+            L"index_unicode_cyrillic_name_and_extension_bucket_use_same_casefold");
+        FastSearchOptions unicode_scope; unicode_scope.text = L"unicode-parent"; unicode_scope.path_prefix = L"d:\\åNGSTRÖM\\каталог\\";
+        unicode_scope.direct_children = true; unicode_scope.excluded_attributes = excluded;
+        check(names(scoped, unicode_scope) == std::vector<std::wstring>{ L"unicode-parent-hit.txt" },
+            L"index_unicode_folder_scope_and_direct_parent_use_ordinal_comparison");
+        bool ordinal_matrix = true;
+        const std::vector<std::wstring> ordinal_queries{ L"STRASSE", L"straße", L"STRAẞE", L"ÉCLAIR", L"E\u0301CLAIR",
+            L"istanbul", L"İSTANBUL", L"ıSTANBUL" };
+        query.extension.clear();
+        for (const auto& text : ordinal_queries)
+        {
+            query.text = text;
+            std::vector<std::wstring> expected;
+            for (const auto& name : unicode_names)
+            {
+                if (name.size() >= text.size() && CompareStringOrdinal(name.data(), static_cast<int>(text.size()),
+                    text.data(), static_cast<int>(text.size()), TRUE) == CSTR_EQUAL) { expected.push_back(name); }
+            }
+            std::sort(expected.begin(), expected.end()); ordinal_matrix &= names(unicode, query) == expected;
+        }
+        check(ordinal_matrix, L"index_unicode_sharp_s_combining_marks_and_turkish_i_match_windows_ordinal_oracle");
+        FastIndex malformed;
+        FastIndexTestAccess::Reset(malformed, root_id, serial);
+        const auto unusual_name = L"odd-" + std::wstring(1, static_cast<wchar_t>(0xD800)) + L"-é.txt";
+        FastIndexTestAccess::Seed(malformed, { { identity(200), root_id, unusual_name, FILE_ATTRIBUTE_ARCHIVE, 2 } });
+        query = {}; query.text = L"-É.TXT";
+        check(names(malformed, query) == std::vector<std::wstring>{ unusual_name },
+            L"index_unicode_unpaired_utf16_is_preserved_while_other_characters_are_folded");
+        const auto long_name = std::wstring(240, L'é') + L".TXT";
+        (void)FastIndexTestAccess::Add(unicode, { identity(201), root_id, long_name, FILE_ATTRIBUTE_ARCHIVE, 2 });
+        query.text = std::wstring(240, L'É'); query.prefix = true;
+        check(names(unicode, query) == std::vector<std::wstring>{ long_name },
+            L"index_unicode_explicit_length_mapping_keeps_long_filename_and_query");
+        scoped.SetInternalExcludedRoots({ L"d:\\åNGSTRÖM\\каталог" });
+        check(scoped.Search(unicode_scope).empty() && names(scoped, scope) == std::vector<std::wstring>{ L"mutable.txt" },
+            L"index_unicode_internal_exclusion_is_case_insensitive_without_excluding_unrelated_scope");
+        scoped.SetInternalExcludedRoots({ L"D:\\Chosen" });
+        scope.text = L"scope-hit"; scope.path_prefix.clear();
+        check(names(scoped, scope) == std::vector<std::wstring>{ L"scope-hit-sibling.txt" },
+            L"index_unicode_internal_exclusion_keeps_directory_boundary_semantics");
+
+        const auto fixture = fs::absolute(fs::path(L".build") / L"index-search-correctness-fixtures" /
+            (L"pid-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64())));
+        struct Cleanup { fs::path root; ~Cleanup() { std::error_code ignored; fs::remove_all(root, ignored); } } cleanup{ fixture };
+        fs::create_directories(fixture);
+        const auto store = fixture / L"unicode.blink5", visible_store = fixture / L"visibility.blink5";
+        DWORD error{};
+        FastIndex loaded, visible_loaded;
+        bool rebuilt = unicode.Save(store.wstring(), &error) && FastIndex::ValidateStoreFile(store.wstring(), &error) &&
+            loaded.Load(store.wstring(), L"D:\\", &error);
+        query = {}; query.prefix = true;
+        for (const auto& text : ordinal_queries)
+        { query.text = text; rebuilt = rebuilt && names(loaded, query) == names(unicode, query); }
+        query.text = L"привет"; query.extension = L".тхт";
+        rebuilt = rebuilt && names(loaded, query) == std::vector<std::wstring>{ L"ПрИвЕт.ТХТ" } && SameSearchResults(loaded, query);
+        check(rebuilt, L"index_unicode_blk5_load_rebuilds_name_keys_and_derived_unicode_extension_index");
+        options.text = L"needle"; options.extension = L".TXT"; options.limit = 200;
+        check(crowded.Save(visible_store.wstring(), &error) && visible_loaded.Load(visible_store.wstring(), L"D:\\", &error) &&
+            visible(visible_loaded.Search(options), 40, excluded),
+            L"index_visibility_blk5_roundtrip_preserves_attributes_and_visible_limit_semantics");
+        const auto old_latin = unicode_records.front();
+        Spec renamed{ old_latin.identity, old_latin.parent_identity, L"ångSTRÖM.BIN", FILE_ATTRIBUTE_ARCHIVE, 8 };
+        const bool renamed_ok = FastIndexTestAccess::Apply(loaded, old_latin, USN_REASON_RENAME_OLD_NAME) &&
+            FastIndexTestAccess::Apply(loaded, renamed, USN_REASON_RENAME_NEW_NAME);
+        query.text = L"ÅNGSTRÖM"; query.extension = L".TXT";
+        const bool old_bucket_gone = loaded.Search(query).empty(); query.extension = L".bin";
+        check(renamed_ok && old_bucket_gone && names(loaded, query) == std::vector<std::wstring>{ renamed.name } && SameSearchResults(loaded, query),
+            L"index_unicode_usn_case_rename_refreshes_name_cache_and_extension_bucket");
+        check(FastIndexTestAccess::Apply(loaded, renamed, USN_REASON_FILE_DELETE) && loaded.Search(query).empty(),
+            L"index_unicode_usn_delete_removes_cached_name_and_derived_extension_match");
+        WriteUtf8Line(L"search_correctness_unit=" + std::wstring(passed ? L"PASS" : L"FAIL") + L" checks=" + std::to_wstring(checks));
+        return passed;
     }
 
     [[nodiscard]] bool RunLoadIsolationUnitTest()
@@ -1760,6 +2010,20 @@ namespace
 
 int wmain(int argc, wchar_t* argv[])
 {
+    const bool offline_suite = argc > 2 && std::wstring(argv[1]) == L"--search-index-only" &&
+        std::wstring(argv[2]) == L"--suite";
+    if ((argc > 1 && std::wstring(argv[1]) == L"--suite") || offline_suite)
+    {
+        const int suite_argument = offline_suite ? 3 : 2;
+        if (argc == suite_argument + 1)
+        {
+            const std::wstring suite = argv[suite_argument];
+            if (suite == L"search-correctness") { return RunSearchCorrectnessTests() ? 0 : 94; }
+            if (suite == L"search-visibility-wire") { return RunSearchVisibilityWireTests() ? 0 : 95; }
+        }
+        std::wcerr << L"usage: Blink.Phase05.Tests.exe [--search-index-only] --suite search-correctness|search-visibility-wire\n";
+        return 2;
+    }
     if (argc > 1 && std::wstring(argv[1]) == L"--offline-search")
     {
         return RunOfflineSearch(argc, argv);
@@ -1788,13 +2052,18 @@ int wmain(int argc, wchar_t* argv[])
         }
         const int derived = RunDerivedExtensionIndexUnitTest();
         if (derived != 0) { return derived; }
-        return RunLoadIsolationUnitTest() ? 0 : 93;
+        if (!RunLoadIsolationUnitTest()) { return 93; }
+        const bool correctness = RunSearchCorrectnessTests();
+        const bool wire = RunSearchVisibilityWireTests();
+        return correctness && wire ? 0 : 94;
     }
 
     if (!RunProgressSnapshotUnitTest())
     {
         return 90;
     }
+    if (!RunSearchCorrectnessTests()) { return 94; }
+    if (!RunSearchVisibilityWireTests()) { return 95; }
 
     const std::wstring service_exe = FullPath(L"x64\\Debug\\Blink.IndexService.exe");
     const std::wstring data_root = L".build\\phase05-service-data";

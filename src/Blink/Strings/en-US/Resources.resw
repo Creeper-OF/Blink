@@ -265,6 +265,8 @@
   <data name="Search.Exact" xml:space="preserve"><value>Exact name</value></data>
   <data name="Search.ExactPartial" xml:space="preserve"><value>“{0}”: showing {1} items; exact results could not be fully checked.</value></data>
   <data name="Search.ExactLimit" xml:space="preserve"><value>Name candidates reached the per-volume limit of {0}. Exact matches may be missing. Narrow the scope.</value></data>
+  <data name="Search.IncompletePartial" xml:space="preserve"><value>“{0}”: showing {1} items; some matching results have not been checked.</value></data>
+  <data name="Search.IncompleteLimit" xml:space="preserve"><value>The per-volume limit of {0} candidates was reached. Results may be missing. Narrow the scope or retry.</value></data>
   <data name="NewFolder.Create" xml:space="preserve"><value>Create</value></data>
   <data name="NewFolder.Name" xml:space="preserve"><value>Folder name</value></data>
   <data name="NewFolder.InvalidName" xml:space="preserve"><value>Enter a valid name without paths, reserved names, or trailing dots/spaces.</value></data>

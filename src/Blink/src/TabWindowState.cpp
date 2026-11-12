@@ -19,15 +19,19 @@ namespace blink::app
     { if (!automatic_refresh) { LeaveSearch(); } }
     SearchQuery TabRecord::SearchIntent(bool reuse_committed) const
     {
+        const DWORD excluded_attributes = FILE_ATTRIBUTE_SYSTEM |
+            (state->GetVisibilityPolicy().show_hidden_items ? 0 : FILE_ATTRIBUTE_HIDDEN);
         if (reuse_committed)
         {
-            if (search_snapshot) { return search_snapshot->query; }
-            return search_state->Snapshot().query;
+            auto query = search_snapshot ? search_snapshot->query : search_state->Snapshot().query;
+            query.excluded_attributes = excluded_attributes;
+            return query;
         }
         SearchQuery query{ search_draft };
         query.scope = search_scope; query.mode = search_mode;
         query.selected_volumes = search_selected_volumes;
         query.include_subfolders = search_include_subfolders;
+        query.excluded_attributes = excluded_attributes;
         const auto location = state->PresentationSnapshot().committed_location;
         if (query.scope == SearchScope::FollowLocation)
         { query.scope = location.IsFolder() ? SearchScope::CurrentVolume : SearchScope::AllLocalVolumes; }

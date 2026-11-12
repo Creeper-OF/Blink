@@ -35,8 +35,8 @@ namespace blink::app
         winrt::Windows::Foundation::IAsyncAction work_{ nullptr };
     };
 
-    // One response per volume, including Busy. The optional raw transport
-    // shares the production generation checks without opening a real pipe.
+    // Busy returns immediately; a rejected visibility command may fall back
+    // once to legacy Search. Raw transport shares the production checks.
     [[nodiscard]] SearchCoordinator::ExchangeFunction MakeSearchExchange(
         const std::shared_ptr<SearchState>& state,
         SearchCoordinator::ExchangeFunction raw_transport = {});

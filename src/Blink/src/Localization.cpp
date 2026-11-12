@@ -298,6 +298,8 @@ namespace blink::app
                 { L"Search.Exact", L"Exact name" },
                 { L"Search.ExactPartial", L"“{0}”: showing {1} items; exact results could not be fully checked." },
                 { L"Search.ExactLimit", L"Name candidates reached the per-volume limit of {0}. Exact matches may be missing. Narrow the scope." },
+                { L"Search.IncompletePartial", L"“{0}”: showing {1} items; some matching results have not been checked." },
+                { L"Search.IncompleteLimit", L"The per-volume limit of {0} candidates was reached. Results may be missing. Narrow the scope or retry." },
                 { L"App.Title", L"Blink" },
                 { L"Nav.Places", L"Places" },
                 { L"Nav.Drives", L"Drives" },

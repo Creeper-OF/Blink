@@ -77,6 +77,8 @@ namespace blink::app
         if (query.text.empty() || query.text.size() > 32767 || query.text.find(L'\0') != std::wstring::npos ||
             std::all_of(query.text.begin(), query.text.end(), [](wchar_t c) { return std::iswspace(c) != 0; }) ||
             query.limit == 0 || query.limit > 1000 ||
+            (query.excluded_attributes != 0 && query.excluded_attributes != FILE_ATTRIBUTE_SYSTEM &&
+                query.excluded_attributes != (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) ||
             (query.scope != SearchScope::AllLocalVolumes && query.scope != SearchScope::CurrentFolder &&
                 query.scope != SearchScope::CurrentVolume && query.scope != SearchScope::SelectedVolumes &&
                 query.scope != SearchScope::SelectedFolder) ||
@@ -98,8 +100,22 @@ namespace blink::app
     {
         blink::index::ipc::Request request;
         const bool folder_scope = query.scope == SearchScope::CurrentFolder || query.scope == SearchScope::SelectedFolder;
-        request.type = folder_scope && !query.include_subfolders ?
-            blink::index::ipc::RequestType::SearchDirectChildren : blink::index::ipc::RequestType::Search;
+        const bool direct_children = folder_scope && !query.include_subfolders;
+        if (query.excluded_attributes == 0)
+        {
+            request.type = direct_children ? blink::index::ipc::RequestType::SearchDirectChildren :
+                blink::index::ipc::RequestType::Search;
+        }
+        else if ((query.excluded_attributes & FILE_ATTRIBUTE_HIDDEN) != 0)
+        {
+            request.type = direct_children ? blink::index::ipc::RequestType::SearchVisibleDirectChildren :
+                blink::index::ipc::RequestType::SearchVisible;
+        }
+        else
+        {
+            request.type = direct_children ? blink::index::ipc::RequestType::SearchWithHiddenDirectChildren :
+                blink::index::ipc::RequestType::SearchWithHidden;
+        }
         request.volume_root = SearchDriveRoot(root);
         request.limit = query.mode == SearchMode::Exact ? kSearchCandidateLimit : query.limit;
         request.prefix = query.mode == SearchMode::Prefix || query.mode == SearchMode::Exact;
@@ -155,7 +171,9 @@ namespace blink::app
         if (reply.response.results.size() > wire_limit)
         { volume.error = ERROR_INVALID_DATA; volume.stage = VolumeIndexStage::Unavailable; return volume; }
         volume.searched = true;
-        volume.query_incomplete = query.mode == SearchMode::Exact && reply.response.results.size() >= kSearchCandidateLimit;
+        volume.query_incomplete =
+            (query.mode == SearchMode::Exact && reply.response.results.size() >= kSearchCandidateLimit) ||
+            (query.excluded_attributes != 0 && reply.legacy_search_visibility && reply.response.results.size() >= wire_limit);
         volume.limit_reached = query.mode != SearchMode::Exact && reply.response.results.size() >= query.limit;
         const auto folder = CanonicalPath(query.folder);
         for (const auto& hit : reply.response.results)
@@ -175,6 +193,7 @@ namespace blink::app
                 volume.results.clear();
                 return volume;
             }
+            if ((hit.attributes & query.excluded_attributes) != 0) { continue; }
             if (query.mode == SearchMode::Exact && !EqualPath(hit.name, query.text)) { continue; }
             if (folder_scope && !InsideFolder(path, folder, query.include_subfolders)) { continue; }
             SearchResult result{ volume.root, hit };
@@ -196,6 +215,13 @@ namespace blink::app
         snapshot_.stage = SearchStage::Searching;
         snapshot_.error = ERROR_SUCCESS;
         if (!retry) { snapshot_.volumes.clear(); snapshot_.scope_identity = {}; }
+        else
+        {
+            // A capped legacy/exact reply is not a finished volume. Explicit
+            // retry must reach a newly upgraded service or changed index.
+            for (auto& volume : snapshot_.volumes)
+            { if (volume.query_incomplete) { volume.searched = false; } }
+        }
         snapshot_.query = std::move(query);
         return snapshot_.generation;
     }

@@ -3657,15 +3657,16 @@ int wmain(int argc, wchar_t* argv[])
         if (argc == 3 && std::wstring(argv[1]) == L"--suite")
         {
             const std::wstring suite = argv[2];
-            if (suite == L"search-response" || suite == L"search-scope")
+            if (suite == L"search-response" || suite == L"search-scope" || suite == L"search-visibility")
             {
                 winrt::init_apartment(winrt::apartment_type::multi_threaded);
-                const bool passed = suite == L"search-response" ? RunSearchResponseTests() : RunSearchScopeCacheTests();
+                const bool passed = suite == L"search-response" ? RunSearchResponseTests() :
+                    suite == L"search-scope" ? RunSearchScopeCacheTests() : RunSearchVisibilityTests();
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
         }
-        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope]"
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility]"
             " or --live-index-probe <options>\n";
         return 2;
     }
@@ -3695,6 +3696,7 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunSearchExactTests();
     passed &= RunSearchResponseTests();
     passed &= RunSearchScopeCacheTests();
+    passed &= RunSearchVisibilityTests();
     passed &= RunSearchContextMenuTests();
     passed &= RunFileOperationTests();
     passed &= RunDirectoryOperationTargetTests();

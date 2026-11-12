@@ -110,18 +110,43 @@ namespace blink::app
             if (snapshot.stage != SearchStage::Searching || !state->IsCurrent(generation))
             { return IndexRpcResult{ false, ERROR_CANCELLED }; }
 
-            IndexRpcResult reply;
-            if (raw_transport) { reply = raw_transport(std::move(request)); }
-            else if (client->IsConnected() || client->Connect(1000, &reply.error))
-            {
+            const auto exchange_once = [&](ipc::Request next) {
                 if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
-                reply.received = client->Send(std::move(request), reply.response, 5000, &reply.error);
-                if (reply.received) { reply.expected_request_id = reply.response.request_id; }
-                else { client->Disconnect(); }
+                IndexRpcResult reply;
+                if (raw_transport) { reply = raw_transport(std::move(next)); }
+                else if (client->IsConnected() || client->Connect(1000, &reply.error))
+                {
+                    if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
+                    reply.received = client->Send(std::move(next), reply.response, 5000, &reply.error);
+                    if (reply.received) { reply.expected_request_id = reply.response.request_id; }
+                    else { client->Disconnect(); }
+                }
+                if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
+                return reply;
+            };
+
+            const bool filtered = request.type == ipc::RequestType::SearchVisible ||
+                request.type == ipc::RequestType::SearchVisibleDirectChildren ||
+                request.type == ipc::RequestType::SearchWithHidden ||
+                request.type == ipc::RequestType::SearchWithHiddenDirectChildren;
+            if (!filtered) { return exchange_once(std::move(request)); }
+
+            auto reply = exchange_once(request);
+            const bool unsupported = ValidateIndexReply(reply) == ERROR_SUCCESS &&
+                ((reply.response.status == ipc::ResponseStatus::Unsupported &&
+                    (reply.response.error == ERROR_NOT_SUPPORTED || reply.response.error == ERROR_INVALID_FUNCTION)) ||
+                 (reply.response.status == ipc::ResponseStatus::InvalidRequest &&
+                    reply.response.error == ERROR_INVALID_PARAMETER));
+            if (unsupported)
+            {
+                const bool direct = request.type == ipc::RequestType::SearchVisibleDirectChildren ||
+                    request.type == ipc::RequestType::SearchWithHiddenDirectChildren;
+                request.type = direct ? ipc::RequestType::SearchDirectChildren : ipc::RequestType::Search;
+                reply = exchange_once(std::move(request));
+                reply.legacy_search_visibility = true;
             }
-            if (!state->IsCurrent(generation)) { return IndexRpcResult{ false, ERROR_CANCELLED }; }
             // Collect must reach the other volumes after Busy/IO_PENDING.
-            // An explicit retry retains the successful volumes already found.
+            // Only a rejected new command gets one legacy compatibility call.
             return reply;
         };
     }

@@ -25,6 +25,12 @@ namespace blink::index::ipc
         StopOperation = 6,
         // Existing Search payload, restricted to direct children of path_prefix.
         SearchDirectChildren = 7,
+        // Existing payload; exclude Hidden/System matches before the result cap.
+        SearchVisible = 8,
+        SearchVisibleDirectChildren = 9,
+        // Include Hidden matches while still excluding System before the cap.
+        SearchWithHidden = 10,
+        SearchWithHiddenDirectChildren = 11,
     };
 
     enum class ResponseStatus : std::uint32_t

@@ -11,7 +11,7 @@
 Debug/Release已各1648 PASS/0 FAIL/4既有符号链接权限SKIP，249输入/388中英fallback资源一致。窗口功能仍待完整通过：5/1标题假设失败和0/1前台中断分档，两进程均exit0/夹具已清，不能拼作成功。用户转为整体审计及功能优先工作流，默认G06b未替换；后续逐功能脚本验证，不重新编译未变源码。原始记录归本轮integration，审计原生事实见 `.build/maintenance/code-audit/native-validation.json`。
 
 ```powershell
-$blinkBinary = '.build\search-response\runtime\Release\Blink.exe'
+$blinkBinary = '.build\search-correctness\runtime\Release\Blink.exe'
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature NewFolder -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Rename -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Delete -Binary $blinkBinary
@@ -22,3 +22,5 @@ $blinkBinary = '.build\search-response\runtime\Release\Blink.exe'
 普通回收站删除的导航UI、真实鼠标、常用位置及盘根实际写入、IME/UNC与完整主题/DPI/多屏/读屏矩阵仍需分别验证。其它对象菜单、外部剪贴板完成反馈及完整 G06/P0 继续按 README 推进。当前正式索引和服务不在本轮修改范围；生成物集中在本轮 stage，保留有效缓存、当前运行版本和最近两个成功源码恢复点。
 
 2026-11-12搜索批次已将原G06c候选归并到上述search-response候选，旧runtime/service-build已核对归属后清理，原GUI分档记录及Git源码保留。新候选Release原生1688/0/4通过，但本页7/8/5项窗口功能仍未完整运行；不能用搜索子集或完整原生通过替代。见[当前候选与搜索验证](SEARCH_RESPONSE_VALIDATION.md)。
+
+当前候选继续归并到A02/A04的search-correctness批次，Release应用原生1744/0/4通过，原侧栏7/8/5项窗口事实保持待验；上批A01/A03 runtime/service-build已校验后清理。详情仍见[搜索验证](SEARCH_RESPONSE_VALIDATION.md)。

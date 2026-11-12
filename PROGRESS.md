@@ -1,5 +1,15 @@
 # Blink Progress
 
+## 搜索显示策略与Windows Unicode匹配 — 2026-11-12
+
+- A02/A04按三个模块并行实现，主模型统一Release单并发集成。FastSearchOptions.excluded_attributes默认0保旧调用；实际Tab绑定0/4/6语义，普通模式排Hidden|System，显示隐藏仍排System，索引在候选/路径重建/limit前过滤。Substring/Prefix/Extension/Exact候选、直接子目录和硬链接沿原算法。
+- 只读命令8/9排两类、10/11只排System，复用原帧字段，旧5/7、wire版本1、pipe及BLK5不变。生产factory仅在合法相关的旧拒绝87或明确Unsupported时回退一次，Busy/权限/传输/关联/版本错误不重试。旧返回顶满cap明确query_incomplete；Retry重查未完整卷并保留完整成功卷，不缓存过期服务能力。已接通通用未完整文案/实际上限及重试按钮。
+- A04保留ASCII快路径，名称/扩展用invariant uppercase并受ordinal等价约束，Load和USN重建派生键。扩展原始后缀去掉间接CRT locale依赖；路径前缀、内部排除、排序改ordinal，减少重复NLS映射/分配；没有Unicode规范化或拼写展开。
+- 五功能组独立通过Response15/Scope25/Visibility56/Index31/Wire16；随后Phase1完整1744 PASS/0 FAIL/4既有1314权限SKIP（32.462秒），Phase05离线58 PASS/0 FAIL/0 SKIP（3.070秒，含旧11/core31/wire16，progress摘要另过）。新103项已分别计入对应全组，不与功能子集重复相加；251冻结输入/390中英fallback资源一致，Debug未重建，Phase05无参数服务原型入口未运行。
+- 首轮完整构建744.123秒：产品输出已成功，新增测试一处int→DWORD列表初始化C2397；修为显式转换，仅补Phase05工程27.355秒。Core首测30/1：测试错误假设最终sigma与大写Sigma总等价，Win32探针确认该机最终形不等价、普通形等价；断言改实际ordinal oracle且保留普通形正例，仅补同工程8.031秒并重测受影响Index/Wire，其余三组沿用同SHA通过结果。失败、源哈希差异和探针摘要已分档，未放宽生产匹配或重复编译产品。
+- 当前候选Blink.exe SHA `b0091e56fad3300928e34fa879949acb72d80ba36c3e7bc339832c4dd00a22f4`。默认G06b/PID15036、正式服务6848及其二进制保持，未直接改写或重建正式索引，原Clipboard保持；旧服务兼容已测，但新限额前过滤和Unicode实现完全生效仍需更新服务。G06c侧栏7/8/5窗口、真实首屏/Everything及完整环境矩阵未验。
+- 本轮清理可核算231313557字节、321文件/146目录/1测试链接，含被替代的A01/A03候选、已结束夹具、已校验重复测试EXE/PDB、重复日志/哈希草稿及完成的一次性脚本。保留当前唯一候选及匹配服务符号、规范测试目录的EXE/PDB、有效增量缓存/15包和原2成功恢复点；固定.build/tmp留给现运行Shell。原始事实归.build/search-correctness/integration，见[验证与边界](docs/SEARCH_RESPONSE_VALIDATION.md)。
+
 ## 搜索响应与单次目录范围复用 — 2026-11-12
 
 - 本轮按用户要求完成后暂停：3个独立模块分工、主模型统一集成和单并发构建；只实现A01/A03，不扩索引格式、服务协议或远端范围。新增业务在既有搜索模块，未继续增加应用main职责。

@@ -10,10 +10,10 @@
 #include <chrono>
 #include <cstddef>
 #include <cstring>
-#include <cwctype>
 #include <functional>
 #include <limits>
 #include <new>
+#include <stdexcept>
 #include <string_view>
 #include <utility>
 
@@ -78,13 +78,61 @@ namespace blink::index
             return buffer;
         }
 
-        [[nodiscard]] std::wstring Lower(std::wstring value)
+        [[nodiscard]] std::wstring FoldCase(std::wstring value)
         {
+            bool non_ascii = false;
             for (wchar_t& character : value)
             {
-                character = static_cast<wchar_t>(std::towlower(character));
+                if (character >= L'a' && character <= L'z')
+                { character = static_cast<wchar_t>(character - (L'a' - L'A')); }
+                else if (character > 0x7F) { non_ascii = true; }
+            }
+            if (!non_ascii) { return value; }
+            if (value.size() > static_cast<std::size_t>((std::numeric_limits<int>::max)()))
+            { throw std::length_error("Index case mapping input is too long"); }
+
+            const int length = static_cast<int>(value.size());
+            // File-name matching is ordinal and independent of the CRT/user
+            // locale. Keep this derived key out of BLK5 and rebuild on Load.
+            const int required = LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE,
+                value.data(), length, nullptr, 0, nullptr, nullptr, 0);
+            if (required > 0)
+            {
+                std::wstring mapped(static_cast<std::size_t>(required), L'\0');
+                if (required == length && LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, value.data(), length,
+                    mapped.data(), required, nullptr, nullptr, 0) == required &&
+                    CompareStringOrdinal(value.data(), length, mapped.data(), required, TRUE) == CSTR_EQUAL)
+                { return mapped; }
+            }
+
+            // NLS can expand a character (for example sharp S) or reject an
+            // unpaired UTF-16 surrogate. Never turn that into an extra ordinal
+            // equivalence, discard the name, or split a valid surrogate pair.
+            for (std::size_t offset = 0; offset < value.size();)
+            {
+                if (value[offset] <= 0x7F) { ++offset; continue; }
+                const int count = value[offset] >= 0xD800 && value[offset] <= 0xDBFF &&
+                    offset + 1 < value.size() && value[offset + 1] >= 0xDC00 && value[offset + 1] <= 0xDFFF ? 2 : 1;
+                wchar_t mapped[2]{};
+                if (LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, value.data() + offset, count,
+                    mapped, count, nullptr, nullptr, 0) == count &&
+                    CompareStringOrdinal(value.data() + offset, count, mapped, count, TRUE) == CSTR_EQUAL)
+                { std::copy_n(mapped, count, value.data() + offset); }
+                offset += static_cast<std::size_t>(count);
             }
             return value;
+        }
+
+        [[nodiscard]] std::wstring FoldExtension(const std::wstring& name)
+        {
+            const auto separator = name.find_last_of(L"\\/");
+            const auto dot = name.find_last_of(L'.');
+            if (dot == std::wstring::npos || dot == 0 ||
+                (separator != std::wstring::npos && dot < separator)) { return {}; }
+            // Core::FileExtension also lowercases through the CRT locale.
+            // Read the raw suffix so extension keys use the same Windows fold
+            // as cached names and incoming search predicates.
+            return FoldCase(name.substr(dot));
         }
 
         [[nodiscard]] bool StartsWithInsensitive(const std::wstring& value, const std::wstring& prefix)
@@ -93,7 +141,8 @@ namespace blink::index
             {
                 return false;
             }
-            return Lower(value.substr(0, prefix.size())) == Lower(prefix);
+            return CompareStringOrdinal(value.data(), static_cast<int>(prefix.size()),
+                prefix.data(), static_cast<int>(prefix.size()), TRUE) == CSTR_EQUAL;
         }
 
         void MarkFastSearchTiming(
@@ -310,7 +359,9 @@ namespace blink::index
 
         [[nodiscard]] bool SamePathInsensitive(const std::wstring& left, const std::wstring& right)
         {
-            return Lower(core::NormalizePath(left)) == Lower(core::NormalizePath(right));
+            const auto normalized_left = core::NormalizePath(left), normalized_right = core::NormalizePath(right);
+            return normalized_left.size() == normalized_right.size() &&
+                StartsWithInsensitive(normalized_left, normalized_right);
         }
 
         void SetError(DWORD* error, DWORD value) noexcept
@@ -358,7 +409,7 @@ namespace blink::index
 
     void FastIndex::AddExtensionIndexEntryUnlocked(const Link& link)
     {
-        const std::wstring extension = Lower(core::FileExtension(link.name));
+        const std::wstring extension = FoldExtension(link.name);
         if (!extension.empty())
         {
             extension_index_[extension].insert(link.identity);
@@ -387,7 +438,7 @@ namespace blink::index
                 links->second.end(),
                 [&extension](const Link& link)
                 {
-                    return Lower(core::FileExtension(link.name)) == extension;
+                    return FoldExtension(link.name) == extension;
                 });
             if (still_present)
             {
@@ -410,7 +461,7 @@ namespace blink::index
             (void)identity;
             for (Link& link : links)
             {
-                link.folded_name = Lower(link.name);
+                link.folded_name = FoldCase(link.name);
                 AddExtensionIndexEntryUnlocked(link);
             }
         }
@@ -433,7 +484,7 @@ namespace blink::index
                 continue;
             }
 
-            normalized_roots.push_back(Lower(normalized));
+            normalized_roots.push_back(normalized);
 
             // Resolve the exclusion root once, outside FastIndex::mutex_.
             // Incremental USN records carry stable parent identities, so the
@@ -868,16 +919,17 @@ namespace blink::index
 
     bool FastIndex::IsInternalExcludedResolvedPathUnlocked(const std::wstring& full_path) const
     {
-        const std::wstring normalized_path = Lower(core::NormalizePath(full_path));
+        if (internal_excluded_roots_.empty()) { return false; }
+        const std::wstring normalized_path = core::NormalizePath(full_path);
         if (normalized_path.empty())
         {
             return false;
         }
         for (const std::wstring& root : internal_excluded_roots_)
         {
-            if (normalized_path == root ||
-                StartsWithInsensitive(normalized_path, root + L"\\") ||
-                StartsWithInsensitive(normalized_path, root + L"/"))
+            if (normalized_path.size() >= root.size() && StartsWithInsensitive(normalized_path, root) &&
+                (normalized_path.size() == root.size() || normalized_path[root.size()] == L'\\' ||
+                    normalized_path[root.size()] == L'/'))
             {
                 return true;
             }
@@ -959,7 +1011,7 @@ namespace blink::index
         {
             if (existing.parent_identity == link.parent_identity && existing.name == link.name)
             {
-                if (existing.folded_name.empty()) { existing.folded_name = Lower(existing.name); }
+                if (existing.folded_name.empty()) { existing.folded_name = FoldCase(existing.name); }
                 const bool old_directory = (existing.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                 existing.attributes = link.attributes;
                 existing.last_usn = link.last_usn;
@@ -986,7 +1038,7 @@ namespace blink::index
             }
         }
         Link cached = link;
-        cached.folded_name = Lower(cached.name);
+        cached.folded_name = FoldCase(cached.name);
         links.push_back(std::move(cached));
         AddExtensionIndexEntryUnlocked(link);
         ++stats_.links;
@@ -1021,7 +1073,7 @@ namespace blink::index
         {
             if (existing.parent_identity == link.parent_identity && existing.name == link.name)
             {
-                removed_extensions.insert(Lower(core::FileExtension(existing.name)));
+                removed_extensions.insert(FoldExtension(existing.name));
             }
         }
         links.erase(
@@ -1170,11 +1222,11 @@ namespace blink::index
             MarkFastSearchTiming(timing->search_start_us, timing->request_received);
         }
 
-        const std::wstring query = Lower(options.text);
-        const std::wstring extension = Lower(options.extension);
+        const std::wstring query = FoldCase(options.text);
+        const std::wstring extension = FoldCase(options.extension);
         const std::wstring path_prefix = options.path_prefix.empty()
             ? std::wstring{}
-            : Lower(core::NormalizePath(options.path_prefix));
+            : core::NormalizePath(options.path_prefix);
         std::wstring direct_parent = path_prefix;
         while (direct_parent.size() > 3 && direct_parent.back() == L'\\') { direct_parent.pop_back(); }
 
@@ -1192,8 +1244,9 @@ namespace blink::index
         // reconstruction.  Keep a per-query parent-path cache only for the
         // candidates that survive those predicates; the cache is discarded
         // with this search and does not change the persistent index shape.
+        const auto normalized_volume_root = core::NormalizePath(snapshot_.volume_root);
         const bool path_prefix_is_volume_root = !path_prefix.empty() &&
-            path_prefix == Lower(core::NormalizePath(snapshot_.volume_root));
+            path_prefix.size() == normalized_volume_root.size() && StartsWithInsensitive(path_prefix, normalized_volume_root);
 
         std::unordered_map<core::FileIdentity, std::wstring, IdentityHash> resolved_parent_paths;
         std::unordered_set<core::FileIdentity, IdentityHash> resolving_parents;
@@ -1270,6 +1323,7 @@ namespace blink::index
         {
             for (const Link& link : links)
             {
+                if ((link.attributes & options.excluded_attributes) != 0) { continue; }
                 const std::wstring& name = link.folded_name;
                 const bool text_match = query.empty() ||
                     (options.prefix ? name.starts_with(query) : name.find(query) != std::wstring::npos);
@@ -1391,7 +1445,8 @@ namespace blink::index
             results.end(),
             [](const FastSearchResult& left, const FastSearchResult& right)
             {
-                return Lower(left.full_path) < Lower(right.full_path);
+                return CompareStringOrdinal(left.full_path.data(), static_cast<int>(left.full_path.size()),
+                    right.full_path.data(), static_cast<int>(right.full_path.size()), TRUE) == CSTR_LESS_THAN;
             });
         if (timing != nullptr)
         {

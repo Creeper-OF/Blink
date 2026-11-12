@@ -13,9 +13,9 @@
 | 编号/优先级 | 源码证据与触发条件 | 结论、处理顺序 |
 | --- | --- | --- |
 | A01 / P1，已修 | 审计基线abf4f9f的Busy重试占约120秒；逐盘Collect仅最终publish | 本轮MakeSearchExchange每卷一次有界响应，Busy交Collect继续其它盘；Retry保留成功卷，取消/所有权保留。独立15项及Release完整1688/0/4通过；真实UI首屏待测，仍逐卷串行 |
-| A02 / P2 | `FastIndex.cpp` 1347附近先按 limit 截断，`SearchViewModel.cpp` 14起后过滤 Hidden/System | 隐藏匹配可挤掉后续可见结果。需以真实“隐藏项占满上限”夹具修正；当前有上限提示，不当作完整 known-miss |
+| A02 / P2，源码已修/服务待更新 | 审计基线先limit后按Hidden/System过滤，可见命中被挤占 | 本批在索引候选/路径/limit前按窗口0/4/6策略过滤；新命令兼容原帧，旧服务截断明确未完整。应用56/索引31/帧16独立项及1744/0/4、离线58/0/0通过；完整生效需更新正式服务 |
 | A03 / P2，已修 | 审计基线逐结果重复解析scope和parent目录链 | 本轮按单次Filter的精确canonical拼写复用，批尾鲜读实际scope与唯一parent，Open/Locate仍独立重验。独立25项及Release全回归通过；200同父读取1002→8为调用计数，非UI耗时 |
-| A04 / P2 | `FastIndex.cpp` 81用`std::towlower`，源码未设置CRT locale | 非ASCII大小写匹配需修正并补例。采用明确一致的Windows折叠；此项为静态定位，未在正式服务复现，不编造漏搜数据 |
+| A04 / P2，源码已修/服务待更新 | 审计基线std::towlower依赖默认CRT locale，非ASCII匹配不一致 | 本批使用Windows invariant uppercase/ordinal，名称与原始扩展缓存一致，Load/USN重建；无全局locale或拼写规范化。31项核心例及BLK5往返通过；Greek最终形按实际系统ordinal oracle，不假定语言学等价 |
 | A05 / P1，工具 | 旧菜单脚本仍期待Copy未开放；旧CommandBar脚本只恢复Unicode文本而实际会Copy/Cut | 两旧入口已在任何文件/GUI/剪贴板副作用前退出，停止推荐；当前功能脚本单列。不是新增产品防护机制 |
 | A06 / P2，文档 | C06常用项仍称无右键，但main已绑定且G06a验证Quick Home Open；若干链接指向已清理`.build` | 按真实已接入/待验同步台账，历史路径改为溯源文字和交接摘要，避免恢复旧构建来补链接 |
 | A07 / P2，结构 | `PHASE1_PLAN.md`153要求不继续把业务塞入main；当前`main.cpp`约9310行，本轮侧栏接线也继续增加其中内容 | 存在模块化债务。新增交互优先进入已有controller/presentation；随后做小范围归拢，不能以审计为由整仓重写或新造框架 |
@@ -26,6 +26,8 @@
 CRT大小写语义参考微软[towlower](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/tolower-tolower-towlower-tolower-l-towlower-l?view=msvc-170)与[默认C locale](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170)说明；实际修正仍以当前SDK及功能例为准。
 
 ## 当前功能与验证事实
+
+A02/A04后续批次已完成源码与离线验证：Release应用1744/0/4，索引离线58/0/0，五功能组15/25/56/31/16，251输入/390资源。首轮产品已编译，仅测试DWORD与Greek预期修正后增量补Phase05工程，失败事实保留。Debug未重建；正式服务与默认G06b未更新，窗口和真实首屏仍待验。当前候选归search-correctness，详见[搜索修正验证](SEARCH_RESPONSE_VALIDATION.md)。
 
 2026-11-12后续搜索批次已完成A01/A03：Release单并发365.200秒，独立Response15/Scope25项通过，完整原生31.329秒、1688/0/4，249输入/388资源一致。Debug本批未重建；默认G06b及正式服务未换。新候选归search-response，旧G06c重复候选已清，仍保留其源代码和GUI待验事实。详见[搜索响应与范围](SEARCH_RESPONSE_VALIDATION.md)。
 
@@ -43,9 +45,9 @@ CRT大小写语义参考微软[towlower](https://learn.microsoft.com/en-us/cpp/c
 
 源码/依赖/当前缓存/候选/夹具/用户索引按[维护规则](WORKSPACE_MAINTENANCE.md)分类。有效增量缓存保留，旧构建与临时物按实际使用和SHA确认后清理，记录范围和字节；保留当前唯一待验候选及最近两个成功恢复点，不积累重试副本。
 
-## 后续待办（本轮结束后暂停）
+## 后续待办
 
-1. A01/A03已修；继续A02可见性与limit、A04非ASCII折叠，真实首屏/Everything同机基准另测；不改索引磁盘格式、不增加第二套搜索引擎。
+1. A01–A04源码已修；更新正式服务并核对新命令/Unicode，真实首屏/Everything同机基准另测；BLK5不变，不增加第二套搜索引擎。
 2. 保留G06c现有实现，按功能入口分别验证；未测完成前不替换用户默认运行版。
 3. 再继续外部Clipboard完成反馈及其它高频操作缺口；菜单细节、体积精简与完整环境矩阵按实际优先级推进。
 
@@ -53,4 +55,6 @@ CRT大小写语义参考微软[towlower](https://learn.microsoft.com/en-us/cpp/c
 
 先前审计批次收尾实际可核算清理29405字节：其中过期生成收尾模板29165字节，原生夹具/临时缓存240字节，移除78目录和2测试链接；当前大块为有效依赖/缓存及唯一待验候选，继续保留，未为凑清理量删除。GUI自清与净磁盘变化另计。详细范围见本机code-audit/cleanup-summary.json。
 
-本次搜索批次另清理可核算220683754字节、313文件/143目录/1测试链接；范围为被替代的G06c runtime/service-build、自有已结束夹具、重复日志和完成的一次性脚本。保留当前候选、匹配服务符号、有效缓存/15包、默认运行版及原2成功恢复点，正式数据不清。详细记录在本机search-response/integration/cleanup-summary.json；这是累计删除量，不是磁盘净变化。
+上批A01/A03另清理可核算220683754字节、313文件/143目录/1测试链接；范围为被替代的G06c runtime/service-build、自有已结束夹具、重复日志和完成的一次性脚本。保留当前候选、匹配服务符号、有效缓存/15包、默认运行版及原2成功恢复点，正式数据不清。详细记录在本机search-response/integration/cleanup-summary.json；这是累计删除量，不是磁盘净变化。
+
+本批A02/A04另清理可核算231313557字节、321文件/146目录/1链接，保留当前唯一候选/匹配符号、有效缓存/15包和两个既有成功恢复点。清理范围与失败修复事实在search-correctness/integration，不以待窗口/待服务更新候选冒充生产发布；删除量非磁盘净变化。

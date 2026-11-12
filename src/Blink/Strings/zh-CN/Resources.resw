@@ -265,6 +265,8 @@
   <data name="Search.Exact" xml:space="preserve"><value>名称完全匹配</value></data>
   <data name="Search.ExactPartial" xml:space="preserve"><value>“{0}”：显示 {1} 项，精确结果未能完全查询。</value></data>
   <data name="Search.ExactLimit" xml:space="preserve"><value>名称候选达到每卷 {0} 项上限，精确结果可能遗漏。请缩小范围。</value></data>
+  <data name="Search.IncompletePartial" xml:space="preserve"><value>“{0}”：显示 {1} 项，部分匹配结果尚未查询。</value></data>
+  <data name="Search.IncompleteLimit" xml:space="preserve"><value>候选达到每卷 {0} 项上限，结果可能遗漏。请缩小范围或重试。</value></data>
   <data name="NewFolder.Create" xml:space="preserve"><value>创建</value></data>
   <data name="NewFolder.Name" xml:space="preserve"><value>文件夹名称</value></data>
   <data name="NewFolder.InvalidName" xml:space="preserve"><value>请输入有效的名称，勿使用路径、保留名称或末尾的点和空格。</value></data>

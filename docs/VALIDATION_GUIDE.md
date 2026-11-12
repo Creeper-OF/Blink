@@ -19,12 +19,31 @@
 .\scripts\run-blink-search-smoke.ps1 -Configuration Release -Feature All
 ```
 
-`All` 顺序启动 `--suite search-response`（15项）与 `--suite search-scope`（25项）两个独立原生进程；也能用 `-Feature Response` 或 `-Feature Scope` 单独复测。每项保存日志、退出码、精确检查数及二进制SHA。脚本不编译、不操作前台或正式服务；完整无参数原生回归另跑。详细约定及实际结果见[搜索功能验证](SEARCH_RESPONSE_VALIDATION.md)。调用次数和假IPC行为不能当成真实窗口首屏或Everything对比。
+`All` 顺序启动五个独立进程，也能只选择其中一个功能复测：
+
+| Feature | 原生组 | 预期检查数 |
+| --- | --- | --- |
+| Response | search-response | 15 |
+| Scope | search-scope | 25 |
+| Visibility | search-visibility | 56 |
+| Index | search-correctness | 31 |
+| Wire | search-visibility-wire | 16 |
+
+前三组使用Phase1测试程序；后两组使用Phase05并显式带`--search-index-only --suite`离线前缀。上批Phase05不认识新suite时仍进入已支持的离线分支，随后由精确检查数识别版本不符；不能让旧程序掉入服务原型流程。`-TestBinaryPath`、`-IndexTestBinaryPath`可分别指定明确二进制。
+
+每项保存日志、退出码、精确检查数及二进制SHA，同一程序的跨组SHA必须一致。脚本不编译、不操作前台或正式服务；完整Phase1与受影响的离线索引回归另跑：
+
+```powershell
+& .\x64\Release\Blink.Phase1.Tests.exe
+& .\x64\Release\Blink.Phase05.Tests.exe --search-index-only
+```
+
+Phase05无参数是会启动服务原型的历史入口，不作为本批普通回归。详细约定及实际结果见[搜索功能验证](SEARCH_RESPONSE_VALIDATION.md)。调用次数和假IPC行为不能当成真实窗口首屏或Everything对比。
 
 ## 当前侧栏目录功能
 
 ```powershell
-$blinkBinary = '.build\search-response\runtime\Release\Blink.exe'
+$blinkBinary = '.build\search-correctness\runtime\Release\Blink.exe'
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature NewFolder -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Rename -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Delete -Binary $blinkBinary
