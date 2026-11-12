@@ -1,5 +1,14 @@
 # Blink Progress
 
+## 正式索引服务更新与关闭生命周期修复 — 2026-11-12
+
+- 正式服务正常停止并等待原进程退出后，原位替换经过验证的EXE/PDB；PID6848→29080，服务EXE SHA `5e921f86617437ceea6012e95b9a49b87ddd04e9b3c55407e1f6ce1305043073`。注册命令、原数据根、授权参数、LocalSystem和Auto前后核对一致；标准RunAs子进程exit0。只保留一份核验过的旧二进制恢复点，没有重新安装服务或请求初建/重建，正常USN更新可继续保存现有库。
+- 普通用户C/D只读就绪探针均exit0。新真实服务脚本通过23 PASS/0 FAIL、19个相关v1只读请求：旧5/7、新8/9/10/11的属性策略、直接子目录、limit、范围与实际Windows Unicode oracle。首次夹具尚未USN收录时exit3、4 PASS/0 FAIL/1 NOT_READY，随后复用同manifest完整通过；成功核验并删除5样本+manifest、2目录、2481字节。小夹具不作为全盘或UI/Everything性能基准。
+- G06c独立NewFolder先因外部前台切换中断，SUT正常exit0；原失败报告已保留，脚本增加菜单证据采集后的前台核验。随后两个独立进程均完成5业务检查，但CloseMainWindow退出C0000005，夹具各363字节已清；第二次以exact-owned PID的ProcDump再次捕获，真实崩溃待修，不记成7项通过。Rename/Delete暂未继续；默认G06b/PID15036未替换，Clipboard未写入。
+- 两份真实StackWalk64调用链完全一致：App析构释放TitleBar的FrameworkElement缓存列表，连带TabView/TabViewItem/自动化peer/ToolTip析构，最后在已销毁的content root上读取0x8。用严格匹配的微软官方PDB/现成本地LLVM核实，原菜单持有猜测已排除。修复只改main的关闭生命周期：关闭前先失效回调/选择同步，在宿主仍活时清空TabItems、解除TitleBar内容及原生绑定、移除并释放标题栏和TabView；不改菜单业务或索引。
+- Release只增量App及其引用检查，两次85.647/86.130秒（首版构建后复核补齐TabView强引用，未额外跑首版GUI）；251输入中仅main变化，390资源不变，规范原生测试二进制SHA均保持，未重编/重复整组测试或Debug。当前Blink候选SHA `79f9157d09b8fed21a135e94071e7886755a273832438f80f30a815f3c2fe522`；NewFolder最终7项、Rename最终8项均完整PASS/exit0/夹具清理，启动及关闭HWND均匹配。Delete已2业务项中通过适用性/默认取消，最终确认前被外部前台打断、exit0/夹具已清，完整5项待补。默认G06b仍未替换。
+- 3子代理分工服务证据/窗口工具/生命周期与台账，根统一集成/构建/GUI。事实归`.build/search-rollout/integration`；已删除本轮用完的官方PDB及失效EXE/PDB/重复初始转储共698590396字节，来源metadata归位，保留最新转储/符号化报告、有效缓存/15包、当前运行版、唯一候选和原2成功恢复点。工作台自检无编译/测试/调试进程、无构建联接，附录B既有6/1/17/0仅记录未扩大清理。Delete最后确认及候选发布等待可用前台时段，真实UI首屏/Everything和完整环境矩阵另验。
+
 ## 搜索显示策略与Windows Unicode匹配 — 2026-11-12
 
 - A02/A04按三个模块并行实现，主模型统一Release单并发集成。FastSearchOptions.excluded_attributes默认0保旧调用；实际Tab绑定0/4/6语义，普通模式排Hidden|System，显示隐藏仍排System，索引在候选/路径重建/limit前过滤。Substring/Prefix/Extension/Exact候选、直接子目录和硬链接沿原算法。

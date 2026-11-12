@@ -1,6 +1,6 @@
 # 搜索正确性、响应与目录范围
 
-本页覆盖A01–A04搜索修正的headless功能测试，不代表实际界面或真实服务搜索性能验收。
+本页覆盖A01–A04的原生功能测试、正式服务部署及真实自有夹具搜索。窗口首屏、Everything同机基准与完整环境验收仍需单独测量。
 
 ## 实现范围
 
@@ -15,6 +15,20 @@ A02：查询携带当前窗口的显示策略，普通模式排Hidden与System�
 新命令被旧服务明确拒绝时，只追加一次对应旧5/7调用；Busy、权限、传输、版本与响应关联错误仍如实反馈。旧返回达到候选上限时标记未完整，不当作确定空结果；显式Retry重查未完整卷并保留完整成功卷。窗口使用通用未完整提示和实际候选上限，重试按钮也允许此类卷。索引服务更新后，下次查询可直接使用新命令，不保留过期能力缓存。
 
 A04：名称和扩展缓存使用Windows invariant uppercase，并以ordinal等价约束映射；ASCII有快路径，Load与USN变更统一重建派生键。扩展名读取原始后缀，不再间接依赖CRT locale；路径边界、内部排除与排序用ordinal比较，减少重复大小写映射。没有做拼写展开或Unicode规范化。依据微软[CompareStringOrdinal](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-comparestringordinal)和[LCMapStringEx](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-lcmapstringex)的序数比较及非语言学大小写规则。
+
+## 当前部署与真实搜索结果 — 2026-11-12
+
+23:04（北京时间）已正常停止原服务、等待原PID退出并校验旧EXE/PDB恢复副本，随后在原注册路径更新匹配的服务文件并启动。PID由6848变为29080，服务EXE SHA256为`5e921f86617437ceea6012e95b9a49b87ddd04e9b3c55407e1f6ce1305043073`；原启动命令、数据根、授权SID参数、LocalSystem账户与Auto启动方式保持，没有发生回滚。继续使用原BLK5库，未提交初建/重建；正常USN追赶可以更新库内容，不宣称库字节完全不变。随后C/D只读就绪检查均exit0，`index_ready`与`index_status_read_only`通过。
+
+23:08的普通用户真实服务搜索为**23 PASS / 0 FAIL / 0 NOT_READY，19个只读v1请求**。五个自有文件分别覆盖普通、Hidden、System、Hidden+System与嵌套Unicode名称；实际核对旧5/7、新8/9/10/11的结果集合、各模式limit=1、嵌套范围、Unicode大小写与最终形sigma的Windows ordinal oracle，以及`.TXT`扩展筛选。请求未包含服务控制、初建或直接索引库写入，未操作GUI或Clipboard。
+
+首次运行因自有夹具尚未通过USN完全收敛而返回`NOT_READY`：4 PASS / 0 FAIL / 1 NOT_READY，不计整组通过。稍后用`-ResumeFixture`复用同一GUID目录和manifest，脚本SHA相同，再完成上述23项；两次结果不相加。成功后核对内容与属性并精确删除五个样本及manifest，共6文件、2目录、2481字节，最新报告的`resume_fixture`已清空。
+
+正式服务已更新，默认主程序仍为G06b/PID15036；候选主程序尚未发布。G06c原候选两次关闭C0000005已由严格匹配符号定位为TitleBar/TabView延迟析构，当前79f915修复版NewFolder7项、Rename8项完整通过并正常exit0；Delete默认取消已过，最终确认前被前台切换打断，等待独立补完整5项。C/D就绪检查耗时与这个五文件夹具均不能代表全盘搜索性能，UI首屏/Everything基准仍未做。原生、部署、就绪、真实夹具搜索及窗口验证分别记账，不合并为一个成功数。
+
+原始部署和就绪事实位于本机`.build/search-rollout/integration`；`live-search/live-search-latest.json`按报告路径与SHA指向成功运行`1af9d3a626d74459862145f747269285`，首次`d9dcf0e52f824c398d8653647c5e56d9`的NOT_READY报告保留。公开文档只保留简明结论，不上传本机日志、索引、二进制或授权SID值。
+
+实际入口为`.\scripts\run-blink-live-search-smoke.ps1`。exit3/NOT_READY保留现有manifest，稍后给`-ResumeFixture`传入最新指针中的manifest路径恢复同一夹具；exit0才表示完整通过，exit1表示失败。可执行示例及OutputDirectory约定见[验证指南](VALIDATION_GUIDE.md#真实服务搜索与夹具恢复)。
 
 ## 分功能入口
 
@@ -39,9 +53,9 @@ A04：名称和扩展缓存使用Windows invariant uppercase，并以ordinal等�
 
 非零退出、FAIL、0 PASS、数量不符或运行期间二进制变化都会失败；不能仅凭进程启动或未抛异常宣称通过。以 JSON 内实际结果为准。本入口编写阶段只做 AST 静态解析，未代替执行测试。
 
-这些测试使用fake transport、可控状态与metadata调用计数，也包含自有真实Unicode目录替换和缺失错误夹具。调用次数减少不等于真实IPC耗时、UI首屏响应或Everything同机基准。后续仍需普通用户实际GUI验收与真实服务测量；完整无参数原生回归另跑，不由两个功能子集替代。
+这些原生测试使用fake transport、可控状态与metadata调用计数，也包含自有真实Unicode目录替换和缺失错误夹具。调用次数减少不等于真实IPC耗时、UI首屏响应或Everything同机基准。后续仍需普通用户实际GUI验收与真实服务性能测量；完整Phase1与Phase05离线回归另跑，不由各功能子集替代。
 
-## 当前A02/A04结果 — 2026-11-12
+## A02/A04原生检查点（正式部署前）— 2026-11-12
 
 | 验证 | 实际结果 |
 | --- | --- |
@@ -56,7 +70,7 @@ A04：名称和扩展缓存使用Windows invariant uppercase，并以ordinal等�
 
 首轮统一构建744.123秒，主程序、服务和Phase1已生成；Phase05测试夹具列表初始化需要显式DWORD转换。仅补该测试工程27.355秒后，核心组一项Greek断言发现把最终形sigma错误当成通用ordinal等价；真实Win32探针显示最终形与大写不等价、普通形等价。断言改为系统ordinal oracle，并仍要求普通形命中；仅再补Phase05工程8.031秒。生产搜索实现未为此放宽，两个修正均不重编产品。规范测试EXE/PDB逐项SHA归位，重复本地输出已清。
 
-当前候选：`.build/search-correctness/runtime/Release/Blink.exe`，SHA256 `b0091e56fad3300928e34fa879949acb72d80ba36c3e7bc339832c4dd00a22f4`。默认G06b与正式服务6848保持；完整限额前过滤/Unicode实现仍需更新服务，旧服务只有有限兼容及真实不完整反馈。本批未操作前台窗口或Clipboard，G06c侧栏7/8/5窗口、真实首屏/Everything与环境矩阵仍待验证。
+该原生检查点生成的候选：`.build/search-correctness/runtime/Release/Blink.exe`，SHA256 `b0091e56fad3300928e34fa879949acb72d80ba36c3e7bc339832c4dd00a22f4`。当时默认G06b与正式服务6848尚未替换，旧服务只有有限兼容及真实不完整反馈；随后正式服务部署和真实搜索结果见上方当前记录。该原生检查点未操作前台窗口或Clipboard；G06c侧栏7/8/5窗口、真实首屏/Everything与环境矩阵仍待验证。
 
 本机证据归`.build/search-correctness/integration`：最终source-freeze/native-validation、functional/search-current-release-summary、两份完整合并日志、initial-build/before-greek-fix及greek-nls-probe摘要、candidate-files与cleanup-summary。清理可核算231313557字节、321文件/146目录/1链接；保留有效缓存/15包、一个当前候选及匹配服务符号、规范测试产物与原两个成功恢复点。原始日志、数据和二进制不进入公开仓库。
 
@@ -74,8 +88,8 @@ A04：名称和扩展缓存使用Windows invariant uppercase，并以ordinal等�
 
 200项同父目录夹具实测8次metadata读取（旧逻辑1002次）；20层共链46对4802，5父各40项24对1002。后两项和同父项均受检查预算约束；旧数是旧逻辑调用数，不是同机耗时。真实Unicode、批中替换和缺失错误夹具已通过，文件原内容保留后按自有范围清理。
 
-该批候选（已被本批替代）：`.build/search-response/runtime/Release/Blink.exe`，SHA256 `cfcdd314c00cc2bb2a28a66d9996cfa9dda2f794d42c80b0fdded73d6508a7b7`。它包含G06c侧栏实现；旧G06c候选已归并清理，侧栏NewFolder/Rename/Delete窗口7/8/5项仍待验。默认G06b及正式索引服务6848保持，本轮未操作前台或Clipboard，UI首屏/Everything实测仍未进行。服务候选中的CodeView路径因隔离OutDir变化而不同，与本批service-build副本一致；正式服务文件SHA未变，服务源码/协议/BLK5未变。
+该批候选（已被A02/A04批次替代）：`.build/search-response/runtime/Release/Blink.exe`，SHA256 `cfcdd314c00cc2bb2a28a66d9996cfa9dda2f794d42c80b0fdded73d6508a7b7`。它包含G06c侧栏实现；旧G06c候选已归并清理，侧栏NewFolder/Rename/Delete窗口7/8/5项仍待验。该批结束时默认G06b及正式索引服务6848保持，未操作前台或Clipboard，UI首屏/Everything实测尚未进行。该批服务候选中的CodeView路径因隔离OutDir变化而不同，与其service-build副本一致；当时正式服务文件SHA未变，服务源码/协议/BLK5未变。
 
 本地证据集中在`.build/search-response/integration`：source-freeze/native-validation、functional两个日志与JSON、完整tests-release.log/state、候选SHA清单及cleanup-summary。公开只同步源码与简明结果，不上传本地数据库/依赖/二进制/日志。
 
-本轮清理可核算220683754字节（313文件/143目录/1测试链接），删除旧重复候选、已结束夹具、重复日志及完成的一次性脚本。保留当前候选及匹配服务符号、有效增量缓存/15包、当前运行版与两个已验证成功恢复点；本轮未将待GUI候选包装成新成功运行版本。用户要求本轮完成后休息，停止追加下一批。
+该批清理可核算220683754字节（313文件/143目录/1测试链接），删除旧重复候选、已结束夹具、重复日志及完成的一次性脚本。保留当时候选及匹配服务符号、有效增量缓存/15包、当前运行版与两个已验证成功恢复点；未将待GUI候选包装成新成功运行版本。该批按当时用户要求结束后暂停，后续部署与验证见上方当前记录。

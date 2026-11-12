@@ -1,6 +1,6 @@
 # Explorer 兼容差距与切片顺序
 
-2026-11-12审计：开发优先级改为功能/响应/易用性；G06c源码双配置1648/0/4、249输入/388资源已过，但NewFolder7/Rename8/Delete5窗口脚本仅完成拆分与AST，未实跑，不将旧片段计入通过。默认仍为G06b；当前审计与后续先搜索响应见[审计](DEVELOPMENT_AUDIT.md)。
+2026-11-12更新：G06c同一修复版Release的NewFolder7项、Rename8项均完整PASS、正常exit0；Delete仅适用性/默认取消两项通过，最终确认前被外部前台切换打断，完整5项仍待验。关闭前退役TitleBar及TabView已在原新建序列和未提交改名草稿下实测正常退出。默认主程序仍为G06b，候选尚未发布；功能/响应/易用性优先，见[审计](DEVELOPMENT_AUDIT.md)与[本轮交接](EXPLORER_NAVIGATION_MUTATION_HANDOFF.md)。
 
 G06b最新（2026-11-11）：目录Cut/Copy/Paste、已加载树分支事件/F5刷新已接入，双配置1636/0/4、249输入/386资源；13项不写Clipboard窗口检查通过，实际传输UI为SKIP（0项）。其余对象菜单/完整G06/P0待续。见[交接](EXPLORER_NAVIGATION_TRANSFER_HANDOFF.md)。
 
@@ -37,7 +37,7 @@ G03b最新记录（2026-11-11）：逐级下级目录菜单已实现；两配置
 | G03 | P0，功能已接入/组合待验 | 编辑/面包屑、历史、逐级目录、前缀候选与键盘已接入 | IMPLEMENTED_NEEDS_MANUAL | AddressBarModel/Presentation、StartAddressSuggestions，复用Location/枚举/隐藏项与原导航 | 双配置1608/0/4、383资源，最终同Release补全15+地址20项；实物鼠标/真实IME/UNC及完整环境仍待验，不标完整G03/P0完成 |
 | G04 | P0，G04a所列子项已验 | F3共享搜索入口；F6/Shift+F6显式六区域切换，标准TabView/ListView快捷键保留 | PARTIAL（所列子项IMPLEMENTED_VERIFIED） | main `CanUseFocusShortcut/CurrentFocusRegion/CycleWindowFocus`；原生文本组合事件 | 双配置1583/0/4、最终23项窗口全PASS，零结果页原生“更多”入口已补并复测；真实IME/读屏及全部组合仍待验 |
 | G05 | P0，G05a/G05b所列场景已验 | 文件主名初选，目录及新建等全选；保留ContentDialog，改名后选中并滚动到精确新行 | PARTIAL（实测子项IMPLEMENTED_VERIFIED） | `ShowFileNameDialog`、`TabState::CommitBrowse`、`RestoreRenderedSelection`；搜索仍先定位父目录 | 双配置1583/0/4、最终17项窗口检查，覆盖同身份其他链接不误选、仅改大小写、分批列表滚动和编辑中正常关闭。真实IME与完整区域焦点组合仍待续，Ctrl+A可编辑全名 |
-| G06 | P0，G06a/b已交付；G06c源码待分项验证 | 常用目标/剪贴板及G06c新建改名删除已有接线，更多系统/其它对象菜单待续 | PARTIAL（G06c IMPLEMENTED_NEEDS_MANUAL） | BeginTargetDirectoryOperation、FileDropOrigin、原唯一queue/对话框及串行已加载树刷新 | G06c双配置1648/0/4；NewFolder7/Rename8/Delete5仅AST，窗口尚待实跑；默认仍G06b |
+| G06 | P0，G06a/b已交付；G06c所列新建/改名子项已验 | 常用目标/剪贴板及G06c新建改名删除已有接线，更多系统/其它对象菜单待续 | PARTIAL（G06c新建/改名实测子项IMPLEMENTED_VERIFIED） | BeginTargetDirectoryOperation、FileDropOrigin、原唯一queue/对话框及串行已加载树刷新 | 同一79f915…Release独立NewFolder7/Rename8均PASS、exit0；Delete2 PASS/1前台中断FAIL，最终确认及完整5项待验。普通回收站、Quick真实用户目录、盘根写入、外部Clipboard及完整矩阵待验；默认仍G06b |
 | G07 | P0，后续 | Shell菜单单/同父多选与2/3消息转发已做；host无wall-clock deadline，现代IExplorerCommand未对接 | PARTIAL | `ShellContextMenuController::Dispatch`、`Blink.ShellMenuHost` | 进程隔离不等于超时已覆盖；先验证实际挂起/取消边界再做必要处理；动态扩展按系统返回，不硬编码软件名，不进Blink主进程 |
 | G08 | P0，后续 | 标准COPY/MOVE剪贴板有Preferred；外部performed完成回传与剪切淡化闭环不足 | PARTIAL | `ClipboardFileTransfer`、main剪贴板缓存及唯一coordinator；OLE拖放现有完成反馈另计 | 保留真实sequence/源身份与部分完成；Explorer双向互操作必须实测，不能把“已发布剪贴板”写成已移动 |
 | G09 | P0，后续 | 同/跨卷拖放、Ctrl/Shift与OLE完成已有；link、右键拖放选择菜单、虚拟文件未接 | PARTIAL | `FileDragDropController/Model/Data`与 `FileDragDropTests` | 现有操作如实验证；未支持的effect返回NONE。FileDescriptor/FileContents不是CF_HDROP的既有能力 |
@@ -76,6 +76,14 @@ E. G03a最终WM_CLOSE修正后，两配置原生各1565/0/4；同一Release地�
 - 本轮限定环境的真实窗口自动化和Debug/Release回归通过，资源键一致；24H2/其余DPI/主题/IMEs/网络等按交互矩阵仍NOT RUN，不升级整项目或整个P0验收。
 
 风险限于WinUI菜单生成、既有命令绑定和展示状态；索引服务、协议、存储、文件操作引擎与ShellHost均不在此切片修改范围。失败修原因，不通过关闭测试或添加无动作按钮掩盖问题。
+
+## G06c导航目录操作限定实测 — 2026-11-12
+
+候选SHA256为`79f9157d09b8fed21a135e94071e7886755a273832438f80f30a815f3c2fe522`。NewFolder独立报告7 PASS/0 FAIL，覆盖目录/盘根/虚拟目标适用性、Esc取消与导航回焦、Ctrl+Shift+N精确目标创建、重名失败后Retry、旧菜单退役及正常关闭/清理；Rename独立报告8 PASS/0 FAIL，覆盖F2取消、真实目录和子项身份/字节保持、另一个标签跟随、重名Retry、文件区F2作用域及未提交草稿关窗。PID6064/44760均exit0、无强杀，各清理363字节自有夹具；两组分别计数，不套用旧候选或原All14项结果。
+
+Delete报告为2 PASS/1 FAIL：#01适用性与#08默认Cancel按Enter保留非空目录已过；#09最终确认前前台已不属于自有PID，预检拒绝输入，确认删除及树刷新尚未完成。该进程exit0、363字节夹具已清，不把这次中断或其它候选的删除结果拼成完整5项通过。普通回收站、Quick真实用户目录/盘根实际写入、外部剪贴板、物理鼠标、IME/UNC及全主题/DPI/多屏/读屏仍待验。
+
+此前两次关闭AV的匹配dump/PDB栈指向App析构释放TitleBar的FrameworkElement列表，连带TabView/自动化peer/ToolTip在宿主关闭后析构。修复在原生宿主仍活时先失效回调/选择同步，停用TitleBar拖动区自动刷新，清空TabItems、解除Content及SetTitleBar绑定，并释放TabView/TitleBar；原NewFolder序列和Rename未提交草稿均已正常退出。正式索引服务PID29080及真实服务23项搜索检查为独立证据，见[搜索验证](SEARCH_RESPONSE_VALIDATION.md)；默认主程序尚未替换，完整G06/P0保持PARTIAL。
 
 ## G01历史实测更新
 

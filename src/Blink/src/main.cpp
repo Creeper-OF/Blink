@@ -8139,6 +8139,10 @@ struct App : AppT<App>
     void PrepareWindowClose() noexcept
     {
         if (window_style_closed_) { return; }
+        // Hide/Focus and removing title-bar content can synchronously reenter
+        // application callbacks. Retire them before the native host closes.
+        window_style_closed_ = true;
+        tab_view_sync_suppressed_ = true;
         try
         {
             DismissTargetContextMenu();
@@ -8152,6 +8156,29 @@ struct App : AppT<App>
             address_bar_.PrepareForClose();
         }
         catch (...) { startup_.GenericFailure("address.prepare-close"); }
+        try
+        {
+            if (title_bar_)
+            {
+                // TitleBar caches interactive descendants of the TabView.
+                // Release those controls while their XamlRoot is still alive,
+                // rather than from App's destructor after Window destruction.
+                title_bar_.AutoRefreshDragRegions(false);
+                if (tab_view_)
+                {
+                    tab_view_.TabItems().Clear();
+                    tab_item_ids_.clear();
+                }
+                title_bar_.Content(nullptr);
+                window_.SetTitleBar(nullptr);
+                std::uint32_t index{};
+                if (window_frame_.Children().IndexOf(title_bar_, index))
+                { window_frame_.Children().RemoveAt(index); }
+                tab_view_ = nullptr;
+                title_bar_ = nullptr;
+            }
+        }
+        catch (...) { startup_.GenericFailure("title-bar.prepare-close"); }
     }
 
     void OnWindowClosed() noexcept

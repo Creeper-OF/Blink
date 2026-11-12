@@ -40,6 +40,30 @@
 
 Phase05无参数是会启动服务原型的历史入口，不作为本批普通回归。详细约定及实际结果见[搜索功能验证](SEARCH_RESPONSE_VALIDATION.md)。调用次数和假IPC行为不能当成真实窗口首屏或Everything对比。
 
+## 真实服务搜索与夹具恢复
+
+正式索引服务已在原注册路径更新为PID29080，C/D只读就绪及真实搜索夹具已通过；默认主程序仍为G06b/PID15036。真实服务入口在普通用户PowerShell、项目根运行：
+
+```powershell
+.\scripts\run-blink-live-search-smoke.ps1
+```
+
+脚本在`.build/search-rollout/integration/live-search`的自有GUID目录创建五个样本和manifest，只向正式服务发送19个只读v1请求。完整契约为23 PASS，包含旧5/7和新8/9/10/11、显示策略、limit=1、范围、Unicode ordinal oracle、扩展名和精确清理；不编译、不管理服务、不操作GUI或Clipboard，不直接写索引库。成功后删除该夹具的五个样本、manifest及两个目录，保留报告与日志。
+
+退出码`0`表示完整通过；`3`表示脚本已识别服务或夹具尚未就绪（`NOT_READY`），保留同一manifest，不能记作通过；`1`表示失败。exit3后稍后恢复相同夹具，避免反复新建GUID：
+
+```powershell
+$latestPath = '.build\search-rollout\integration\live-search\live-search-latest.json'
+$pending = Get-Content -LiteralPath $latestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($pending.status -eq 'NOT_READY') {
+    .\scripts\run-blink-live-search-smoke.ps1 -ResumeFixture $pending.resume_fixture
+}
+```
+
+恢复时沿用相同`-OutputDirectory`（如曾自定义），`-ResumeFixture`与`-FixtureRoot`不能同时使用。`-TimeoutMs`默认5000、范围1000–15000，限制单次IPC预算，不会自动等待USN收敛。最新指针包含报告路径和SHA；PASS后`resume_fixture`清空，不能再使用已清理的历史manifest。
+
+2026-11-12实际首次4 PASS/0 FAIL/1 NOT_READY，复用同一manifest后23 PASS/0 FAIL/0 NOT_READY、19请求通过，精确清理2481字节；两次不相加。小夹具与就绪检查耗时不代表全盘性能，UI首屏/Everything仍待单独测量，完整事实见[当前搜索验证](SEARCH_RESPONSE_VALIDATION.md)。
+
 ## 当前侧栏目录功能
 
 ```powershell
@@ -51,7 +75,7 @@ $blinkBinary = '.build\search-correctness\runtime\Release\Blink.exe'
 
 三个入口分别预期 7、8、5 项检查，包含各自真实操作、取消/冲突或目标核对及正常关闭/精确清理。报告独立保存；共同检查不能重复当成新增功能数。现有 `-Feature All` 保留侧栏批次的 14 项检查兼容入口，不等于后续的全应用流程验收。
 
-候选尚未发布时通过 `-Binary` 指向本批 runtime。G06c 当前原生双配置已过，窗口功能尚未完整通过；两次片段/前台中断不计作成功。用户使用电脑时不争抢前台，窗口检查另择时间。
+候选尚未发布时通过 `-Binary` 指向本批 runtime。G06c此前原生双配置已过，本批候选仅补Release；窗口功能受前台切换中断，尚未完整通过，默认仍为G06b/PID15036。片段或中断不计成功；用户使用电脑时不争抢前台，窗口检查另择时间。
 
 ## 其它维护入口
 
