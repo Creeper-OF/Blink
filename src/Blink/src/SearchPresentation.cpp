@@ -13,6 +13,12 @@
 
 namespace blink::app
 {
+    namespace
+    {
+        constexpr double kCutOpacity = 0.45;
+        constexpr double kNormalOpacity = 1.0;
+    }
+
     using namespace winrt;
     using namespace Microsoft::UI::Xaml;
     using namespace Microsoft::UI::Xaml::Controls;
@@ -163,9 +169,25 @@ namespace blink::app
                 if (generation == epoch && CanAct() && callbacks.activate) { callbacks.activate(*selected, locating); }
             }
         }
+        double CutOpacityFor(const SearchResult& result) const
+        {
+            return callbacks.is_cut && callbacks.is_cut(result) ? kCutOpacity : kNormalOpacity;
+        }
+        void RefreshCutAppearance()
+        {
+            if (closed || !active) { return; }
+            const auto count = (std::min)(next, static_cast<std::size_t>(items.Size()));
+            for (std::size_t index = 0; index < count; ++index)
+            {
+                const auto item = items.GetAt(static_cast<std::uint32_t>(index)).as<PropertySet>();
+                const auto opacity = CutOpacityFor(rows[index]);
+                if (!item.HasKey(L"CutOpacity") || unbox_value<double>(item.Lookup(L"CutOpacity")) != opacity)
+                { item.Insert(L"CutOpacity", box_value(opacity)); }
+            }
+        }
         void Append()
         {
-            if (closed) { return; }
+            if (closed || !active) { return; }
             const auto end = (std::min)(next + 128, rows.size());
             syncing = true;
             for (; next < end; ++next)
@@ -179,6 +201,7 @@ namespace blink::app
                 item.Insert(L"SearchIndex", box_value(static_cast<std::uint32_t>(next)));
                 item.Insert(L"SearchTabId", box_value(tab_id));
                 item.Insert(L"SearchViewGeneration", box_value(generation));
+                item.Insert(L"CutOpacity", box_value(CutOpacityFor(result)));
                 items.Append(item);
                 if (!selection_changed && restore_selection == next) { list.SelectedIndex(static_cast<int>(next)); }
             }
@@ -187,7 +210,7 @@ namespace blink::app
             const auto epoch = generation;
             const std::weak_ptr<Ui> weak = shared_from_this();
             (void)dispatcher.TryEnqueue(Microsoft::UI::Dispatching::DispatcherQueuePriority::Low, [weak, epoch] {
-                if (const auto ui = weak.lock(); ui && !ui->closed && ui->generation == epoch) { ui->Append(); }
+                if (const auto ui = weak.lock(); ui && !ui->closed && ui->active && ui->generation == epoch) { ui->Append(); }
             });
         }
     };
@@ -320,7 +343,7 @@ namespace blink::app
             Automation::AutomationProperties::SetName(args.ItemContainer(), name);
         });
         Automation::AutomationProperties::SetAutomationId(ui->list, L"SearchResults");
-        ui->list.ItemTemplate(Markup::XamlReader::Load(LR"(<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><StackPanel Spacing="3" Margin="4,5"><TextBlock Text="{Binding Name}" FontSize="15" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding FullPath}" FontSize="12" TextWrapping="Wrap" Opacity="0.8"/><TextBlock Text="{Binding Volume}" FontSize="11" Opacity="0.7"/></StackPanel></DataTemplate>)").as<DataTemplate>());
+        ui->list.ItemTemplate(Markup::XamlReader::Load(LR"(<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><StackPanel Spacing="3" Margin="4,5" Opacity="{Binding [CutOpacity]}"><TextBlock Text="{Binding Name}" FontSize="15" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding FullPath}" FontSize="12" TextWrapping="Wrap" Opacity="0.8"/><TextBlock Text="{Binding Volume}" FontSize="11" Opacity="0.7"/></StackPanel></DataTemplate>)").as<DataTemplate>());
         ui->items = single_threaded_observable_vector<Windows::Foundation::IInspectable>();
         ui->list.ItemsSource(ui->items);
         ui->root.Children().Append(ui->list); Grid::SetRow(ui->list, 4);
@@ -512,6 +535,10 @@ namespace blink::app
             if (volume.error != ERROR_SUCCESS) { volumes += L" (" + std::to_wstring(volume.error) + L")"; }
         }
         ui->volumes.Text(hstring(volumes)); ui->Buttons();
+    }
+    void SearchPresentation::RefreshCutAppearance()
+    {
+        if (const auto ui = ui_) { ui->RefreshCutAppearance(); }
     }
     void SearchPresentation::FocusResults()
     {

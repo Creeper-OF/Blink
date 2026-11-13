@@ -44,6 +44,9 @@ namespace blink::app
         std::function<void(SearchContextSelection, winrt::Windows::Foundation::Point)> context_menu;
         std::function<void(SearchContextSelection, FolderCommand)> command;
         std::function<void(std::uint64_t, std::uint64_t)> dismiss_context_menu;
+        // Fixed for the Build lifetime; a fast UI-thread-only lookup without I/O.
+        // It is not invoked while suspended or after Close.
+        std::function<bool(const SearchResult&)> is_cut;
     };
     class SearchPresentation
     {
@@ -52,6 +55,9 @@ namespace blink::app
             const winrt::Microsoft::UI::Dispatching::DispatcherQueue& dispatcher,
             SearchPresentationCallbacks callbacks);
         void Update(const SearchSnapshot& snapshot, const SearchPresentationOptions& options, const Localization& localization);
+        // Refresh only the already appended row properties after cut state changes.
+        // Does not replace items, selection or the pending Append generation.
+        void RefreshCutAppearance();
         [[nodiscard]] std::optional<SearchPresentationSettings> DraftSettings(std::uint64_t tab_id) const;
         void FocusResults();
         void Close() noexcept;

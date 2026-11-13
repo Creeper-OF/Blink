@@ -47,11 +47,12 @@ $expectedAttributes[(Join-Path $otherFolder $otherHiddenName)] = [IO.FileAttribu
 $compilerTemp = Join-Path $integration ('compiler-temp\'+$guid)
 $originalTemp = $env:TEMP; $originalTmp = $env:TMP; $tempChanged = $false
 $checks = [Collections.Generic.List[object]]::new(); $notes = [Collections.Generic.List[string]]::new()
-$process = $null; $fixtureCreated = $false; $currentStep = 'preflight'
+$process = $null; $fixtureCreated = $false; $currentStep = 'preflight'; $ownedForegroundRequired = $false
 $report = [ordered]@{
     status='RUNNING';passed=$false;skipped=$false;started_utc=[DateTime]::UtcNow.ToString('o');ended_utc=$null
-    configuration=$Configuration;binary=$Binary;binary_sha256=$null;process_id=$null;process_exited=$false;exit_code=$null;forced_termination=$false
+    configuration=$Configuration;binary=$Binary;binary_sha256=$null;script_sha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant();process_id=$null;process_exited=$false;exit_code=$null;forced_termination=$false
     environment=$null;window_dpi=$null;desktop_preflight=$null;input_skip_reason=$null
+    foreground_activation=$null;foreground_evidence=@();last_foreground=$null
     fixture=$fixture;fixture_removed=$false;fixture_bytes_removed=0;fixture_retained=$false;fixture_ownership_failures=@()
     compiler_temp=$compilerTemp;compiler_temp_removed=$false;compiler_temp_bytes_removed=0
     input_mode='Owned PID/HWND InputSite keyboard messages and WinUI UIA patterns only; no global input or Clipboard'
@@ -68,7 +69,7 @@ function Record([string]$RecordLabel,[string]$Result='PASS',[string]$Detail='') 
 function Skip([string]$Reason) { throw ('VIEW_MENU_UI_SKIP: '+$Reason) }
 function Check([string]$CheckLabel,[scriptblock]$Body) {
     $script:currentStep=$CheckLabel; Save-Report
-    try { $null=& $Body; Record $CheckLabel }
+    try { if ($script:ownedForegroundRequired) { Require-OwnedForeground 'before business check' }; $null=& $Body; if ($script:ownedForegroundRequired) { Require-OwnedForeground 'before recording completed business check' }; Record $CheckLabel }
     catch { if ($_.Exception.Message.StartsWith('VIEW_MENU_UI_SKIP: ')) { Record $CheckLabel 'SKIP' $_.Exception.Message.Substring(19) }
         else { Record $CheckLabel 'FAIL' ($_.Exception.ToString()+"`n"+$_.ScriptStackTrace) }; throw }
 }
@@ -187,20 +188,50 @@ function Capture-UiState([string]$Reason,[string]$WaitError='') {
 function Wait-Ui([string]$WaitLabel,[scriptblock]$Predicate,[int]$Seconds=$StepTimeoutSeconds) {
     $timer=[Diagnostics.Stopwatch]::StartNew(); $lastWaitError=''
     do {
-        try { if (& $Predicate) { return } } catch { if ($_.Exception.Message.StartsWith('VIEW_MENU_UI_SKIP: ')) { throw }; $lastWaitError=$_.Exception.Message }
+        try {
+            if ($script:ownedForegroundRequired) { Require-OwnedForeground ('while waiting: '+$WaitLabel) }
+            if (& $Predicate) {
+                if ($script:ownedForegroundRequired) { Require-OwnedForeground ('completed wait: '+$WaitLabel) }
+                return
+            }
+        } catch { if ($_.Exception.Message.StartsWith('VIEW_MENU_UI_SKIP: ')) { throw }; $lastWaitError=$_.Exception.Message }
         if ($process -and $process.WaitForExit(150)) { throw ('Owned Blink exited while waiting for '+$WaitLabel) }
     } while ($timer.Elapsed.TotalSeconds -lt $Seconds)
-    try { Capture-UiState ('timeout: '+$WaitLabel) $lastWaitError } catch { $notes.Add('Timeout snapshot: '+$_.Exception.Message); Save-Report }
+    if ($script:ownedForegroundRequired) { Require-OwnedForeground ('before timeout snapshot: '+$WaitLabel) }
+    try { Capture-UiState ('timeout: '+$WaitLabel) $lastWaitError } catch { if ($_.Exception.Message.StartsWith('VIEW_MENU_UI_SKIP: ')) { throw }; $notes.Add('Timeout snapshot: '+$_.Exception.Message); Save-Report }
+    if ($script:ownedForegroundRequired) { Require-OwnedForeground ('before timeout failure: '+$WaitLabel) }
     throw ('Timed out: '+$WaitLabel+$(if ($lastWaitError) { '; '+$lastWaitError }))
 }
 function Require-InputDesktop {
     $desktop=[BlinkExplorerViewUiNative]::DesktopState(); $report.desktop_preflight=$desktop
     if (-not $desktop.InputReady) { $report.input_skip_reason=$desktop.Reason; Save-Report; Skip ('An unlocked desktop is required: '+$desktop.Reason) }
 }
+function Require-OwnedForeground([string]$Reason) {
+    $process.Refresh(); if ($process.HasExited) { throw ('Owned Blink exited while checking foreground: '+$process.ExitCode) }
+    $desktop=[BlinkExplorerViewUiNative]::DesktopState(); $report.desktop_preflight=$desktop
+    $role=if ($desktop.ForegroundPid -eq $process.Id) { 'OWNED_BLINK' } elseif ($desktop.ForegroundPid -eq 0) { 'NONE' } else { 'EXTERNAL_PROCESS' }
+    $evidence=[pscustomobject]@{utc=[DateTime]::UtcNow.ToString('o');step=$script:currentStep;reason=$Reason;owned_pid=$process.Id;foreground_pid=$desktop.ForegroundPid;role=$role;input_ready=$desktop.InputReady}
+    $previous=$report.last_foreground; $report.last_foreground=$evidence
+    if (-not $previous -or $previous.step -cne $evidence.step -or $previous.reason -cne $Reason -or $previous.foreground_pid -ne $evidence.foreground_pid -or $previous.input_ready -ne $evidence.input_ready) {
+        $report.foreground_evidence+=@($evidence); Save-Report
+    }
+    if (-not $desktop.InputReady -or $desktop.ForegroundPid -ne $process.Id) {
+        $report.input_skip_reason=$Reason+'; expected owned PID '+$process.Id+', actual foreground PID '+$desktop.ForegroundPid+' ('+$role+'); '+$desktop.Reason
+        Save-Report; Skip $report.input_skip_reason
+    }
+}
 function Key([uint32]$KeyCode,[int]$Modifiers=0) {
-    Require-InputDesktop; [BlinkExplorerViewUiNative]::Key($process.Id,$KeyCode,$Modifiers)
+    Require-OwnedForeground ('before scoped key '+$KeyCode)
+    [BlinkExplorerViewUiNative]::Key($process.Id,$KeyCode,$Modifiers)
+    Require-OwnedForeground ('after scoped key '+$KeyCode)
+}
+function Focus-Owned($Element) {
+    Require-OwnedForeground 'before owned UIA focus'
+    if (-not $Element -or $Element.Current.ProcessId -ne $process.Id -or -not (Visible $Element) -or -not $Element.Current.IsEnabled) { throw 'Visible enabled owned focus target required' }
+    $Element.SetFocus()
 }
 function Act($Element) {
+    Require-OwnedForeground 'before owned UIA action'
     if (-not $Element -or $Element.Current.ProcessId -ne $process.Id -or -not (Visible $Element) -or -not $Element.Current.IsEnabled) { throw 'Visible enabled owned UIA element required' }
     $pattern=$null
     if ($Element.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)) { $pattern.Invoke() }
@@ -216,6 +247,7 @@ function Toggle-State($Element) {
     Skip ('Toggle state unavailable on '+$Element.Current.AutomationId)
 }
 function Close-Menus {
+    Require-OwnedForeground 'before closing owned popup menus'
     for ($attempt=0; $attempt -lt 3; $attempt++) {
         if (-not (Owned-Element 'TopViewMenu') -and -not (Owned-Element 'FolderContextMenu') -and -not (Owned-Element 'TopViewShowHidden') -and -not (Owned-Element 'TopSortMenu') -and -not (Owned-Element 'TopNewMenu') -and -not (Owned-Element 'TopMoreMenu')) { return }
         Key 27
@@ -235,11 +267,13 @@ function Open-Top {
 }
 function Expand-Show {
     Open-Top
+    Wait-Ui 'owned TopViewShow parent realized' { $null -ne (Owned-Element 'TopViewShow') } ([Math]::Min(3,$StepTimeoutSeconds))
+    Require-OwnedForeground 'before expanding owned TopViewShow'
     $parent=Owned-Element 'TopViewShow'; $pattern=$null
-    if (-not $parent) { throw 'TopViewShow missing' }
+    if (-not $parent) { Require-OwnedForeground 'before reporting TopViewShow missing'; throw 'TopViewShow missing' }
     if ($parent.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$pattern)) { $pattern.Expand() }
     elseif ($parent.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)) { $pattern.Invoke() }
-    else { $parent.SetFocus(); Key 0x27 }
+    else { Focus-Owned $parent; Key 0x27 }
     Wait-Ui 'owned Show Hidden child realized' { $null -ne (Owned-Element 'TopViewShowHidden') }
 }
 function Assert-TopMode([string]$ExpectedMode) {
@@ -269,7 +303,7 @@ function Set-Hidden([bool]$Enabled) {
 }
 function Navigate-Owned([string]$TargetFolder,[string]$MarkerName='') {
     if ($TargetFolder -notin @($mainFolder,$otherFolder,$emptyFolder)) { throw 'Refusing navigation outside this run fixture' }
-    Close-Menus; Key 0x4C 1; Wait-Ui 'Ctrl L reveals the owned address editor' { $null -ne (Address-Editor) }; $editor=Address-Editor; $editor.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($TargetFolder); $editor.SetFocus(); Key 13
+    Close-Menus; Key 0x4C 1; Wait-Ui 'Ctrl L reveals the owned address editor' { $null -ne (Address-Editor) }; $editor=Address-Editor; $editor.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($TargetFolder); Focus-Owned $editor; Key 13
     Wait-Ui 'committed owned folder and its marker/empty page' {
         (Value (Address)) -ieq $TargetFolder -and (Visible (By-Id 'FolderEntries')) -and
         (By-Id 'CommandSort').Current.IsEnabled -and
@@ -278,7 +312,8 @@ function Navigate-Owned([string]$TargetFolder,[string]$MarkerName='') {
 function Select-Owned([string]$RowLabel) {
     if ($RowLabel -notin @($marker,$otherMarker,$hiddenName)) { throw 'Refusing non-owned selection' }
     Wait-Ui 'exact owned row available' { @(Folder-Rows $RowLabel).Count -eq 1 }
-    $row=@(Folder-Rows $RowLabel)[0]; $row.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select(); $row.SetFocus()
+    Require-OwnedForeground 'before owned row selection'
+    $row=@(Folder-Rows $RowLabel)[0]; $row.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select(); Focus-Owned $row
     Wait-Ui 'exact owned single selection' { $selected=@(Selected-Names); $selected.Count -eq 1 -and $selected[0] -ceq $RowLabel }
 }
 function Open-Context {
@@ -286,10 +321,10 @@ function Open-Context {
     Wait-Ui 'owned ordinary context menu' { $null -ne (Owned-Element 'FolderContextMenu') }
 }
 function Set-ContextChoice([string]$ParentId,[string]$ChoiceId) {
-    Open-Context; $parent=Owned-Element $ParentId; $pattern=$null
+    Open-Context; Require-OwnedForeground 'before owned context submenu'; $parent=Owned-Element $ParentId; $pattern=$null
     if ($parent.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$pattern)) { $pattern.Expand() }
     elseif ($parent.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)) { $pattern.Invoke() }
-    else { $parent.SetFocus(); Key 0x27 }
+    else { Focus-Owned $parent; Key 0x27 }
     Wait-Ui ('owned context choice '+$ChoiceId) { $null -ne (Owned-Element $ChoiceId) }
     Act (Owned-Element $ChoiceId); Wait-Ui 'ordinary context command closes menu' { -not (Owned-Element 'FolderContextMenu') }
 }
@@ -310,11 +345,12 @@ function Sort-Snapshot {
 }
 function Tabs { return @(Of-Type (By-Id 'WindowTabs') ([Windows.Automation.ControlType]::TabItem)) }
 function New-OwnedTab([int]$ExpectedCount) {
-    Close-Menus; (By-Id 'FolderViewMode').SetFocus(); Key 0x54 1
+    Close-Menus; Focus-Owned (By-Id 'FolderViewMode'); Key 0x54 1
     Wait-Ui 'new owned TabView item and ThisPC page' { @(Tabs).Count -eq $ExpectedCount -and $thisPcLabels -ccontains (Value (Address)) }
 }
 function Select-Tab([int]$TabIndex,[string]$ExpectedPath,[string]$ExpectedMode) {
     Close-Menus; $tabs=@(Tabs); if ($TabIndex -ge $tabs.Count) { throw 'Owned tab index unavailable' }
+    Require-OwnedForeground 'before owned tab selection'
     $tabs[$TabIndex].GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Wait-Ui 'selected owned tab commits its saved path/layout' { (Value (Address)) -ieq $ExpectedPath -and (Is-Layout $ExpectedMode) }
     $report.tab_evidence+=@([pscustomobject]@{index=$TabIndex;path=(Value (Address));mode=$ExpectedMode;utc=[DateTime]::UtcNow.ToString('o')}); Save-Report
@@ -373,7 +409,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
-public sealed class BlinkExplorerViewUiDesktop { public bool InputReady; public string Reason,DesktopName,CursorWindowClass,CenterWindowClass,ForegroundClass; public int SessionId,CursorX,CursorY,CenterX,CenterY; public uint CursorWindowPid,CenterWindowPid; public long Foreground; }
+public sealed class BlinkExplorerViewUiDesktop { public bool InputReady; public string Reason,DesktopName,CursorWindowClass,CenterWindowClass,ForegroundClass; public int SessionId,CursorX,CursorY,CenterX,CenterY; public uint CursorWindowPid,CenterWindowPid,ForegroundPid; public long Foreground; }
 public static class BlinkExplorerViewUiNative {
     [StructLayout(LayoutKind.Sequential)] struct Point { public int X,Y; public Point(int x,int y){X=x;Y=y;} }
     delegate bool EnumWindowProc(IntPtr window,IntPtr parameter);
@@ -388,6 +424,7 @@ public static class BlinkExplorerViewUiNative {
     [DllImport("user32.dll",SetLastError=true)] static extern bool GetCursorPos(out Point point);
     [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Point point);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll",SetLastError=true)] static extern IntPtr OpenInputDesktop(uint flags,bool inherit,uint access);
     [DllImport("user32.dll")] static extern bool CloseDesktop(IntPtr desktop);
@@ -398,6 +435,7 @@ public static class BlinkExplorerViewUiNative {
     [DllImport("user32.dll")] static extern bool SetKeyboardState(byte[] state);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
     public static IntPtr OwnedWindow;
+    public static bool ActivateOwnedWindow(int pid) { Own(OwnedWindow,pid);return SetForegroundWindow(OwnedWindow); }
     public static bool WindowExists(IntPtr window) { return window!=IntPtr.Zero&&IsWindow(window); }
     public static bool IsOwnedVisible(IntPtr window,int pid) {
         uint owner;
@@ -411,7 +449,7 @@ public static class BlinkExplorerViewUiNative {
     }
     public static BlinkExplorerViewUiDesktop DesktopState() {
         var result=new BlinkExplorerViewUiDesktop{InputReady=true,SessionId=System.Diagnostics.Process.GetCurrentProcess().SessionId,Reason="Unlocked input desktop"};
-        var foreground=GetForegroundWindow();result.Foreground=foreground.ToInt64();var name=new StringBuilder(256);GetClassName(foreground,name,name.Capacity);result.ForegroundClass=name.ToString();
+        var foreground=GetForegroundWindow();result.Foreground=foreground.ToInt64();uint foregroundPid;GetWindowThreadProcessId(foreground,out foregroundPid);result.ForegroundPid=foregroundPid;var name=new StringBuilder(256);GetClassName(foreground,name,name.Capacity);result.ForegroundClass=name.ToString();
         var desktop=OpenInputDesktop(0,false,1);
         if(desktop==IntPtr.Zero){result.InputReady=false;result.Reason="Input desktop is inaccessible (locked, disconnected, or non-interactive)";}
         else{try{uint needed;var text=new StringBuilder(256);if(GetUserObjectInformationW(desktop,2,text,(uint)(text.Capacity*2),out needed)){result.DesktopName=text.ToString();if(!String.Equals(result.DesktopName,"Default",StringComparison.OrdinalIgnoreCase)){result.InputReady=false;result.Reason="Input desktop is "+result.DesktopName+", not the user's unlocked desktop";}}}finally{CloseDesktop(desktop);}}
@@ -462,6 +500,13 @@ public static class BlinkExplorerViewUiNative {
     $report.process_id=$process.Id; Save-Report
     try { Wait-Ui 'owned automation window' { $null -ne (Window) } } catch { Skip ('Owned automation window unavailable: '+$_.Exception.Message) }
     [BlinkExplorerViewUiNative]::OwnedWindow=$process.MainWindowHandle
+    if (-not [BlinkExplorerViewUiNative]::IsOwnedVisible([BlinkExplorerViewUiNative]::OwnedWindow,$process.Id)) { throw 'Owned visible HWND/PID required before initial activation' }
+    # Only this initial activation is allowed. Later focus loss is SKIP, never
+    # an activation retry; UIA SetFocus and menu/keyboard actions are guarded.
+    $report.foreground_activation=[ordered]@{attempts=1;owned_pid=$process.Id;owned_hwnd=[BlinkExplorerViewUiNative]::OwnedWindow.ToInt64();utc=[DateTime]::UtcNow.ToString('o');api_result=$null}
+    $report.foreground_activation.api_result=[BlinkExplorerViewUiNative]::ActivateOwnedWindow($process.Id)
+    $script:ownedForegroundRequired=$true
+    Require-OwnedForeground 'after the single initial owned activation'
     $report.window_dpi=[BlinkExplorerViewUiNative]::GetDpiForWindow($process.MainWindowHandle); Save-Report
 
     Check '01 owned production window commits only the GUID fixture' {
@@ -528,7 +573,7 @@ public static class BlinkExplorerViewUiNative {
         New-OwnedTab 3; Navigate-Owned $mainFolder $marker
         Wait-Ui 'new tab inherits Hidden policy' { @(Folder-Rows $hiddenName).Count -eq 1 }
         if (-not (Read-Hidden)) { throw 'New tab menu is not checked for Hidden' }; Assert-SystemExcluded
-        (By-Id 'FolderViewMode').SetFocus(); Key 0x57 1; Wait-Ui 'only the new owned tab closes' { @(Tabs).Count -eq 2 }
+        Focus-Owned (By-Id 'FolderViewMode'); Key 0x57 1; Wait-Ui 'only the new owned tab closes' { @(Tabs).Count -eq 2 }
         Select-Tab 0 $mainFolder 'Grid'
     }
     Check '09 stale top View peer cannot change the next tab or its original tab' {
@@ -537,6 +582,7 @@ public static class BlinkExplorerViewUiNative {
             if (-not $oldItem.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern,[ref]$oldPattern)) { Skip 'Old view peer has no invocable pattern' }
         }
         Close-Menus; Select-Tab 1 $otherFolder 'List'; $outcome='returned'
+        Require-OwnedForeground 'before invoking deliberately retired owned menu peer'
         try { if ($oldPattern -is [Windows.Automation.InvokePattern]) { $oldPattern.Invoke() } else { $oldPattern.Toggle() } } catch { $outcome='rejected: '+$_.Exception.GetType().Name }
         if ($process.WaitForExit(750)) { throw 'Owned Blink exited during stale peer observation' }
         if (-not (Is-Layout 'List') -or (Value (Address)) -ine $otherFolder) { throw 'Old View callback changed the active second tab' }
@@ -544,7 +590,7 @@ public static class BlinkExplorerViewUiNative {
         $report.stale_peer=[ordered]@{outcome=$outcome;new_tab_unchanged=$true;original_tab_unchanged=$true}; Save-Report
     }
     Check '10 Space arrows Enter and Escape navigate Show using owned keyboard input and return focus' {
-        $before=Read-Hidden; (By-Id 'FolderViewMode').SetFocus(); Key 0x20
+        $before=Read-Hidden; Focus-Owned (By-Id 'FolderViewMode'); Key 0x20
         Wait-Ui 'Space opens the top View menu' { $null -ne (Owned-Element 'TopViewMenu') }
         Key 0x24; for ($arrow=0; $arrow -lt 3; $arrow++) { Key 0x28 }
         Wait-Ui 'keyboard focus reaches Show after three enabled choices' { (Focused-Id) -ceq 'TopViewShow' }
@@ -552,7 +598,7 @@ public static class BlinkExplorerViewUiNative {
         Key 13; Wait-Ui 'keyboard Enter toggles Hidden and dismisses menu' { -not (Owned-Element 'TopViewMenu') }
         if ((Read-Hidden) -eq $before) { throw 'Keyboard Enter did not change Hidden policy' }
         Wait-Ui 'keyboard Hidden change affects real rows' { @(Folder-Rows $hiddenName).Count -eq $(if ($before) { 0 } else { 1 }) }
-        (By-Id 'FolderViewMode').SetFocus(); Key 0x20; Wait-Ui 'Space reopens top menu' { $null -ne (Owned-Element 'TopViewMenu') }
+        Focus-Owned (By-Id 'FolderViewMode'); Key 0x20; Wait-Ui 'Space reopens top menu' { $null -ne (Owned-Element 'TopViewMenu') }
         Key 0x24; for ($arrow=0; $arrow -lt 3; $arrow++) { Key 0x28 }; Key 0x27
         Wait-Ui 'keyboard Show submenu is visible again' { $null -ne (Owned-Element 'TopViewShowHidden') }
         Key 27; Wait-Ui 'first Escape closes only Show submenu' { -not (Owned-Element 'TopViewShowHidden') -and $null -ne (Owned-Element 'TopViewMenu') }
@@ -573,7 +619,7 @@ public static class BlinkExplorerViewUiNative {
             if ($thisPcLabels -cnotcontains (Value (Address))) { throw 'View choice turned ThisPC into a filesystem path' }
         }
         $pcHidden=Read-Hidden; Set-Hidden (-not $pcHidden); Set-Hidden $pcHidden
-        (By-Id 'FolderViewMode').SetFocus(); Key 0x57 1; Wait-Ui 'temporary ThisPC tab closes normally' { @(Tabs).Count -eq 2 }
+        Focus-Owned (By-Id 'FolderViewMode'); Key 0x57 1; Wait-Ui 'temporary ThisPC tab closes normally' { @(Tabs).Count -eq 2 }
         Select-Tab 0 $emptyFolder 'Grid'; Navigate-Owned $mainFolder $marker
     }
     Check '13 text-focused Ctrl A and Delete edit only address text and preserve selected file and View' {
@@ -582,7 +628,7 @@ public static class BlinkExplorerViewUiNative {
         Key 0x41 1; Key 0x2E; Wait-Ui 'Delete clears only the address text selection' { (Value (Address)) -ceq '' }
         if (-not (Test-Path -LiteralPath (Join-Path $mainFolder $marker) -PathType Leaf) -or -not (Same-Names @(Row-Names) $beforeRows) -or (By-Id 'FolderViewMode').Current.HelpText -cne $beforeMode) { throw 'Text editing affected the selected file, listing or View' }
         (Address-Editor).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($mainFolder)
-        (By-Id 'FolderViewMode').SetFocus()
+        Focus-Owned (By-Id 'FolderViewMode')
     }
     $notes.Add('Search Hidden, navigation tree expansion, human visual/IME/accessibility and theme/DPI matrix were not exercised. No Clipboard or file mutation command was invoked.')
     $report.status='PASS'

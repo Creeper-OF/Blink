@@ -119,6 +119,7 @@ copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(
     <ClInclude Include="include\Blink\App\CopyConflictModel.h" />
     <ClInclude Include="include\Blink\App\FileCopyConflictDialog.h" />
     <ClInclude Include="include\Blink\App\ClipboardFileTransfer.h" />
+    <ClInclude Include="include\Blink\App\ClipboardTransferPresentation.h" />
     <ClInclude Include="include\Blink\App\FileOperationCoordinator.h" />
     <ClInclude Include="include\Blink\App\FileCopyBatch.h" />
     <ClInclude Include="include\Blink\App\FolderNameDialog.h" />
@@ -161,6 +162,7 @@ copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(
     <ClCompile Include="src\FolderWatcher.cpp" />
     <ClCompile Include="src\IndexServiceState.cpp" />
     <ClCompile Include="src\SearchState.cpp" />
+    <ClCompile Include="src\ClipboardTransferPresentation.cpp" />
     <ClCompile Include="src\SearchCoordinator.cpp" />
     <ClCompile Include="src\SearchResultValidation.cpp" />
     <ClCompile Include="src\SearchContextCommands.cpp" />

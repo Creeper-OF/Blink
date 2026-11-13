@@ -9,6 +9,7 @@ namespace blink::app
 {
     // UI-only layouts. All modes consume the same tab-owned row objects;
     // neither templates nor controls own navigation, selection or enumeration.
+    // Each row supplies a double CutOpacity (1.0 normally, 0.45 when cut).
     class FolderViewPresentation
     {
     public:

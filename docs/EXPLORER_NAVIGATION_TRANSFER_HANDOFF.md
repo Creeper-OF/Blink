@@ -18,3 +18,7 @@ Paste保留原页面owner、独立解析点中目标的真实identity；源读�
 ```
 
 真实鼠标、系统属性页、SFTP/UNC、外部Explorer组合、剪切淡化和完整环境矩阵保持独立；本轮没有修改索引/服务或新增本地防护平台。源码、用户资料、正式索引、配置及密钥不在清理范围；构建保持单并发，生成物归.build/explorer-navigation-transfer，保留有效缓存与最近两成功源码恢复点。
+
+## 2026-11-13后续Clipboard批次
+
+本机结果生命周期、单DirectoryCopy跟踪及普通三视图/搜索剪切淡化已实现；Release独立64/0/0和完整1808/0/4通过。原真实Clipboard传输0项事实保留，本次预检仍因Ole Private Data在写入前SKIP。候选/窗口/发布和外部OLE待办以[当前交接](CLIPBOARD_TRANSFER_HANDOFF.md)为准，上文PID和双配置结果属于G06b历史。

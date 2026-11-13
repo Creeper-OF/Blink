@@ -8,7 +8,7 @@ namespace blink::app
     {
         constexpr const wchar_t* kDetailsTemplate = LR"XAML(
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-  <Grid Height="32" AutomationProperties.Name="{Binding [Name]}">
+  <Grid Height="32" Opacity="{Binding [CutOpacity]}" AutomationProperties.Name="{Binding [Name]}">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="*" />
       <ColumnDefinition Width="140" />
@@ -28,7 +28,7 @@ namespace blink::app
 
         constexpr const wchar_t* kListTemplate = LR"XAML(
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-  <Grid Height="28" AutomationProperties.Name="{Binding [Name]}">
+  <Grid Height="28" Opacity="{Binding [CutOpacity]}" AutomationProperties.Name="{Binding [Name]}">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="28" />
       <ColumnDefinition Width="*" />
@@ -41,7 +41,7 @@ namespace blink::app
 
         constexpr const wchar_t* kGridTemplate = LR"XAML(
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-  <Grid Width="136" Height="112" Padding="8" AutomationProperties.Name="{Binding [Name]}">
+  <Grid Width="136" Height="112" Padding="8" Opacity="{Binding [CutOpacity]}" AutomationProperties.Name="{Binding [Name]}">
     <Grid.RowDefinitions>
       <RowDefinition Height="56" />
       <RowDefinition Height="*" />

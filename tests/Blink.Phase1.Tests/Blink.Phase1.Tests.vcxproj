@@ -32,6 +32,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\Blink\include\Blink\App\CopyTransferPresentation.h" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardTransferPresentation.h" />
     <ClInclude Include="..\..\src\Blink\include\Blink\App\FileOperationOrigin.h" />
     <ClCompile Include="..\..\src\Blink\src\BrowseController.cpp" />
     <ClCompile Include="..\..\src\Blink\src\FolderWatcher.cpp" />
@@ -60,9 +61,11 @@
     <ClCompile Include="src\ClipboardFileTransferTests.cpp" />
     <ClCompile Include="src\ClipboardCopySourceTests.cpp" />
     <ClCompile Include="src\CopyPresentationTests.cpp" />
+    <ClCompile Include="src\ClipboardTransferPresentationTests.cpp" />
     <ClCompile Include="..\..\src\Blink\src\FileCopyOperation.cpp" />
     <ClCompile Include="..\..\src\Blink\src\DirectoryCopyOperation.cpp" />
     <ClCompile Include="..\..\src\Blink\src\ClipboardFileTransfer.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\ClipboardTransferPresentation.cpp" />
     <ClCompile Include="..\..\src\Blink\src\DirectoryLease.cpp" />
     <ClCompile Include="..\..\src\Blink\src\RenameOperation.cpp" />
     <ClCompile Include="..\..\src\Blink\src\MoveOperation.cpp" />
@@ -135,6 +138,7 @@
     <ClInclude Include="src\DirectoryCopyCoordinatorTests.h" />
     <ClInclude Include="src\ClipboardCopySourceTests.h" />
     <ClInclude Include="src\CopyPresentationTests.h" />
+    <ClInclude Include="src\ClipboardTransferPresentationTests.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Blink.Core\Blink.Core.vcxproj">

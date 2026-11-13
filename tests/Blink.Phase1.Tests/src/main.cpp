@@ -44,6 +44,7 @@
 #include "ClipboardFileTransferTests.h"
 #include "ClipboardCopySourceTests.h"
 #include "CopyPresentationTests.h"
+#include "ClipboardTransferPresentationTests.h"
 #include "FileOperationCoordinatorTests.h"
 #include "Blink/App/FolderViewFormatting.h"
 #include "Blink/App/Localization.h"
@@ -3657,6 +3658,15 @@ int wmain(int argc, wchar_t* argv[])
         if (argc == 3 && std::wstring(argv[1]) == L"--suite")
         {
             const std::wstring suite = argv[2];
+            if (suite == L"clipboard-transfer-presentation")
+            {
+                winrt::init_apartment(winrt::apartment_type::multi_threaded);
+                std::cout << "suite=clipboard-transfer-presentation\n";
+                const bool passed = RunClipboardTransferPresentationTests();
+                std::cout << "clipboard_transfer_presentation_tests=" << (passed ? "PASS" : "FAIL") << "\n";
+                winrt::uninit_apartment();
+                return passed ? 0 : 1;
+            }
             if (suite == L"search-response" || suite == L"search-scope" || suite == L"search-visibility")
             {
                 winrt::init_apartment(winrt::apartment_type::multi_threaded);
@@ -3666,7 +3676,7 @@ int wmain(int argc, wchar_t* argv[])
                 return passed ? 0 : 1;
             }
         }
-        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility]"
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|clipboard-transfer-presentation]"
             " or --live-index-probe <options>\n";
         return 2;
     }
@@ -3727,6 +3737,7 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunClipboardFileTransferTests();
     passed &= RunClipboardCopySourceTests();
     passed &= RunCopyPresentationTests();
+    passed &= RunClipboardTransferPresentationTests();
     passed &= RunFileOperationCoordinatorTests();
     passed &= RunFolderChangeStateTests();
     passed &= RunNativeFolderWatcherTests();

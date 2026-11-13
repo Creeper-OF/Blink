@@ -13,6 +13,16 @@
 
 本次原生回归全部检查约 33–54 秒，产品编译约 15–16 分钟。源码没变而脚本修正时，直接复测对应脚本，不重编产品。开发台构建使用本批 candidate OutDir，避免覆盖正在运行的正式索引服务；具体环境见 LOCAL_ENVIRONMENT。
 
+## Clipboard本机结果与剪切呈现
+
+```powershell
+.\scripts\run-blink-clipboard-smoke.ps1 -Configuration Release -Feature Presentation
+```
+
+独立CLI为`--suite clipboard-transfer-presentation`，预期64个唯一PASS/0 FAIL/0 SKIP，只运行此组一次；可用`-TestBinaryPath`指定实际测试程序。脚本不构建、不读写真实Clipboard、不操作GUI或服务，保存日志/退出码/SHA到`.build/clipboard-transfer/integration`。该组在无参完整Phase1中也只调用一次，不能把两次数量叠加。
+
+本批Release完整1808 PASS/0 FAIL/4既有1314 SKIP，已包含新64项。实际Clipboard预检因Ole Private Data无法完整恢复而在写入前SKIP；模型通过不替代真实淡化/Explorer收发。普通View模板/布局/关闭验证和本批发布状态见[交接](CLIPBOARD_TRANSFER_HANDOFF.md)。
+
 ## 搜索响应与目录范围
 
 ```powershell
@@ -42,7 +52,7 @@ Phase05无参数是会启动服务原型的历史入口，不作为本批普通�
 
 ## 真实服务搜索与夹具恢复
 
-正式索引服务已在原注册路径更新为PID29080，C/D只读就绪及真实搜索夹具已通过；默认主程序仍为G06b/PID15036。真实服务入口在普通用户PowerShell、项目根运行：
+正式索引服务已在原注册路径更新为PID29080，C/D只读就绪及真实搜索夹具已通过；默认主程序已于G06c批次发布79f915/PID39240；后续Clipboard原生验证版已更新9fe19d/PID28400；窗口与实机待验边界见上节。真实服务入口在普通用户PowerShell、项目根运行：
 
 ```powershell
 .\scripts\run-blink-live-search-smoke.ps1
