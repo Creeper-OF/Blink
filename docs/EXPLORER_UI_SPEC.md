@@ -149,7 +149,7 @@ flowchart TD
 | 详情/预览 | 无详情侧栏或预览面板；`DEFERRED` | 不提供无效“预览/详情”开关；格式解码及第三方预览隔离应独立切片 |
 | 状态栏 | 浏览加载/空/错误、选中数量、索引状态与操作状态已接；`PARTIAL` | 不显示选中总大小或完整传输速度/剩余量；未实现暂停，不增加装饰按钮 |
 | 属性 | 普通目录为Blink只读统计ContentDialog；搜索可调用完整系统属性；`PARTIAL` | 两入口已有实测但并非属性编辑器；驱动器、所有特殊对象/原生页签矩阵仍需独立验证 |
-| 外部剪贴板/拖放 | CF_HDROP、Copy/Move、修饰键、异步准备及实际队列已有回归；`PARTIAL` | 本机Clipboard结果/剪切淡化已实现，真实外观与外部OLE完成回传待验（见[当前交接](CLIPBOARD_TRANSFER_HANDOFF.md)）；Alt/链接拖放、右键拖放、FileDescriptor/FileContents虚拟文件未提供 |
+| 外部剪贴板/拖放 | CF_HDROP、Copy/Move、修饰键、异步准备及实际队列已有回归；`PARTIAL` | 本机Clipboard结果/剪切淡化已实现（见[呈现交接](CLIPBOARD_TRANSFER_HANDOFF.md)）；外部原对象接收与完成回传已接线（见[接收交接](CLIPBOARD_RECEIVE_HANDOFF.md)），真实外观/Explorer互操作待验，自有OLE发送对象未实现；Alt/链接拖放、右键拖放、FileDescriptor/FileContents虚拟文件未提供 |
 
 源码定位：ThisPC入口 `Location.cpp:54/91/114`；地址 `AddressBarModel.h/.cpp`、`AddressBarPresentation.h/.cpp`与main的`BuildAddressBar/SyncAddressBar`；工具条 `BuildFolderViewCommands`；模板 `FolderViewPresentation.cpp:9/29/43`；类型图标 `FolderViewFormatting.cpp:237`；状态 `FormatBrowseActivity`；F2选区 `FileNameSelection.h::BuildFileNameSelection`、`FolderNameDialog::Show/Opened`；拖放能力 `FileDragDropModel.cpp:62`。更多对象/菜单差异以菜单矩阵为准。
 

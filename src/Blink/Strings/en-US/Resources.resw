@@ -470,4 +470,13 @@
   <data name="Nav.MenuCollapse" xml:space="preserve"><value>Collapse</value></data>
   <data name="Operation.TargetPreparing" xml:space="preserve"><value>Reading target folder…</value></data>
   <data name="Operation.TargetCancelling" xml:space="preserve"><value>Cancelling folder preparation…</value></data>
+  <data name="Clipboard.SourceFailed" xml:space="preserve">
+    <value>Unable to read files from the source application: {0}</value>
+  </data>
+  <data name="Clipboard.FeedbackFailed" xml:space="preserve">
+    <value>The file operation ended, but the source application could not be notified: {0}</value>
+  </data>
+  <data name="Clipboard.Changed" xml:space="preserve">
+    <value>Clipboard contents changed during preparation. Paste again.</value>
+  </data>
 </root>

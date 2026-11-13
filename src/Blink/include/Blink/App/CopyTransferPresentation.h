@@ -104,6 +104,20 @@ namespace blink::app
         return collision || (value.result.error == ERROR_INVALID_PARAMETER && same_source_root);
     }
 
+    // The single-directory route waits for this same root decision in the UI,
+    // even though it has no resumable file-batch snapshot.
+    [[nodiscard]] inline bool DirectoryCopyHasRootConflict(const FileOperationSnapshot& value) noexcept
+    {
+        if (value.kind != FileOperationKind::DirectoryCopy || value.stage != FileOperationStage::Failed ||
+            !value.directory_copy_request || !value.directory_copy_result || value.directory_copy_result->partial_tree_left ||
+            value.directory_copy_result->directories_created || value.directory_copy_result->files_copied) { return false; }
+        const auto& request = *value.directory_copy_request;
+        const bool same_root = request.source_parent_identity == request.destination_parent_identity &&
+            CompareStringOrdinal(request.source.name.c_str(), -1, request.destination_name.c_str(), -1, TRUE) == CSTR_EQUAL;
+        return value.result.error == ERROR_ALREADY_EXISTS || value.result.error == ERROR_FILE_EXISTS ||
+            (value.result.error == ERROR_INVALID_PARAMETER && same_root);
+    }
+
     [[nodiscard]] inline bool DirectoryCopyNeedsRefresh(const FileOperationSnapshot& value) noexcept
     { return value.kind == FileOperationKind::DirectoryCopy && value.directory_copy_result &&
         (value.directory_copy_result->copied || value.directory_copy_result->partial_tree_left); }

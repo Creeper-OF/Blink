@@ -45,6 +45,9 @@
 #include "ClipboardCopySourceTests.h"
 #include "CopyPresentationTests.h"
 #include "ClipboardTransferPresentationTests.h"
+#include "ClipboardDataObjectTests.h"
+#include "ClipboardPasteSessionTests.h"
+#include "ClipboardPasteControllerTests.h"
 #include "FileOperationCoordinatorTests.h"
 #include "Blink/App/FolderViewFormatting.h"
 #include "Blink/App/Localization.h"
@@ -3667,6 +3670,20 @@ int wmain(int argc, wchar_t* argv[])
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
+            if (suite == L"clipboard-data-object" || suite == L"clipboard-paste-session" || suite == L"clipboard-paste-controller")
+            {
+                winrt::init_apartment(winrt::apartment_type::multi_threaded);
+                const bool data_object = suite == L"clipboard-data-object";
+                const bool session = suite == L"clipboard-paste-session";
+                std::cout << "suite=" << (data_object ? "clipboard-data-object" : session ? "clipboard-paste-session" : "clipboard-paste-controller") << "\n";
+                const bool passed = data_object ? RunClipboardDataObjectTests() :
+                    session ? RunClipboardPasteSessionTests() : RunClipboardPasteControllerTests();
+                std::cout << (data_object ? "clipboard_data_object_tests=" :
+                    session ? "clipboard_paste_session_tests=" : "clipboard_paste_controller_tests=")
+                    << (passed ? "PASS" : "FAIL") << "\n";
+                winrt::uninit_apartment();
+                return passed ? 0 : 1;
+            }
             if (suite == L"search-response" || suite == L"search-scope" || suite == L"search-visibility")
             {
                 winrt::init_apartment(winrt::apartment_type::multi_threaded);
@@ -3676,7 +3693,7 @@ int wmain(int argc, wchar_t* argv[])
                 return passed ? 0 : 1;
             }
         }
-        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|clipboard-transfer-presentation]"
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller]"
             " or --live-index-probe <options>\n";
         return 2;
     }
@@ -3738,6 +3755,9 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunClipboardCopySourceTests();
     passed &= RunCopyPresentationTests();
     passed &= RunClipboardTransferPresentationTests();
+    passed &= RunClipboardDataObjectTests();
+    passed &= RunClipboardPasteSessionTests();
+    passed &= RunClipboardPasteControllerTests();
     passed &= RunFileOperationCoordinatorTests();
     passed &= RunFolderChangeStateTests();
     passed &= RunNativeFolderWatcherTests();

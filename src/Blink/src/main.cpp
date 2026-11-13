@@ -8,6 +8,7 @@
 #include "Blink/App/CopyTransferPresentation.h"
 #include "Blink/App/ClipboardFileTransfer.h"
 #include "Blink/App/ClipboardTransferPresentation.h"
+#include "Blink/App/ClipboardPasteController.h"
 #include "Blink/App/MoveTransferPresentation.h"
 #include "Blink/App/FileOperationRelocation.h"
 #include "Blink/App/DeletePresentation.h"
@@ -1251,6 +1252,7 @@ struct App : AppT<App>
         copy_conflict_wait_operation_id_ = 0;
         directory_merge_dialog_operation_id_ = directory_merge_dialog_conflict_id_ = 0;
         folder_name_dialog_.Close(); copy_conflict_dialog_.Close();
+        clipboard_receiver_.CancelDecisions();
         delete_confirmation_.Close(); properties_dialog_.Close();
         if ((had_conflict && file_operations_.HasPendingBatch()) || had_merge_conflict)
         {
@@ -2061,6 +2063,7 @@ struct App : AppT<App>
 
     void ObserveClipboardTransfer(const blink::app::FileOperationSnapshot& snapshot)
     {
+        clipboard_receiver_.Observe(snapshot);
         (void)clipboard_presentation_.Observe(snapshot);
         RefreshClipboardCutAppearance();
     }
@@ -2076,6 +2079,7 @@ struct App : AppT<App>
 
     void ClipboardFilesPublished()
     {
+        ++clipboard_feedback_generation_;
         clipboard_presentation_.Publish(clipboard_copy_cache_);
         // An external publication can race the worker's dispatcher callback.
         // A late success must not restore the appearance of superseded data.
@@ -2083,9 +2087,12 @@ struct App : AppT<App>
     }
 
     void TrackClipboardPaste(const blink::app::ClipboardCopySources& sources,
-        const blink::app::ClipboardFilePaths& payload, const std::uint64_t operation_id)
+        const blink::app::ClipboardFilePaths& payload, const std::uint64_t operation_id,
+        std::shared_ptr<blink::app::ClipboardPasteSession> session,
+        std::shared_ptr<blink::app::ClipboardPasteFeedbackContext> feedback_context)
     {
         if (!operation_id) { return; }
+        clipboard_receiver_.Track(sources, payload, operation_id, std::move(session), std::move(feedback_context));
         clipboard_presentation_.Track(sources, payload.intent, payload.sequence, operation_id);
         ObserveClipboardTransfer(file_operations_.Snapshot());
     }
@@ -2263,12 +2270,16 @@ struct App : AppT<App>
         status_.Text(hstring(localization_.GetString(L"Clipboard.Preparing"))); RenderFileOperationStatus();
         const auto weak = get_weak(); const auto dispatcher = dispatcher_;
         const auto own = clipboard_copy_cache_;
+        const auto feedback_generation = ++clipboard_feedback_generation_;
+        const auto feedback_context = std::make_shared<blink::app::ClipboardPasteFeedbackContext>();
         try
         {
             clipboard_work_ = Windows::System::Threading::ThreadPool::RunAsync(
-                [weak, dispatcher, origin, cancellation, own](auto&&) mutable {
+                [weak, dispatcher, origin, cancellation, own, feedback_generation, feedback_context](auto&&) mutable {
                     blink::app::ClipboardCopySources requests;
                     blink::app::ClipboardFilePaths payload;
+                    std::shared_ptr<blink::app::ClipboardPasteSession> session;
+                    HRESULT source_error{ S_OK };
                     DWORD error = ERROR_GEN_FAILURE;
                     try
                     {
@@ -2278,7 +2289,30 @@ struct App : AppT<App>
                             const auto result = blink::app::ReadFileDropTarget(origin.location.FolderPath(), origin.identity);
                             if (FAILED(result)) { error = HRESULT_CODE(result); }
                         }
-                        if (!error) { payload = blink::app::ReadClipboardFilesTransfer(); error = payload.error; }
+                        if (!error)
+                        {
+                            auto source = blink::app::CaptureClipboardPaste(cancellation,
+                                [weak, dispatcher, feedback_generation, feedback_context](const blink::app::ClipboardPasteSessionReport& report) {
+                                    // Unsupported optional feedback and S_FALSE
+                                    // do not turn a completed file task into an error.
+                                    if (!report.feedback.warning || !FAILED(report.error)) { return; }
+                                    const auto result = report.error;
+                                    (void)dispatcher.TryEnqueue([weak, feedback_generation, feedback_context, result] {
+                                        if (const auto app = weak.get(); app && !app->window_style_closed_ &&
+                                            app->clipboard_feedback_generation_ == feedback_generation &&
+                                            feedback_context->operation_id &&
+                                            app->file_operations_.Snapshot().operation_id == feedback_context->operation_id &&
+                                            !app->file_operations_.IsBusy() && !app->clipboard_work_pending_)
+                                        {
+                                            app->status_.Text(hstring(app->localization_.Format(L"Clipboard.FeedbackFailed",
+                                                winrt::hresult_error(result).message().c_str())));
+                                        }
+                                    });
+                                });
+                            source_error = source.error;
+                            session = std::move(source.session);
+                            payload = std::move(source.payload); error = payload.error;
+                        }
                         if (error == ERROR_SUCCESS)
                         {
                             // Already-submitted MOVE data is resolved through its
@@ -2296,14 +2330,21 @@ struct App : AppT<App>
                     }
                     catch (const std::bad_alloc&) { error = ERROR_NOT_ENOUGH_MEMORY; }
                     catch (...) { error = ERROR_GEN_FAILURE; requests.emplace<std::monostate>(); }
-                    (void)dispatcher.TryEnqueue([weak, origin, cancellation, requests = std::move(requests), payload = std::move(payload), error]() mutable {
+                    (void)dispatcher.TryEnqueue([weak, origin, cancellation, requests = std::move(requests),
+                        payload = std::move(payload), session = std::move(session), feedback_context, source_error, error]() mutable {
                         if (auto app = weak.get(); app && !app->window_style_closed_)
                         {
                             app->clipboard_work_pending_ = false; app->RenderFileOperationStatus();
                             if (cancellation->load()) { app->ShowClipboardCopyError(ERROR_CANCELLED); return; }
                             if (!blink::app::IsFileOperationOwnerCurrent(origin, app->ActiveTab(), app->window_style_closed_))
                             { app->status_.Text(hstring(app->localization_.GetString(L"Status.CommandStale"))); return; }
-                            if (error != ERROR_SUCCESS) { app->ShowClipboardCopyError(error); return; }
+                            if (error != ERROR_SUCCESS)
+                            {
+                                if (error == ERROR_GEN_FAILURE && FAILED(source_error))
+                                { app->status_.Text(hstring(app->localization_.Format(L"Clipboard.SourceFailed", winrt::hresult_error(source_error).message().c_str()))); }
+                                else { app->ShowClipboardCopyError(error); }
+                                return;
+                            }
                             if (!app->IsFileOperationOriginCurrent(origin))
                             { app->status_.Text(hstring(app->localization_.GetString(L"Status.CommandStale"))); return; }
                             if (payload.intent == blink::app::ClipboardTransferIntent::Move)
@@ -2315,7 +2356,7 @@ struct App : AppT<App>
                                 const auto id = app->StartMoves(origin, std::move(moves));
                                 if (id)
                                 {
-                                    app->TrackClipboardPaste(requests, payload, id);
+                                    app->TrackClipboardPaste(requests, payload, id, std::move(session), feedback_context);
                                     // Keep the original sequence/IDs even for external
                                     // CUT data. Partial completion never replays it as
                                     // a freshly captured selection on another Paste.
@@ -2329,7 +2370,7 @@ struct App : AppT<App>
                                 // The existing item queue also owns detached
                                 // directory conflicts, cancellation and retries.
                                 app->TrackClipboardPaste(requests, payload,
-                                    app->SubmitFileDrop(origin, requests, DROPEFFECT_COPY));
+                                    app->SubmitFileDrop(origin, requests, DROPEFFECT_COPY), std::move(session), feedback_context);
                                 return;
                             }
                             blink::app::ClipboardCopySources bound;
@@ -2343,7 +2384,7 @@ struct App : AppT<App>
                             { id = app->StartDirectoryCopy(origin, std::move(*directory)); }
                             else if (auto* items = std::get_if<blink::app::CopyItemRequests>(&bound))
                             { id = app->StartCopyItems(origin, std::move(*items)); }
-                            app->TrackClipboardPaste(requests, payload, id);
+                            app->TrackClipboardPaste(requests, payload, id, std::move(session), feedback_context);
                         }
                     });
                 });
@@ -2354,6 +2395,7 @@ struct App : AppT<App>
     void ShowClipboardCopyError(const DWORD error)
     {
         status_.Text(hstring(error == ERROR_INVALID_STATE ? localization_.GetString(L"Move.AlreadySubmitted") :
+            error == ERROR_RETRY ? localization_.GetString(L"Clipboard.Changed") :
             error == ERROR_NOT_SAME_DEVICE ? localization_.GetString(L"Move.CrossVolume") :
             error == ERROR_NOT_SUPPORTED ? localization_.GetString(L"Clipboard.CopyLimited") :
             error == ERROR_CANCELLED ? localization_.GetString(L"Clipboard.Cancelled") :
@@ -2427,7 +2469,8 @@ struct App : AppT<App>
     void DirectoryCopyActionEnded(const FileOperationOrigin& origin, const std::uint64_t operation_id,
         std::optional<blink::app::DirectoryCopyRequest> conflict = {})
     {
-        if (window_style_closed_ || file_operations_.Snapshot().operation_id != operation_id) { return; }
+        if (window_style_closed_ || file_operations_.Snapshot().operation_id != operation_id)
+        { clipboard_receiver_.CancelDecision(operation_id); return; }
         const auto action = file_operations_.CurrentAction();
         if (action && action.Status() == winrt::Windows::Foundation::AsyncStatus::Started)
         {
@@ -2440,7 +2483,7 @@ struct App : AppT<App>
                     {
                         const bool may_show_conflict = app->copy_conflict_wait_operation_id_ == operation_id;
                         if (may_show_conflict) { app->copy_conflict_wait_operation_id_ = 0; }
-                        else { conflict.reset(); }
+                        else { conflict.reset(); app->clipboard_receiver_.CancelDecision(operation_id); }
                         app->DirectoryCopyActionEnded(origin, operation_id, std::move(conflict));
                     }
                 });
@@ -2449,6 +2492,7 @@ struct App : AppT<App>
         RenderFileOperationStatus();
         if (conflict && IsFileOperationOriginCurrent(origin))
         { ShowDirectoryCopyConflictDialog(origin, std::move(*conflict), operation_id); }
+        else if (conflict) { clipboard_receiver_.CancelDecision(operation_id); }
     }
 
     void ShowDirectoryMergeConflictDialog(const FileOperationOrigin& origin, const std::uint64_t operation_id)
@@ -2529,15 +2573,7 @@ struct App : AppT<App>
             const bool terminal = snapshot.directory_copy_result.has_value();
             const bool awaiting_conflict = snapshot.directory_conflict.has_value();
             std::optional<blink::app::DirectoryCopyRequest> conflict;
-            const bool same_source_root = snapshot.directory_copy_request &&
-                snapshot.directory_copy_request->source_parent_identity == snapshot.directory_copy_request->destination_parent_identity &&
-                CompareStringOrdinal(snapshot.directory_copy_request->source.name.c_str(), -1,
-                    snapshot.directory_copy_request->destination_name.c_str(), -1, TRUE) == CSTR_EQUAL;
-            if (snapshot.stage == blink::app::FileOperationStage::Failed && snapshot.directory_copy_request &&
-                snapshot.directory_copy_result && !snapshot.directory_copy_result->partial_tree_left &&
-                !snapshot.directory_copy_result->directories_created && !snapshot.directory_copy_result->files_copied &&
-                (snapshot.result.error == ERROR_ALREADY_EXISTS || snapshot.result.error == ERROR_FILE_EXISTS ||
-                    (snapshot.result.error == ERROR_INVALID_PARAMETER && same_source_root)))
+            if (blink::app::DirectoryCopyHasRootConflict(snapshot))
             { conflict = snapshot.directory_copy_request; }
             std::optional<blink::app::FileOperationSnapshot> transfer_end;
             if (terminal || snapshot.closed) { transfer_end.emplace(std::move(snapshot)); }
@@ -2547,7 +2583,8 @@ struct App : AppT<App>
                 {
                     if (transfer_end) { app->ObserveClipboardTransfer(*transfer_end); }
                     if (changed) { app->RefreshAfterFileOperation(parent); }
-                    if (app->file_operations_.Snapshot().operation_id != id) { return; }
+                    if (app->file_operations_.Snapshot().operation_id != id)
+                    { app->clipboard_receiver_.CancelDecision(id); return; }
                     app->RenderFileOperationStatus();
                     app->ShowDirectoryMergeConflictDialog(origin, id);
                     if (terminal) { app->DirectoryCopyActionEnded(origin, id, std::move(conflict)); }
@@ -2584,12 +2621,14 @@ struct App : AppT<App>
         const std::uint64_t operation_id)
     {
         if (!IsFileOperationOriginCurrent(origin) || file_operations_.IsBusy() || file_operations_.HasPendingBatch() ||
-            clipboard_work_pending_ || target_operation_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen()) { return; }
+            clipboard_work_pending_ || target_operation_pending_ || copy_conflict_wait_operation_id_ != 0 || IsOperationDialogOpen())
+        { clipboard_receiver_.CancelDecision(operation_id); return; }
         const auto current = file_operations_.Snapshot();
         if (current.operation_id != operation_id || current.kind != blink::app::FileOperationKind::DirectoryCopy ||
             current.stage != blink::app::FileOperationStage::Failed || !current.directory_copy_result ||
             current.directory_copy_result->partial_tree_left || current.directory_copy_result->directories_created ||
-            current.directory_copy_result->files_copied || request.destination_parent_identity != origin.identity) { return; }
+            current.directory_copy_result->files_copied || request.destination_parent_identity != origin.identity)
+        { clipboard_receiver_.CancelDecision(operation_id); return; }
         const auto source = blink::core::JoinPath(request.source_parent, request.source.name);
         const auto destination = blink::core::JoinPath(origin.location.FolderPath(), request.destination_name);
         const bool can_merge = request.source_parent_identity != request.destination_parent_identity ||
@@ -2597,23 +2636,36 @@ struct App : AppT<App>
         const auto weak = get_weak();
         try
         {
-            (void)copy_conflict_dialog_.Show(root_.XamlRoot(), localization_, source, destination, false,
+            const bool shown = copy_conflict_dialog_.Show(root_.XamlRoot(), localization_, source, destination, false,
                 [weak, origin, request = std::move(request), operation_id](blink::app::FileCopyConflictPolicy policy) mutable {
                     if (auto app = weak.get(); app && !app->window_style_closed_)
                     {
                         if (!app->IsFileOperationOriginCurrent(origin) || app->file_operations_.Snapshot().operation_id != operation_id)
-                        { app->status_.Text(hstring(app->localization_.GetString(L"Status.CommandStale"))); return; }
+                        {
+                            app->clipboard_receiver_.CancelDecision(operation_id);
+                            app->status_.Text(hstring(app->localization_.GetString(L"Status.CommandStale"))); return;
+                        }
                         if (policy != blink::app::FileCopyConflictPolicy::Skip && policy != blink::app::FileCopyConflictPolicy::KeepBoth &&
-                            policy != blink::app::FileCopyConflictPolicy::Cancel && policy != blink::app::FileCopyConflictPolicy::Merge) { return; }
+                            policy != blink::app::FileCopyConflictPolicy::Cancel && policy != blink::app::FileCopyConflictPolicy::Merge)
+                        { app->clipboard_receiver_.CancelDecision(operation_id); return; }
                         request.conflict_policy = policy;
-                        app->StartDirectoryCopy(origin, std::move(request), true);
+                        if (!app->StartDirectoryCopy(origin, std::move(request), true))
+                        { app->clipboard_receiver_.CancelDecision(operation_id); }
                     }
-                }, [weak](HRESULT) {
+                }, [weak, operation_id](HRESULT) {
                     if (auto app = weak.get(); app && !app->window_style_closed_)
-                    { app->status_.Text(hstring(app->localization_.GetString(L"NewFolder.DialogFailed"))); }
+                    {
+                        app->clipboard_receiver_.CancelDecision(operation_id);
+                        app->status_.Text(hstring(app->localization_.GetString(L"NewFolder.DialogFailed")));
+                    }
                 }, true, false, can_merge);
+            if (!shown) { clipboard_receiver_.CancelDecision(operation_id); }
         }
-        catch (...) { status_.Text(hstring(localization_.GetString(L"NewFolder.DialogFailed"))); }
+        catch (...)
+        {
+            clipboard_receiver_.CancelDecision(operation_id);
+            status_.Text(hstring(localization_.GetString(L"NewFolder.DialogFailed")));
+        }
     }
 
     void ShowDirectoryCopyNameDialog(const FileOperationOrigin& origin, blink::app::DirectoryCopyRequest request,
@@ -5174,6 +5226,7 @@ struct App : AppT<App>
     {
         file_drag_drop_.Advance(previous, next, snapshot);
         clipboard_presentation_.Advance(previous, next);
+        clipboard_receiver_.Advance(previous, next);
         ObserveClipboardTransfer(snapshot);
         if (next && directory_tree_changes_ && directory_tree_changes_->operation_id == previous)
         {
@@ -8305,6 +8358,7 @@ struct App : AppT<App>
         shell_context_menu_.Shutdown(); search_menu_selection_.reset(); pending_search_folder_command_.reset();
         CloseOperationDialogs();
         file_operations_.Shutdown();
+        clipboard_receiver_.Close();
         CancelDragTabHover(); file_drag_drop_.Close();
         if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
         clipboard_presentation_.Close();
@@ -9365,6 +9419,8 @@ struct App : AppT<App>
     blink::app::FileOperationCancellation clipboard_cancellation_;
     blink::app::ClipboardCopyCache clipboard_copy_cache_;
     blink::app::ClipboardTransferPresentation clipboard_presentation_;
+    blink::app::ClipboardPasteController clipboard_receiver_;
+    std::uint64_t clipboard_feedback_generation_{};
     std::uint64_t clipboard_cut_generation_{};
     blink::app::ShellContextMenuController shell_context_menu_;
     blink::app::SearchContextMenuPresentation search_context_menu_presentation_;

@@ -135,7 +135,7 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 | EXP-MOUSE-04 | 标签重排/溢出、滚轮、窗口拖动/缩放/Snap | TabView/TitleBar 系统控件；历史窗口拖动和导航树滚轮单独存证 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN；本轮不扩成触控板/多屏已验 |
 | EXP-CLIP-01 | Unicode CF_HDROP，最多 1024 项、4 MiB，顺序/重复名保留；COPY/MOVE Preferred DropEffect | ClipboardFileTransfer；T-CLIP；H-FOLDER-UI #08、H-MERGE-UI #02 | IMPLEMENTED_VERIFIED（限定历史）/ NOT RUN |
 | EXP-CLIP-02 | 内部剪贴板缓存绑定 sequence、原始有序 payload、复制/移动意图与源/父身份；续尾不重放已完成项 | main Publish/Paste、ClipboardCopyCache、MoveTransferTests | IMPLEMENTED_VERIFIED（原生历史）/ NOT RUN |
-| EXP-CLIP-03 | 外部 Explorer → Blink 及 Blink → Explorer，分别 Copy/Cut 后 Paste，记录真实源/目标、完成效果、取消与剪贴板是否还属于本次操作 | 内部真实 CF_HDROP smoke 不等于 Explorer 对端；本机结果/剪切淡化见[当前交接](CLIPBOARD_TRANSFER_HANDOFF.md)，外部Performed反馈和实机效果仍待验 | PARTIAL / NOT RUN |
+| EXP-CLIP-03 | 外部 Explorer → Blink 及 Blink → Explorer，分别 Copy/Cut 后 Paste，记录真实源/目标、完成效果、取消与剪贴板是否还属于本次操作 | 内部真实 CF_HDROP smoke 不等于 Explorer 对端；本机结果/剪切淡化见[呈现交接](CLIPBOARD_TRANSFER_HANDOFF.md)；原对象接收/完成回传已接线，见[接收交接](CLIPBOARD_RECEIVE_HANDOFF.md)。真实Explorer收发/淡化仍待验，自有OLE发送对象未实现 | PARTIAL / NOT RUN |
 | EXP-CLIP-04 | OLE 虚拟文件 FileDescriptor/FileContents、邮件附件/压缩包内拖出等无路径对象 | 读取入口只接受 CF_HDROP/TYMED_HGLOBAL；未实现流/描述符物化 | DEFERRED；当前 UNSUPPORTED 输入 / NOT RUN |
 | EXP-CLIP-05 | 本机Cut淡化、成功项解除、终态恢复；新Clipboard替换、分批行及搜索追加不保留旧外观 | ClipboardTransferPresentation及普通三模板/搜索；原生独立64项，含单DirectoryCopy/部分/重试/旧事件；[交接](CLIPBOARD_TRANSFER_HANDOFF.md) | IMPLEMENTED_NEEDS_MANUAL；原生64/0/0，真实Opacity/Clipboard未验 |
 | EXP-DROP-01 | 真实 IDataObject 与 IDataObjectProvider、跨 apartment 引用、异步 capability；完整本地路径集合不截成 WinRT StorageItems 前缀 | FileDragData/FileDragDropController；T-DROP | IMPLEMENTED_VERIFIED（原生历史）/ NOT RUN |

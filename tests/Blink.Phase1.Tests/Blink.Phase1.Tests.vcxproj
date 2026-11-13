@@ -33,6 +33,9 @@
   <ItemGroup>
     <ClInclude Include="..\..\src\Blink\include\Blink\App\CopyTransferPresentation.h" />
     <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardTransferPresentation.h" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardDataObject.h" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardPasteSession.h" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardPasteController.h" />
     <ClInclude Include="..\..\src\Blink\include\Blink\App\FileOperationOrigin.h" />
     <ClCompile Include="..\..\src\Blink\src\BrowseController.cpp" />
     <ClCompile Include="..\..\src\Blink\src\FolderWatcher.cpp" />
@@ -62,10 +65,16 @@
     <ClCompile Include="src\ClipboardCopySourceTests.cpp" />
     <ClCompile Include="src\CopyPresentationTests.cpp" />
     <ClCompile Include="src\ClipboardTransferPresentationTests.cpp" />
+    <ClCompile Include="src\ClipboardDataObjectTests.cpp" />
+    <ClCompile Include="src\ClipboardPasteSessionTests.cpp" />
+    <ClCompile Include="src\ClipboardPasteControllerTests.cpp" />
     <ClCompile Include="..\..\src\Blink\src\FileCopyOperation.cpp" />
     <ClCompile Include="..\..\src\Blink\src\DirectoryCopyOperation.cpp" />
     <ClCompile Include="..\..\src\Blink\src\ClipboardFileTransfer.cpp" />
     <ClCompile Include="..\..\src\Blink\src\ClipboardTransferPresentation.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\ClipboardDataObject.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\ClipboardPasteSession.cpp" />
+    <ClCompile Include="..\..\src\Blink\src\ClipboardPasteController.cpp" />
     <ClCompile Include="..\..\src\Blink\src\DirectoryLease.cpp" />
     <ClCompile Include="..\..\src\Blink\src\RenameOperation.cpp" />
     <ClCompile Include="..\..\src\Blink\src\MoveOperation.cpp" />
@@ -139,6 +148,9 @@
     <ClInclude Include="src\ClipboardCopySourceTests.h" />
     <ClInclude Include="src\CopyPresentationTests.h" />
     <ClInclude Include="src\ClipboardTransferPresentationTests.h" />
+    <ClInclude Include="src\ClipboardDataObjectTests.h" />
+    <ClInclude Include="src\ClipboardPasteSessionTests.h" />
+    <ClInclude Include="src\ClipboardPasteControllerTests.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Blink.Core\Blink.Core.vcxproj">

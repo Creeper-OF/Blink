@@ -13,15 +13,22 @@
 
 本次原生回归全部检查约 33–54 秒，产品编译约 15–16 分钟。源码没变而脚本修正时，直接复测对应脚本，不重编产品。开发台构建使用本批 candidate OutDir，避免覆盖正在运行的正式索引服务；具体环境见 LOCAL_ENVIRONMENT。
 
-## Clipboard本机结果与剪切呈现
+## Clipboard结果、呈现与原对象接收
 
 ```powershell
-.\scripts\run-blink-clipboard-smoke.ps1 -Configuration Release -Feature Presentation
+.\scripts\run-blink-clipboard-smoke.ps1 -Configuration Release -Feature All -OutputDirectory '.build\clipboard-receive\integration'
 ```
 
-独立CLI为`--suite clipboard-transfer-presentation`，预期64个唯一PASS/0 FAIL/0 SKIP，只运行此组一次；可用`-TestBinaryPath`指定实际测试程序。脚本不构建、不读写真实Clipboard、不操作GUI或服务，保存日志/退出码/SHA到`.build/clipboard-transfer/integration`。该组在无参完整Phase1中也只调用一次，不能把两次数量叠加。
+| Feature | 独立原生CLI | 预期唯一正常检查数 |
+| --- | --- | --- |
+| Presentation | clipboard-transfer-presentation | 64 |
+| DataObject | clipboard-data-object | 60 |
+| Session | clipboard-paste-session | 33 |
+| Controller | clipboard-paste-controller | 23 |
 
-本批Release完整1808 PASS/0 FAIL/4既有1314 SKIP，已包含新64项。实际Clipboard预检因Ole Private Data无法完整恢复而在写入前SKIP；模型通过不替代真实淡化/Explorer收发。普通View模板/布局/关闭验证和本批发布状态见[交接](CLIPBOARD_TRANSFER_HANDOFF.md)。
+All 顺序启动四个独立进程，核对每组精确标签、完成标记、退出码及相同测试EXE SHA。也可只选某个Feature复测；默认Presentation及旧默认输出目录保持兼容。脚本不构建、不读写真实Clipboard、不操作GUI或服务。四组也包含在无参完整Phase1中，数量不能相加为更多覆盖。
+
+DataObject验证格式/medium所有权与完成协议；Session验证真实STA消息泵、原对象捕获/释放、取消和序号变化；Controller验证实际任务ID/续接、部分完成、单目录根冲突的处理与放弃。以上使用注入来源，不等于真实Explorer互操作或透明度验收。原生结果、失败修复及发布边界见[接收交接](CLIPBOARD_RECEIVE_HANDOFF.md)，上一批本机呈现记录见[呈现交接](CLIPBOARD_TRANSFER_HANDOFF.md)。实际Clipboard无法完整恢复时，必须在任何写入前SKIP。
 
 ## 搜索响应与目录范围
 
