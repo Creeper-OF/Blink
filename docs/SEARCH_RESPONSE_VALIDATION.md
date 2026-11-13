@@ -16,7 +16,7 @@ A02：查询携带当前窗口的显示策略，普通模式排Hidden与System�
 
 A04：名称和扩展缓存使用Windows invariant uppercase，并以ordinal等价约束映射；ASCII有快路径，Load与USN变更统一重建派生键。扩展名读取原始后缀，不再间接依赖CRT locale；路径边界、内部排除与排序用ordinal比较，减少重复大小写映射。没有做拼写展开或Unicode规范化。依据微软[CompareStringOrdinal](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-comparestringordinal)和[LCMapStringEx](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-lcmapstringex)的序数比较及非语言学大小写规则。
 
-## 当前部署与真实搜索结果 — 2026-11-12
+## 当前部署与真实搜索结果 — 2026-11-12至13
 
 23:04（北京时间）已正常停止原服务、等待原PID退出并校验旧EXE/PDB恢复副本，随后在原注册路径更新匹配的服务文件并启动。PID由6848变为29080，服务EXE SHA256为`5e921f86617437ceea6012e95b9a49b87ddd04e9b3c55407e1f6ce1305043073`；原启动命令、数据根、授权SID参数、LocalSystem账户与Auto启动方式保持，没有发生回滚。继续使用原BLK5库，未提交初建/重建；正常USN追赶可以更新库内容，不宣称库字节完全不变。随后C/D只读就绪检查均exit0，`index_ready`与`index_status_read_only`通过。
 
@@ -24,7 +24,9 @@ A04：名称和扩展缓存使用Windows invariant uppercase，并以ordinal等�
 
 首次运行因自有夹具尚未通过USN完全收敛而返回`NOT_READY`：4 PASS / 0 FAIL / 1 NOT_READY，不计整组通过。稍后用`-ResumeFixture`复用同一GUID目录和manifest，脚本SHA相同，再完成上述23项；两次结果不相加。成功后核对内容与属性并精确删除五个样本及manifest，共6文件、2目录、2481字节，最新报告的`resume_fixture`已清空。
 
-正式服务已更新，默认主程序仍为G06b/PID15036；候选主程序尚未发布。G06c原候选两次关闭C0000005已由严格匹配符号定位为TitleBar/TabView延迟析构，当前79f915修复版NewFolder7项、Rename8项完整通过并正常exit0；Delete默认取消已过，最终确认前被前台切换打断，等待独立补完整5项。C/D就绪检查耗时与这个五文件夹具均不能代表全盘搜索性能，UI首屏/Everything基准仍未做。原生、部署、就绪、真实夹具搜索及窗口验证分别记账，不合并为一个成功数。
+11月13日已补完Delete独立5项，连同11月12日同79f915修复版的NewFolder7、Rename8三组均完整PASS/exit0/精确清理。旧默认PID15036保存单个此电脑标签并正常退出，默认运行目录5文件更新、295文件/219148935字节逐项SHA核对；新默认PID39240可见，真实选中序号0和原地址由独立只读检查确认恢复。首次开启辅助流程因失前台标恢复未完，不能说其过程exit0；随后无选择/键盘动作的只读检查PASS，用户窗口未关闭或重复启动。C/D就绪检查耗时与这个五文件夹具均不能代表全盘搜索性能，UI首屏/Everything基准仍未做。原生、部署、就绪、真实夹具搜索及窗口验证分别记账，不合并为一个成功数。
+
+发布后C/D只读就绪探针再通过，正式服务仍为PID29080/EXE5e921f86，未重启或重建索引。打包服务为当前引用工程增量链接的65099786：八个PE代码/数据节与正式5e逐字节一致，屏蔽时间戳/校验/CodeView后全文件相同；不是服务业务/协议变更。保留当前服务构建输出、匹配符号及`.ilk`，不把它们当无用缓存清空。真实服务23项仍为原报告，不把本次就绪时间当搜索或界面耗时。
 
 原始部署和就绪事实位于本机`.build/search-rollout/integration`；`live-search/live-search-latest.json`按报告路径与SHA指向成功运行`1af9d3a626d74459862145f747269285`，首次`d9dcf0e52f824c398d8653647c5e56d9`的NOT_READY报告保留。公开文档只保留简明结论，不上传本机日志、索引、二进制或授权SID值。
 

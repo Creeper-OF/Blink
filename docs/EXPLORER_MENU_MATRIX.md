@@ -1,6 +1,6 @@
 # Explorer 菜单与命令矩阵
 
-2026-11-12更新：G06c同一79f915…Release独立NewFolder7项、Rename8项完整PASS/exit0；Delete仅适用性和默认取消已过，最终确认前被外部前台切换打断，完整5项待验。C07只升级自有导航目录实际覆盖的新建/改名，删除保留PARTIAL；默认主程序仍G06b、候选未发布。普通回收站、Quick真实用户目录、盘根写入、外部Clipboard及完整矩阵仍待验，见[交接](EXPLORER_NAVIGATION_MUTATION_HANDOFF.md)。
+2026-11-13更新：G06c同一79f915…Release独立NewFolder7项、Rename8项、Delete5项均完整PASS/0 FAIL/0 SKIP、exit0；不同日期的三组独立报告保留。C07只认定自有导航目录实际覆盖的新建/改名/ShiftDelete，合并删除行因普通回收站未验仍PARTIAL；默认运行目录已更新至同一79f915…版本，新PID39240可见。Quick真实用户目录、盘根写入、外部Clipboard及完整矩阵仍待验，见[交接](EXPLORER_NAVIGATION_MUTATION_HANDOFF.md)。
 
 G06b最新（2026-11-11）：目录目标Cut/Copy/Paste已接入原队列，根仅Paste、虚拟ThisPC无传输；双配置1636/0/4、13项不写Clipboard窗口检查PASS。实际传输UI SKIP，因此相应动作仍明确限定，见[交接](EXPLORER_NAVIGATION_TRANSFER_HANDOFF.md)。
 
@@ -284,7 +284,7 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C07 | 导航普通目录右键 > 粘贴 | 粘贴 | Paste | Fluent E77F | 读取点中目录真实identity，复用原CopyItems/MOVE队列与冲突/取消/重试 | TargetContextPaste | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | enablement=真实CF_HDROP；实际传输UI SKIP |
 | C07 | 导航普通目录右键 > 新建文件夹 | 新建文件夹 | New folder | Fluent E8F4 | 捕获所点目录真实ID，原名称框与queue，CtrlShiftN限导航焦点，事件更新已加载树 | TargetContextNewFolder | Blink | IMPLEMENTED_VERIFIED | [NAV-MUTATION] | 同79f915…独立NewFolder7 PASS/0 FAIL、exit0；自有目录取消/创建/重名Retry/树自动刷新/旧peer已验；Quick及盘根真实写入待验 |
 | C07 | 导航普通目录右键 > 重命名 | 重命名 | Rename | Fluent E8AC | 捕获目录与父ID，原whole-name/dialog/queue及其它Tab relocation，F2限导航，Retry保持实际目标 | TargetContextRename | Blink | IMPLEMENTED_VERIFIED | [NAV-MUTATION] | 同79f915…独立Rename8 PASS/0 FAIL、exit0；自有目录F2取消/身份字节/标签跟随/重名Retry/未提交草稿关窗已验 |
-| C07 | 导航普通目录右键 > 删除 | 删除 | Delete | Fluent E74D | 普通Delete走回收站；ShiftDelete走默认Cancel确认，原queue/Retry及事件树刷新 | TargetContextDelete | Blink | PARTIAL | [NAV-MUTATION] | 同79f915…仅#01适用性/#08默认取消PASS；#09确认前外部前台中断，2 PASS/1 FAIL，完整Delete5及普通回收站UI待验 |
+| C07 | 导航普通目录右键 > 删除 | 删除 | Delete | Fluent E74D | 普通Delete走回收站；ShiftDelete走默认Cancel确认，原queue/Retry及事件树刷新 | TargetContextDelete | Blink | PARTIAL | [NAV-MUTATION] | 同79f915…独立Delete5 PASS/0 FAIL/0 SKIP、exit0，#01/#08/#09/#13/#14实际覆盖适用性、默认取消、确认后精确永久删除/树自动刷新及收尾；普通回收站UI待验 |
 | C07 | 导航普通目录右键 > 属性 | 属性 | Properties | Fluent E946 | worker捕获点中目录的真实entry/parent，再走进程外properties-only | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 10项原生捕获及菜单enabled已验；真实属性页NOT RUN |
 | C07 | 导航普通目录右键 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B | 捕获点中目录Location，复用原后台文本剪贴板发布 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | enabled已验；本轮实际剪贴板写入NOT RUN |
 | C07 | 导航普通目录右键 > 更多系统选项 | 更多系统选项 | More system options | 未接入 | 无树节点host请求构建 | —（此上下文未定义） | Shell | DEFERRED | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-11 |
@@ -515,4 +515,4 @@ print("rows", sum(sum(values.values()) for values in counts.values()))
 
 - [NAV-TRANSFER]：main CopyTargetDirectory/PasteTargetDirectory/PublishFileCopySources，CaptureDirectoryClipboardSource及FileDropOrigin，复用原CopyItems/MOVE/cache；已加载树按真实目录操作与F5串行刷新。真实Clipboard传输报告=SKIP，不可将未执行动作等同入口检查。
 
-- [NAV-MUTATION]：main BeginTargetDirectoryOperation/CaptureNavigationTarget、CaptureDirectoryOperationTarget与原名称/删除对话框、唯一coordinator。同79f915…Release独立NewFolder7/Rename8完整PASS；Delete2 PASS/1前台中断FAIL，仅适用性和默认取消已验，确认及完整5项待补。关闭前退役TitleBar/TabView后，新建序列及改名未提交草稿均exit0；默认主程序尚未发布。见[导航操作交接](EXPLORER_NAVIGATION_MUTATION_HANDOFF.md)。
+- [NAV-MUTATION]：main BeginTargetDirectoryOperation/CaptureNavigationTarget、CaptureDirectoryOperationTarget与原名称/删除对话框、唯一coordinator。同79f915…Release独立NewFolder7/Rename8/Delete5均完整PASS/0 FAIL/0 SKIP、exit0；删除限自有导航非空目录ShiftDelete取消/明确确认及树自动刷新，普通回收站仍待验。关闭前退役TitleBar/TabView后，新建序列及改名未提交草稿均exit0；默认运行目录已更新，5个变化文件/108077386字节、全部295文件/219148935字节逐项SHA一致；新PID39240/HWND13241572可见，独立只读核验确认单个“此电脑”标签及选中序号0。首次opener中断不计通过，发布状态取独立verification；C/D只读探针就绪，服务29080未重启。见[导航操作交接](EXPLORER_NAVIGATION_MUTATION_HANDOFF.md)。

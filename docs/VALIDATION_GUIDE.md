@@ -67,7 +67,7 @@ if ($pending.status -eq 'NOT_READY') {
 ## 当前侧栏目录功能
 
 ```powershell
-$blinkBinary = '.build\search-correctness\runtime\Release\Blink.exe'
+$blinkBinary = 'src\Blink\x64\Release\Blink.exe'
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature NewFolder -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Rename -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Delete -Binary $blinkBinary
@@ -75,7 +75,7 @@ $blinkBinary = '.build\search-correctness\runtime\Release\Blink.exe'
 
 三个入口分别预期 7、8、5 项检查，包含各自真实操作、取消/冲突或目标核对及正常关闭/精确清理。报告独立保存；共同检查不能重复当成新增功能数。现有 `-Feature All` 保留侧栏批次的 14 项检查兼容入口，不等于后续的全应用流程验收。
 
-候选尚未发布时通过 `-Binary` 指向本批 runtime。G06c此前原生双配置已过，本批候选仅补Release；窗口功能受前台切换中断，尚未完整通过，默认仍为G06b/PID15036。片段或中断不计成功；用户使用电脑时不争抢前台，窗口检查另择时间。
+当前默认79f915修复版已发布，NewFolder7/Rename8/Delete5三组独立完整通过、正常exit0、夹具清理；7/8于11月12日、5于11月13日运行，同二进制与脚本SHA，分组原始报告分别保存。未来候选未发布时才通过`-Binary`指向当批明确路径。历史片段/前台中断不计成功；本轮复用旧通过结果，只补Delete，没有重新编译或重复无关整组。用户使用电脑时不争抢前台。
 
 ## 其它维护入口
 

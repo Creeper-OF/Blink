@@ -1,10 +1,10 @@
 # G06c 导航目录新建、重命名与删除
 
-## 当前结果 — 2026-11-12
+## 当前结果 — 2026-11-13
 
-正式索引服务已原位更新且真实服务搜索23项通过，见[搜索验证](SEARCH_RESPONSE_VALIDATION.md)。本页G06c候选已包含搜索修正和关闭生命周期修复，Blink.exe SHA256为`79f9157d09b8fed21a135e94071e7886755a273832438f80f30a815f3c2fe522`。默认G06b仍保留，候选尚未发布。
+正式索引服务已原位更新且真实服务搜索23项通过，见[搜索验证](SEARCH_RESPONSE_VALIDATION.md)。本页G06c默认修复版已包含搜索修正和关闭生命周期修复，Blink.exe SHA256为`79f9157d09b8fed21a135e94071e7886755a273832438f80f30a815f3c2fe522`。默认G06b已正常退出并切换为本版；新PID39240可见，295个运行文件逐项SHA一致，单个此电脑标签与选中位置经只读核对恢复。
 
-NewFolder独立7 PASS、Rename独立8 PASS，均0 FAIL/0 SKIP、正常exit0并清理自有夹具；包括实际新建、冲突重试、目录改名后其它标签跟随、文件区F2作用域、未提交Rename草稿正常关窗。启动与关闭前Process.MainWindowHandle均等于已验证原生主窗。Delete适用性和默认取消通过，但最终确认前因外部前台切换退出，2 PASS/1 FAIL不算5项通过；进程正常exit0、夹具已清，等待单独补验。
+NewFolder独立7 PASS、Rename独立8 PASS（11月12日）、Delete独立5 PASS（11月13日），三组均0 FAIL/0 SKIP、正常exit0、启动与关闭HWND一致并清理自有夹具。实际覆盖新建/冲突重试、目录改名后其它标签跟随、文件区F2作用域、未提交Rename草稿正常关闭、Shift+Delete默认取消及明确确认自有非空目录后的实际删除/树刷新。三组同79f915二进制/a12a9e脚本SHA，原中断2/1不拼为成功。普通回收站仍未运行。
 
 原候选NewFolder两次5业务PASS后关闭C0000005。两份自有转储的真实64帧链完全相同，严格匹配的微软官方符号显示TitleBar成员列表延迟释放TabView及自动化/ToolTip对象，已销毁content root上读取0x8。修复限定窗口关闭：先失效回调和标签选择同步，再在原宿主活着时停止标题栏自动刷新、清空标签项，断开TitleBar内容和Window绑定，移除并释放TitleBar/TabView。原菜单业务及搜索/文件后端不变；通过同失败序列及Rename草稿关闭实测，未以换关闭路径规避问题。
 
@@ -23,7 +23,7 @@ NewFolder独立7 PASS、Rename独立8 PASS，均0 FAIL/0 SKIP、正常exit0并�
 原G06c检查点Debug/Release已各1648 PASS/0 FAIL/4既有符号链接权限SKIP，249输入/388中英fallback资源一致。窗口功能仍待完整通过：5/1标题假设失败和0/1前台中断分档，两进程均exit0/夹具已清，不能拼作成功。用户转为整体审计及功能优先工作流，默认G06b未替换；后续逐功能脚本验证，不重新编译未变源码。原始记录归本轮integration，审计原生事实见 `.build/maintenance/code-audit/native-validation.json`。
 
 ```powershell
-$blinkBinary = '.build\search-correctness\runtime\Release\Blink.exe'
+$blinkBinary = 'src\Blink\x64\Release\Blink.exe'
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature NewFolder -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Rename -Binary $blinkBinary
 .\scripts\run-blink-navigation-mutation-smoke.ps1 -Configuration Release -Feature Delete -Binary $blinkBinary
