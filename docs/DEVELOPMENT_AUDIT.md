@@ -12,7 +12,7 @@
 
 | 编号/优先级 | 源码证据与触发条件 | 结论、处理顺序 |
 | --- | --- | --- |
-| A01 / P1，已修 | 审计基线abf4f9f的Busy重试占约120秒；逐盘Collect仅最终publish | 先去掉内部 Busy 重试，再实现最多两卷并发、逐卷交付。重试保留成功卷，取消仍持有旧任务至退出。WinUI 首屏待测，见[搜索实测](SEARCH_RESPONSE_VALIDATION.md) |
+| A01 / P1，已修 | 审计基线abf4f9f的Busy重试占约120秒；逐盘Collect仅最终publish | 默认版最多同时查询两卷，逐卷交付。重试保留成功卷，取消等待旧任务退出。两版已实测全盘和单卷 WinUI 首屏，见[搜索实测](SEARCH_RESPONSE_VALIDATION.md) |
 | A02 / P2，服务已更新/真实搜索已验 | 审计基线先limit后按Hidden/System过滤，可见命中被挤占 | 本批在索引候选/路径/limit前按窗口0/4/6策略过滤；新命令兼容原帧，旧服务截断明确未完整。应用56/索引31/帧16独立项及1744/0/4、离线58/0/0通过；正式服务已更新，真实23项搜索检查通过，UI仍待验 |
 | A03 / P2，已修 | 审计基线逐结果重复解析scope和parent目录链 | 本轮按单次Filter的精确canonical拼写复用，批尾鲜读实际scope与唯一parent，Open/Locate仍独立重验。独立25项及Release全回归通过；200同父读取1002→8为调用计数，非UI耗时 |
 | A04 / P2，服务已更新/真实搜索已验 | 审计基线std::towlower依赖默认CRT locale，非ASCII匹配不一致 | 本批使用Windows invariant uppercase/ordinal，名称与原始扩展缓存一致，Load/USN重建；无全局locale或拼写规范化。31项核心例及BLK5往返通过；Greek最终形按实际系统ordinal oracle，不假定语言学等价 |
@@ -26,6 +26,8 @@
 CRT大小写语义参考微软[towlower](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/tolower-tolower-towlower-tolower-l-towlower-l?view=msvc-170)与[默认C locale](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170)说明；实际修正仍以当前SDK及功能例为准。
 
 ## 当前功能与验证事实
+
+2026-11-19 应用 `a38e3a41` 已更新到默认启动目录。两版真实窗口全盘和单卷范围验证通过，窗口首条可见结果的几组样本接近。当前服务下，双卷客户端首批暖查中位数，宽泛词 39.2→24.1 ms，精确名称 24.3→14.5 ms。D 盘 40 秒内完成 8,448 次文件操作，两盘 342 次并行于写入的查询有 340 次正确、2 次 Busy。详见[搜索实测](SEARCH_RESPONSE_VALIDATION.md)。
 
 2026-11-19 普通文件名片段提速。较长、候选少的片段先从每组链接的摘要筛选，再核对实际名称。真实库 108 组结果逐条一致，正式服务 D 盘命中暖测 70.5→15.5 ms，新增内存估算 25.1 MB。真实改名和删除后索引收敛通过。见[搜索实测](SEARCH_RESPONSE_VALIDATION.md)。
 
@@ -64,7 +66,7 @@ A02/A04后续批次已完成源码与离线验证：Release应用1744/0/4，索�
 ## 后续待办
 
 1. Clipboard原对象接收与OLE发送/完成回传/退出保留已实现，默认e59f39d已发布；六组247/0/0与完整1991/0/4通过。下一步真实Explorer/淡化/实际flush及窗口关闭组合，人工验收暂缓。Native API或启动证据不冒充真实互操作，见[发送交接](CLIPBOARD_SEND_HANDOFF.md)。
-2. 实测真实首屏/重复查询/Everything同机表现，明确首次加载、IPC、校验与呈现阶段；普通就绪和小夹具不代替性能基准。
+2. 补 Everything 同机对比、更长负荷及 C/D 同时写入。窗口首屏、客户端交付和受控 D 盘写入已分别记录。
 3. 菜单细节、普通回收站/Quick真实目标和完整环境矩阵继续分项；体积精简后置，已过功能/未变源码不重复构建。
 
 功能状态以README/PROGRESS当前摘要为准，历史PHASE切片与UI表格只描述其对应版本。具体测试约定见[功能验证指南](VALIDATION_GUIDE.md)。

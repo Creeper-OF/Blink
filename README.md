@@ -8,6 +8,8 @@ Blink 是一个使用 C++20、C++/WinRT 和 WinUI 3 开发的 Windows 文件管�
 
 当前优先级为功能实现、响应效率和易用性，体积优化后置。同批功能集中实现、统一构建、逐功能验证，沿用自有文件身份模型和唯一文件操作队列。规则见[AGENTS.md](AGENTS.md)、[维护规则](docs/WORKSPACE_MAINTENANCE.md)及[验证指南](docs/VALIDATION_GUIDE.md)。
 
+多盘搜索的逐卷交付已更新到本机默认版。“此电脑”查本地所有盘，进入 D 盘目录后默认只查 D 盘。两版真实窗口首屏样本接近。D 盘持续写入 40 秒时，C、D 两盘共 342 次查询，340 次正确返回，2 次 Busy。见[搜索实测](docs/SEARCH_RESPONSE_VALIDATION.md)。
+
 较长的普通文件名片段可先顺序筛选候选，再核对实际名称。正式服务的 D 盘稀疏片段命中暖测从 70.5 降到 15.5 毫秒，见[搜索实测](docs/SEARCH_RESPONSE_VALIDATION.md)。
 
 完整文件名和较长前缀查询可以从内存索引直接缩小候选范围。正式服务已用原有 C、D 两盘索引启动。实机 D 盘精确名称暖测从 64.9 降到 15.3 毫秒，见[搜索实测](docs/SEARCH_RESPONSE_VALIDATION.md)。
@@ -20,7 +22,7 @@ C、D 两盘索引已恢复。服务启动时载入既有索引，正常增量�
 
 Release六个独立分组64/60/33/23/38/29全部通过，完整Phase1为1991 PASS/0 FAIL/4既有权限SKIP，前247项已包含完整组。原生Shell夹具及注入Clipboard API不等于真实系统Clipboard/Explorer/WinUI通过；双向收发、淡化、实际flush和窗口关闭组合仍待验，人工验收暂缓。Debug本批未重建。
 
-先前G06c新建7/改名8/ShiftDelete5为旧版本独立通过记录；A01–A04搜索修正与正式服务更新见[搜索验证](docs/SEARCH_RESPONSE_VALIDATION.md)。本批正式服务/索引库未改。真实搜索首屏和Everything同机基准仍待做。[审计](docs/DEVELOPMENT_AUDIT.md)与下方待办保持这些边界。
+先前G06c新建7/改名8/ShiftDelete5为旧版本独立通过记录；A01–A04搜索修正与正式服务更新见[搜索验证](docs/SEARCH_RESPONSE_VALIDATION.md)。当前的逐卷交付实测和待办见[搜索实测](docs/SEARCH_RESPONSE_VALIDATION.md)与[审计](docs/DEVELOPMENT_AUDIT.md)。
 
 ## 已实现
 
@@ -51,7 +53,7 @@ Release六个独立分组64/60/33/23/38/29全部通过，完整Phase1为1991 PAS
 ### 近期优先
 
 1. **剪贴板组合验证**：原对象STA接收、OLE发送、实际完成回传与退出保留已实现并通过原生分组；继续真实Explorer双向收发、淡化、部分/冲突/取消、实际flush及普通/最后标签关闭组合。人工验收仍暂缓，原系统Clipboard不为测试清空。
-2. **搜索首屏和持续负荷**：多盘结果已改为逐卷交付。继续测 WinUI 实际首屏、Everything 同机对比和持续 USN 变更时的响应。
+2. **搜索后续对照**：已记录 WinUI 实际首屏和 D 盘持续写入时的两盘响应。继续补 Everything 同机对比、更长时间和双卷同时写入。
 3. **已实现功能的组合验证**：新建7/改名8/删除5本批分项已过；继续普通回收站、真实Quick/盘根写入等未覆盖组合，未变源码及已通过分项不重复构建。
 4. **高频交互余项**：树目标的更多系统选项；虚拟背景、标签、地址和列头菜单；普通目录、多选的系统属性统一。真实鼠标/属性页和特殊位置组合继续独立验证。
 5. **拖放及地址组合**：链接/右键拖放/虚拟文件、实际取消/挂起边界及真实IME/UNC。已有地址编辑、面包屑、历史、逐级目录和目录补全不重复列为未开发。
