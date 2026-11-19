@@ -9,6 +9,7 @@
 #include "Blink/App/ClipboardFileTransfer.h"
 #include "Blink/App/ClipboardTransferPresentation.h"
 #include "Blink/App/ClipboardPasteController.h"
+#include "Blink/App/ClipboardSender.h"
 #include "Blink/App/MoveTransferPresentation.h"
 #include "Blink/App/FileOperationRelocation.h"
 #include "Blink/App/DeletePresentation.h"
@@ -1813,7 +1814,7 @@ struct App : AppT<App>
     }
 
     bool FileDropBusy() const
-    { return window_style_closed_ || file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || target_operation_pending_ || IsOperationDialogOpen(); }
+    { return window_style_closed_ || clipboard_close_pending_ || file_operations_.IsBusy() || file_operations_.HasPendingBatch() || clipboard_work_pending_ || target_operation_pending_ || IsOperationDialogOpen(); }
 
     std::optional<FileOperationOrigin> FileAreaDropTarget(const IInspectable& element) const
     {
@@ -2077,13 +2078,59 @@ struct App : AppT<App>
         SyncCommandBarState();
     }
 
-    void ClipboardFilesPublished()
+    struct ClipboardSourceUiContext
     {
+        DWORD sequence{};
+        bool published{};
+        std::vector<blink::app::ClipboardSourceReport> pending;
+    };
+
+    void SourceClipboardFeedback(const std::shared_ptr<ClipboardSourceUiContext>& context,
+        const blink::app::ClipboardSourceReport& report)
+    {
+        if (!context->published) { context->pending.push_back(report); return; }
+        if (window_style_closed_ || clipboard_source_context_ != context ||
+            clipboard_copy_cache_.sequence != context->sequence) { return; }
+        if (report.completed || FAILED(report.result))
+        {
+            if (report.completed && report.effect == DROPEFFECT_MOVE) { clipboard_copy_cache_.move_submitted = true; }
+            clipboard_presentation_.Clear();
+            RefreshClipboardCutAppearance();
+            SyncCommandBarState();
+        }
+        if (FAILED(report.result) && !FileDropBusy())
+        { status_.Text(hstring(localization_.Format(L"Clipboard.SourceUpdateFailed", winrt::hresult_error(report.result).message().c_str()))); }
+    }
+
+    blink::app::ClipboardSourceCallback SourceClipboardCallback(const std::shared_ptr<ClipboardSourceUiContext>& context)
+    {
+        const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+        return [weak, dispatcher, context](blink::app::ClipboardSourceReport report) {
+            (void)dispatcher.TryEnqueue([weak, context, report] {
+                if (const auto app = weak.get(); app && !app->window_style_closed_)
+                { app->SourceClipboardFeedback(context, report); }
+            });
+        };
+    }
+
+    void ClipboardFilesPublished(std::shared_ptr<ClipboardSourceUiContext> context = {})
+    {
+        clipboard_source_context_ = context;
+        if (context) { context->sequence = clipboard_copy_cache_.sequence; context->published = true; }
         ++clipboard_feedback_generation_;
         clipboard_presentation_.Publish(clipboard_copy_cache_);
         // An external publication can race the worker's dispatcher callback.
         // A late success must not restore the appearance of superseded data.
         ClipboardContentsChanged(true);
+        if (context && !context->pending.empty())
+        {
+            const auto weak = get_weak();
+            auto reports = std::move(context->pending);
+            (void)dispatcher_.TryEnqueue([weak, context, reports = std::move(reports)] {
+                if (const auto app = weak.get(); app && !app->window_style_closed_)
+                { for (const auto& report : reports) { app->SourceClipboardFeedback(context, report); } }
+            });
+        }
     }
 
     void TrackClipboardPaste(const blink::app::ClipboardCopySources& sources,
@@ -2149,18 +2196,20 @@ struct App : AppT<App>
         std::vector<std::wstring> paths, const blink::app::ClipboardTransferIntent intent,
         const bool directory_target = false)
     {
-        HWND owner{};
-        check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(&owner));
         clipboard_work_pending_ = true;
         clipboard_cancellation_ = std::make_shared<std::atomic_bool>(false);
         const auto cancellation = clipboard_cancellation_;
         status_.Text(hstring(localization_.GetString(L"Clipboard.Preparing"))); RenderFileOperationStatus();
         const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+        const auto sender = clipboard_sender_;
+        const auto source_context = std::make_shared<ClipboardSourceUiContext>();
+        const auto source_callback = SourceClipboardCallback(source_context);
         try
         {
             clipboard_work_ = Windows::System::Threading::ThreadPool::RunAsync(
-                [weak, dispatcher, owner, origin, cancellation, intent, directory_target, expected = std::move(expected), paths = std::move(paths)](auto&&) {
+                [weak, dispatcher, sender, source_context, source_callback, origin, cancellation, intent, directory_target, expected = std::move(expected), paths = std::move(paths)](auto&&) {
                     DWORD sequence{}, error = ERROR_GEN_FAILURE;
+                    HRESULT send_result{ S_OK };
                     blink::app::ClipboardCopySources validated;
                     try
                     {
@@ -2171,12 +2220,19 @@ struct App : AppT<App>
                             !blink::app::SameCapturedCopySources(expected, validated))
                         { error = ERROR_FILE_INVALID; }
                         if (error == ERROR_SUCCESS && cancellation->load()) { error = ERROR_CANCELLED; }
-                        if (error == ERROR_SUCCESS) { error = blink::app::PublishClipboardFilesTransfer(owner, paths, intent, sequence); }
+                        if (error == ERROR_SUCCESS)
+                        {
+                            const auto sent = sender->Publish(paths, intent, cancellation, source_callback,
+                                blink::app::MakeClipboardSourceValidation(paths, validated));
+                            sequence = sent.sequence; send_result = sent.result;
+                            error = SUCCEEDED(sent.result) ? ERROR_SUCCESS :
+                                HRESULT_FACILITY(sent.result) == FACILITY_WIN32 ? HRESULT_CODE(sent.result) : ERROR_GEN_FAILURE;
+                        }
                     }
                     catch (const std::bad_alloc&) { error = ERROR_NOT_ENOUGH_MEMORY; }
                     catch (...) { error = ERROR_GEN_FAILURE; }
-                    (void)dispatcher.TryEnqueue([weak, origin, cancellation, captured = std::move(validated),
-                        published_paths = std::move(paths), sequence, error, intent]() mutable {
+                    (void)dispatcher.TryEnqueue([weak, origin, cancellation, source_context, captured = std::move(validated),
+                        published_paths = std::move(paths), sequence, error, intent, send_result]() mutable {
                         if (auto app = weak.get(); app && !app->window_style_closed_)
                         {
                             app->clipboard_work_pending_ = false; app->RenderFileOperationStatus();
@@ -2186,12 +2242,12 @@ struct App : AppT<App>
                                 // Publication already happened: preserve original IDs even if a
                                 // departure/cancel raced after the clipboard call began.
                                 app->clipboard_copy_cache_ = { std::move(captured), std::move(published_paths), sequence, intent };
-                                app->ClipboardFilesPublished();
+                                app->ClipboardFilesPublished(source_context);
                                 if (cancellation->load() || !blink::app::IsFileOperationOwnerCurrent(origin, app->ActiveTab(), app->window_style_closed_))
                                 { app->ShowClipboardCopyError(ERROR_CANCELLED); return; }
                                 app->status_.Text(hstring(app->localization_.Format(intent == blink::app::ClipboardTransferIntent::Move ? L"Clipboard.CutItems" : L"Clipboard.CopiedItems", std::to_wstring(count))));
                             }
-                            else { app->ShowClipboardCopyError(error); }
+                            else { app->ShowClipboardPublishError(error, send_result); }
                         }
                     });
                 });
@@ -2390,6 +2446,13 @@ struct App : AppT<App>
                 });
         }
         catch (...) { clipboard_work_pending_ = false; RenderFileOperationStatus(); status_.Text(hstring(localization_.GetString(L"Clipboard.Unavailable"))); }
+    }
+
+    void ShowClipboardPublishError(const DWORD error, const HRESULT result)
+    {
+        if (error == ERROR_GEN_FAILURE && FAILED(result))
+        { status_.Text(hstring(localization_.Format(L"Clipboard.Failed", winrt::hresult_error(result).message().c_str()))); }
+        else { ShowClipboardCopyError(error); }
     }
 
     void ShowClipboardCopyError(const DWORD error)
@@ -4852,6 +4915,7 @@ struct App : AppT<App>
         }
         else if (message == WM_CLOSE && window == app->navigation_window_handle_)
         {
+            if (app->DeferClipboardClose()) { return 0; }
             // End native text services before WinUI unloads the focus host.
             app->PrepareWindowClose();
         }
@@ -6334,12 +6398,16 @@ struct App : AppT<App>
         const auto cancellation = clipboard_cancellation_;
         RenderFileOperationStatus();
         const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+        const auto sender = clipboard_sender_;
+        const auto source_context = std::make_shared<ClipboardSourceUiContext>();
+        const auto source_callback = SourceClipboardCallback(source_context);
         try
         {
             clipboard_work_ = Windows::System::Threading::ThreadPool::RunAsync(
-                [weak, dispatcher, owner, selection, owner_generation, expected = std::move(expected), target,
+                [weak, dispatcher, sender, source_context, source_callback, owner, selection, owner_generation, expected = std::move(expected), target,
                     text, command, intent, cancellation](auto&&) {
                     DWORD error = ERROR_GEN_FAILURE, sequence{};
+                    HRESULT send_result{ S_OK };
                     blink::app::ClipboardCopySources validated;
                     std::vector<std::wstring> paths{ target.entry.full_path };
                     try
@@ -6353,15 +6421,22 @@ struct App : AppT<App>
                         if (!error && cancellation->load()) { error = ERROR_CANCELLED; }
                         if (!error)
                         {
-                            error = text ? blink::app::PublishClipboardText(owner,
-                                command == ShellMenuCommand::CopyParentPath ? target.parent : target.entry.full_path, sequence) :
-                                blink::app::PublishClipboardFilesTransfer(owner, paths, intent, sequence);
+                            if (text) { error = blink::app::PublishClipboardText(owner,
+                                command == ShellMenuCommand::CopyParentPath ? target.parent : target.entry.full_path, sequence); }
+                            else
+                            {
+                                const auto sent = sender->Publish(paths, intent, cancellation, source_callback,
+                                    blink::app::MakeClipboardSourceValidation(paths, validated));
+                                sequence = sent.sequence; send_result = sent.result;
+                                error = SUCCEEDED(sent.result) ? ERROR_SUCCESS :
+                                    HRESULT_FACILITY(sent.result) == FACILITY_WIN32 ? HRESULT_CODE(sent.result) : ERROR_GEN_FAILURE;
+                            }
                         }
                     }
                     catch (const std::bad_alloc&) { error = ERROR_NOT_ENOUGH_MEMORY; }
                     catch (...) { error = ERROR_GEN_FAILURE; }
-                    (void)dispatcher.TryEnqueue([weak, selection, owner_generation, cancellation, captured = std::move(validated),
-                        paths = std::move(paths), sequence, error, intent, text, command]() mutable {
+                    (void)dispatcher.TryEnqueue([weak, selection, owner_generation, cancellation, source_context, captured = std::move(validated),
+                        paths = std::move(paths), sequence, error, intent, text, command, send_result]() mutable {
                         if (auto app = weak.get(); app && !app->window_style_closed_)
                         {
                             app->clipboard_work_pending_ = false; app->RenderFileOperationStatus();
@@ -6369,14 +6444,14 @@ struct App : AppT<App>
                             {
                                 if (text) { app->clipboard_copy_cache_ = {}; }
                                 else { app->clipboard_copy_cache_ = { std::move(captured), std::move(paths), sequence, intent }; }
-                                app->ClipboardFilesPublished();
+                                app->ClipboardFilesPublished(text ? nullptr : source_context);
                                 if (cancellation->load() || !app->SearchContextCurrent(selection, owner_generation))
                                 { app->ShowClipboardCopyError(ERROR_CANCELLED); return; }
                                 app->status_.Text(hstring(text ? app->localization_.GetString(command == ShellMenuCommand::CopyParentPath ?
                                     L"Search.ParentCopied" : L"Search.PathCopied") : app->localization_.Format(intent == blink::app::ClipboardTransferIntent::Move ?
                                         L"Clipboard.CutItems" : L"Clipboard.CopiedItems", L"1")));
                             }
-                            else { app->ShowClipboardCopyError(error); }
+                            else { app->ShowClipboardPublishError(error, send_result); }
                         }
                     });
                 });
@@ -7857,8 +7932,9 @@ struct App : AppT<App>
         {
             if (window_)
             {
+                if (DeferClipboardClose()) { return; }
                 PrepareWindowClose();
-            window_.Close();
+                window_.Close();
             }
             return;
         }
@@ -8301,6 +8377,39 @@ struct App : AppT<App>
         startup_.Stage("navigation-buttons.end");
     }
 
+    bool DeferClipboardClose() noexcept
+    {
+        if (clipboard_close_ready_) { return false; }
+        if (clipboard_close_pending_) { return true; }
+        try
+        {
+            clipboard_close_pending_ = true;
+            if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
+            if (clipboard_sender_->Active()) { status_.Text(hstring(localization_.GetString(L"Clipboard.Preserving"))); }
+            const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+            clipboard_sender_->Shutdown([weak, dispatcher](const HRESULT result) {
+                (void)dispatcher.TryEnqueue([weak, result] {
+                    if (const auto app = weak.get(); app && !app->window_style_closed_)
+                    {
+                        app->clipboard_close_pending_ = false;
+                        if (FAILED(result))
+                        {
+                            app->status_.Text(hstring(app->localization_.Format(L"Clipboard.PreserveFailed",
+                                winrt::hresult_error(result).message().c_str())));
+                            app->SyncCommandBarState();
+                            return;
+                        }
+                        app->clipboard_close_ready_ = true;
+                        app->PrepareWindowClose();
+                        app->window_.Close();
+                    }
+                });
+            });
+        }
+        catch (...) { clipboard_close_pending_ = false; startup_.GenericFailure("clipboard.prepare-close"); }
+        return true;
+    }
+
     void PrepareWindowClose() noexcept
     {
         if (window_style_closed_) { return; }
@@ -8359,6 +8468,7 @@ struct App : AppT<App>
         CloseOperationDialogs();
         file_operations_.Shutdown();
         clipboard_receiver_.Close();
+        clipboard_sender_->Shutdown();
         CancelDragTabHover(); file_drag_drop_.Close();
         if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
         clipboard_presentation_.Close();
@@ -9420,6 +9530,9 @@ struct App : AppT<App>
     blink::app::ClipboardCopyCache clipboard_copy_cache_;
     blink::app::ClipboardTransferPresentation clipboard_presentation_;
     blink::app::ClipboardPasteController clipboard_receiver_;
+    std::shared_ptr<blink::app::ClipboardSender> clipboard_sender_{ std::make_shared<blink::app::ClipboardSender>() };
+    std::shared_ptr<ClipboardSourceUiContext> clipboard_source_context_;
+    bool clipboard_close_pending_{}, clipboard_close_ready_{};
     std::uint64_t clipboard_feedback_generation_{};
     std::uint64_t clipboard_cut_generation_{};
     blink::app::ShellContextMenuController shell_context_menu_;

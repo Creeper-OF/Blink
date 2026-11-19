@@ -1,6 +1,6 @@
 # Explorer 兼容差距与切片顺序
 
-2026-11-13 Clipboard后续：本机结果/淡化和原IDataObject的STA接收/实际完成回传已实现。Release四独立组64/60/33/23及完整1924/0/4通过，默认e1e66d已更新；真实Explorer/Opacity待验，自有OLE发送对象未实现，见[接收交接](CLIPBOARD_RECEIVE_HANDOFF.md)。下文G06c等是先前交付记录，G08仍为PARTIAL。
+2026-11-19 Clipboard后续：原对象STA接收与OLE发送/完成回传/退出生命周期已实现，六独立组247/0/0及完整1991/0/4通过，默认e59f39d已更新，本批不启动窗口。真实Explorer/Opacity/实际flush/关闭组合待验，见[发送交接](CLIPBOARD_SEND_HANDOFF.md)；G08保留PARTIAL验证边界。
 
 2026-11-13更新：G06c同一修复版Release的NewFolder7项、Rename8项、Delete5项已分别完整PASS/0 FAIL/0 SKIP，均正常exit0；三组在不同日期验证，先前中断记录单独保留。删除验证限自有导航目录的Shift+Delete，普通回收站等范围仍待验。关闭前退役TitleBar及TabView已在原新建序列和未提交改名草稿下实测正常退出。默认运行目录已更新至同一79f915…版本，新PID39240可见；见[审计](DEVELOPMENT_AUDIT.md)与[本轮交接](EXPLORER_NAVIGATION_MUTATION_HANDOFF.md)。
 
@@ -41,7 +41,7 @@ G03b最新记录（2026-11-11）：逐级下级目录菜单已实现；两配置
 | G05 | P0，G05a/G05b所列场景已验 | 文件主名初选，目录及新建等全选；保留ContentDialog，改名后选中并滚动到精确新行 | PARTIAL（实测子项IMPLEMENTED_VERIFIED） | `ShowFileNameDialog`、`TabState::CommitBrowse`、`RestoreRenderedSelection`；搜索仍先定位父目录 | 双配置1583/0/4、最终17项窗口检查，覆盖同身份其他链接不误选、仅改大小写、分批列表滚动和编辑中正常关闭。真实IME与完整区域焦点组合仍待续，Ctrl+A可编辑全名 |
 | G06 | P0，G06a/b已交付；G06c所列新建/改名/ShiftDelete子项已验 | 常用目标/剪贴板及G06c新建改名删除已有接线，更多系统/其它对象菜单待续 | PARTIAL（G06c实测子项IMPLEMENTED_VERIFIED） | BeginTargetDirectoryOperation、FileDropOrigin、原唯一queue/对话框及串行已加载树刷新 | 同一79f915…Release独立NewFolder7/Rename8/Delete5均PASS、exit0；Delete限自有导航目录Shift+Delete取消/明确确认及树刷新。普通回收站、Quick真实用户目录、盘根写入、外部Clipboard及完整矩阵待验；默认版已更新79f915…，新PID39240可见 |
 | G07 | P0，后续 | Shell菜单单/同父多选与2/3消息转发已做；host无wall-clock deadline，现代IExplorerCommand未对接 | PARTIAL | `ShellContextMenuController::Dispatch`、`Blink.ShellMenuHost` | 进程隔离不等于超时已覆盖；先验证实际挂起/取消边界再做必要处理；动态扩展按系统返回，不硬编码软件名，不进Blink主进程 |
-| G08 | P0，继续 | 标准COPY/MOVE、本机结果/剪切淡化及外部原IDataObject接收/完成回传已接线；完整双向OLE待续 | PARTIAL | ClipboardTransferPresentation、ClipboardDataObject/PasteSession/PasteController；原cache/唯一coordinator | Release四独立组64/60/33/23和完整1924/0/4已验；本批原对象接收见[接收交接](CLIPBOARD_RECEIVE_HANDOFF.md)。真实Explorer/Opacity待验，自有OLE发送对象未实现，不以进度或模型通过冒充实际互操作 |
+| G08 | P0，组合验证 | COPY/MOVE、剪切淡化、原IDataObject接收及OLE发送/完成回传/退出保留已实现 | PARTIAL | ClipboardTransferPresentation、DataObject/PasteSession/PasteController、SourceData/Sender；原cache与唯一Blink主动队列 | Release六组64/60/33/23/38/29、完整1991/0/4；真实Shell文件/目录及替换路径已验，实际Clipboard/Opacity/flush/关闭组合仍待验。默认e59f39d更新但本批不启动窗口，见[发送交接](CLIPBOARD_SEND_HANDOFF.md) |
 | G09 | P0，后续 | 同/跨卷拖放、Ctrl/Shift与OLE完成已有；link、右键拖放选择菜单、虚拟文件未接 | PARTIAL | `FileDragDropController/Model/Data`与 `FileDragDropTests` | 现有操作如实验证；未支持的effect返回NONE。FileDescriptor/FileContents不是CF_HDROP的既有能力 |
 | G10 | P0，后续验证 | 文件操作真实partial/取消/冲突已有，组合状态和更直观进度仍需验收 | IMPLEMENTED_NEEDS_MANUAL | `FileOperationCoordinator/MoveTransferPresentation`及既有对话框 | 继续唯一任务队列，不增加假暂停/剩余时间；失败重试不能重放成功前缀，回收站失败不降级永久删除 |
 | G11 | P1 | 搜索与G06a侧栏/ThisPC目录/盘根已接系统属性；普通目录/多选仍未统一 | PARTIAL | PropertiesDialog/ItemProperties、ShellHost properties及单目录捕获 | 本轮目录/盘根捕获10项原生检查、菜单适用性通过；新目标实际属性页未验，普通目录只读详情仍作补充 |

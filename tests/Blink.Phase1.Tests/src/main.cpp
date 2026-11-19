@@ -48,6 +48,8 @@
 #include "ClipboardDataObjectTests.h"
 #include "ClipboardPasteSessionTests.h"
 #include "ClipboardPasteControllerTests.h"
+#include "ClipboardSourceDataTests.h"
+#include "ClipboardSenderTests.h"
 #include "FileOperationCoordinatorTests.h"
 #include "Blink/App/FolderViewFormatting.h"
 #include "Blink/App/Localization.h"
@@ -3684,6 +3686,16 @@ int wmain(int argc, wchar_t* argv[])
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
+            if (suite == L"clipboard-source-data" || suite == L"clipboard-sender")
+            {
+                winrt::init_apartment(winrt::apartment_type::multi_threaded);
+                const bool source = suite == L"clipboard-source-data";
+                std::cout << "suite=" << (source ? "clipboard-source-data" : "clipboard-sender") << "\n";
+                const bool passed = source ? RunClipboardSourceDataTests() : RunClipboardSenderTests();
+                std::cout << (source ? "clipboard_source_data_tests=" : "clipboard_sender_tests=") << (passed ? "PASS" : "FAIL") << "\n";
+                winrt::uninit_apartment();
+                return passed ? 0 : 1;
+            }
             if (suite == L"search-response" || suite == L"search-scope" || suite == L"search-visibility")
             {
                 winrt::init_apartment(winrt::apartment_type::multi_threaded);
@@ -3693,7 +3705,7 @@ int wmain(int argc, wchar_t* argv[])
                 return passed ? 0 : 1;
             }
         }
-        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller]"
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender]"
             " or --live-index-probe <options>\n";
         return 2;
     }
@@ -3758,6 +3770,8 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunClipboardDataObjectTests();
     passed &= RunClipboardPasteSessionTests();
     passed &= RunClipboardPasteControllerTests();
+    passed &= RunClipboardSourceDataTests();
+    passed &= RunClipboardSenderTests();
     passed &= RunFileOperationCoordinatorTests();
     passed &= RunFolderChangeStateTests();
     passed &= RunNativeFolderWatcherTests();

@@ -479,4 +479,13 @@
   <data name="Clipboard.Changed" xml:space="preserve">
     <value>准备期间剪贴板内容已改变，请重新粘贴。</value>
   </data>
+  <data name="Clipboard.SourceUpdateFailed" xml:space="preserve">
+    <value>无法处理原文件：{0}</value>
+  </data>
+  <data name="Clipboard.Preserving" xml:space="preserve">
+    <value>正在保留剪贴板文件…</value>
+  </data>
+  <data name="Clipboard.PreserveFailed" xml:space="preserve">
+    <value>无法保留剪贴板内容，请重试关闭：{0}</value>
+  </data>
 </root>

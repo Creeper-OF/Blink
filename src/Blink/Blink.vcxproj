@@ -97,6 +97,10 @@ copy /Y "$(SolutionDir)$(Platform)\$(Configuration)\Blink.ShellMenuHost.exe" "$(
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClInclude Include="include\Blink\App\ClipboardSourceData.h" />
+    <ClCompile Include="src\ClipboardSourceData.cpp" />
+    <ClInclude Include="include\Blink\App\ClipboardSender.h" />
+    <ClCompile Include="src\ClipboardSender.cpp" />
     <ClInclude Include="include\Blink\App\CopyTransferPresentation.h" />
     <ClInclude Include="include\Blink\App\ItemProperties.h" />
     <ClInclude Include="include\Blink\App\PropertiesPresentation.h" />

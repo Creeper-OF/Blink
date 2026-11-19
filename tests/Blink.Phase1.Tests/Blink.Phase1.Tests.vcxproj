@@ -31,6 +31,14 @@
     <Link><SubSystem>Console</SubSystem></Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardSourceData.h" />
+    <ClCompile Include="..\..\src\Blink\src\ClipboardSourceData.cpp" />
+    <ClInclude Include="src\ClipboardSourceDataTests.h" />
+    <ClCompile Include="src\ClipboardSourceDataTests.cpp" />
+    <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardSender.h" />
+    <ClCompile Include="..\..\src\Blink\src\ClipboardSender.cpp" />
+    <ClInclude Include="src\ClipboardSenderTests.h" />
+    <ClCompile Include="src\ClipboardSenderTests.cpp" />
     <ClInclude Include="..\..\src\Blink\include\Blink\App\CopyTransferPresentation.h" />
     <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardTransferPresentation.h" />
     <ClInclude Include="..\..\src\Blink\include\Blink\App\ClipboardDataObject.h" />

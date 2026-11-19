@@ -479,4 +479,13 @@
   <data name="Clipboard.Changed" xml:space="preserve">
     <value>Clipboard contents changed during preparation. Paste again.</value>
   </data>
+  <data name="Clipboard.SourceUpdateFailed" xml:space="preserve">
+    <value>Unable to process the original files: {0}</value>
+  </data>
+  <data name="Clipboard.Preserving" xml:space="preserve">
+    <value>Keeping Clipboard files available…</value>
+  </data>
+  <data name="Clipboard.PreserveFailed" xml:space="preserve">
+    <value>Unable to keep Clipboard data. Try closing again: {0}</value>
+  </data>
 </root>

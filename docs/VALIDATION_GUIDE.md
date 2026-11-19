@@ -16,7 +16,7 @@
 ## Clipboard结果、呈现与原对象接收
 
 ```powershell
-.\scripts\run-blink-clipboard-smoke.ps1 -Configuration Release -Feature All -OutputDirectory '.build\clipboard-receive\integration'
+.\scripts\run-blink-clipboard-smoke.ps1 -Configuration Release -Feature All -OutputDirectory '.build\clipboard-send\integration'
 ```
 
 | Feature | 独立原生CLI | 预期唯一正常检查数 |
@@ -25,10 +25,12 @@
 | DataObject | clipboard-data-object | 60 |
 | Session | clipboard-paste-session | 33 |
 | Controller | clipboard-paste-controller | 23 |
+| Source | clipboard-source-data | 38 |
+| Sender | clipboard-sender | 29 |
 
-All 顺序启动四个独立进程，核对每组精确标签、完成标记、退出码及相同测试EXE SHA。也可只选某个Feature复测；默认Presentation及旧默认输出目录保持兼容。脚本不构建、不读写真实Clipboard、不操作GUI或服务。四组也包含在无参完整Phase1中，数量不能相加为更多覆盖。
+All 顺序启动六个独立进程，核对每组精确标签、完成标记、退出码及相同测试EXE SHA。也可只选某个Feature复测；默认Presentation及旧默认输出目录保持兼容。脚本不构建、不读写真实Clipboard、不操作GUI或服务。六组也包含在无参完整Phase1中，数量不能相加为更多覆盖。
 
-DataObject验证格式/medium所有权与完成协议；Session验证真实STA消息泵、原对象捕获/释放、取消和序号变化；Controller验证实际任务ID/续接、部分完成、单目录根冲突的处理与放弃。以上使用注入来源，不等于真实Explorer互操作或透明度验收。原生结果、失败修复及发布边界见[接收交接](CLIPBOARD_RECEIVE_HANDOFF.md)，上一批本机呈现记录见[呈现交接](CLIPBOARD_TRANSFER_HANDOFF.md)。实际Clipboard无法完整恢复时，必须在任何写入前SKIP。
+DataObject验证格式/medium所有权与完成协议；Session验证真实STA消息泵、原对象捕获/释放、取消和序号变化；Controller验证实际任务ID/续接、部分完成、单目录根冲突的处理与放弃。Source另验证自有真实Shell文件/目录及替换路径，Sender注入Clipboard API验证STA/flush/重试与消息泵；均未使用系统Clipboard传输。最终247/0/0、完整1991/0/4，不等于真实Explorer/透明度/实际flush与WinUI关闭验收，见[发送交接](CLIPBOARD_SEND_HANDOFF.md)。原生结果、失败修复及发布边界见[接收交接](CLIPBOARD_RECEIVE_HANDOFF.md)，上一批本机呈现记录见[呈现交接](CLIPBOARD_TRANSFER_HANDOFF.md)。实际Clipboard无法完整恢复时，必须在任何写入前SKIP。
 
 ## 搜索响应与目录范围
 

@@ -2,7 +2,7 @@
 param(
  [ValidateSet('Debug','Release')][string]$Configuration='Release',
  [string]$TestBinaryPath='',
- [ValidateSet('Presentation','DataObject','Session','Controller','All')][string]$Feature='Presentation',
+ [ValidateSet('Presentation','DataObject','Session','Controller','Source','Sender','All')][string]$Feature='Presentation',
  [string]$OutputDirectory=''
 )
 # Exact headless suites only. No build, GUI, live Clipboard or service actions.
@@ -24,6 +24,8 @@ $definitions=[ordered]@{
  DataObject=[pscustomobject]@{name='DataObject';suite='clipboard-data-object';completion='clipboard_data_object_tests';prefix='clipboard_data_object_';expected_pass=60}
  Session=[pscustomobject]@{name='Session';suite='clipboard-paste-session';completion='clipboard_paste_session_tests';prefix='clipboard_paste_session_';expected_pass=33}
  Controller=[pscustomobject]@{name='Controller';suite='clipboard-paste-controller';completion='clipboard_paste_controller_tests';prefix='clipboard_paste_controller_';expected_pass=23}
+ Source=[pscustomobject]@{name='Source';suite='clipboard-source-data';completion='clipboard_source_data_tests';prefix='clipboard_source_';expected_pass=38}
+ Sender=[pscustomobject]@{name='Sender';suite='clipboard-sender';completion='clipboard_sender_tests';prefix='clipboard_sender_';expected_pass=29}
 }
 function Save-FeatureReport($Record,[string]$Path){[IO.File]::WriteAllText($Path,($Record|ConvertTo-Json -Depth 8),$encoding)}
 function Invoke-ClipboardSuite($Definition,[string]$SharedBinarySha){
@@ -101,7 +103,7 @@ function Invoke-ClipboardSuite($Definition,[string]$SharedBinarySha){
  Write-Host ('Report: '+$reportPath)
  return $record
 }
-$selected=if($Feature -eq 'All'){@('Presentation','DataObject','Session','Controller')}else{@($Feature)}
+$selected=if($Feature -eq 'All'){@($definitions.Keys)}else{@($Feature)}
 $sharedSha=$null
 if([IO.Path]::GetFileName($TestBinaryPath) -ieq 'Blink.Phase1.Tests.exe' -and (Test-Path -LiteralPath $TestBinaryPath -PathType Leaf)){$sharedSha=(Get-FileHash -LiteralPath $TestBinaryPath -Algorithm SHA256).Hash.ToLowerInvariant()}
 if($Feature -ne 'All'){
