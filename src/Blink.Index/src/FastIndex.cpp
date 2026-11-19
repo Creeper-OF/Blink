@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cstddef>
 #include <cstring>
@@ -143,6 +144,22 @@ namespace blink::index
             for (const wchar_t unit : folded_name.substr(0, prefix_length))
             { packed = (packed << 16) | static_cast<std::uint16_t>(unit); }
             return packed;
+        }
+
+        [[nodiscard]] std::uint64_t NameSubstringMask(const std::wstring_view folded_name) noexcept
+        {
+            if (folded_name.size() < 4) { return 0; }
+            std::uint64_t window = (static_cast<std::uint64_t>(folded_name[0]) << 32) |
+                (static_cast<std::uint64_t>(folded_name[1]) << 16) |
+                static_cast<std::uint16_t>(folded_name[2]);
+            std::uint64_t mask{};
+            for (const wchar_t unit : folded_name.substr(3))
+            {
+                window = (window << 16) | static_cast<std::uint16_t>(unit);
+                const auto hash = (window ^ (window >> 31) ^ (window >> 17)) * 0xD6E8FEB86659FD93ULL;
+                mask |= std::uint64_t{1} << (hash >> 58);
+            }
+            return mask;
         }
 
         [[nodiscard]] bool StartsWithInsensitive(const std::wstring& value, const std::wstring& prefix)
@@ -530,6 +547,9 @@ namespace blink::index
     {
         extension_index_.clear();
         ClearNamePrefixIndexUnlocked();
+        ClearNameSubstringIndexUnlocked();
+        // Leave a little room for USN additions after the initial load.
+        (void)ReserveNameSubstringIndexUnlocked(links_.size() + links_.size() / 16);
         for (auto& [identity, links] : links_)
         {
             (void)identity;
@@ -539,7 +559,77 @@ namespace blink::index
                 AddExtensionIndexEntryUnlocked(link);
                 AddNamePrefixIndexEntryUnlocked(links, link);
             }
+            if (!links.empty())
+            {
+                links.front().substring_slot = 0;
+                UpdateNameSubstringIndexUnlocked(links);
+            }
         }
+    }
+
+    std::uint64_t FastIndex::NameSubstringIndexBytesUnlocked() const noexcept
+    {
+        return name_substring_index_.capacity() * sizeof(NameSubstringEntry);
+    }
+
+    void FastIndex::ClearNameSubstringIndexUnlocked() noexcept
+    {
+        stats_.resident_bytes -= NameSubstringIndexBytesUnlocked();
+        std::vector<NameSubstringEntry>{}.swap(name_substring_index_);
+        name_substring_index_usable_ = true;
+    }
+
+    bool FastIndex::ReserveNameSubstringIndexUnlocked(const std::size_t capacity) noexcept
+    {
+        if (capacity <= name_substring_index_.capacity()) { return true; }
+        const auto bytes_before = NameSubstringIndexBytesUnlocked();
+        try
+        {
+            name_substring_index_.reserve((std::min)(capacity,
+                static_cast<std::size_t>((std::numeric_limits<std::uint32_t>::max)())));
+            if (name_substring_index_.size() < name_substring_index_.capacity())
+            {
+                stats_.resident_bytes += NameSubstringIndexBytesUnlocked() - bytes_before;
+                return true;
+            }
+        }
+        catch (const std::bad_alloc&)
+        {
+            // The authoritative links are still available for a normal scan.
+        }
+        ClearNameSubstringIndexUnlocked();
+        name_substring_index_usable_ = false;
+        return false;
+    }
+
+    void FastIndex::UpdateNameSubstringIndexUnlocked(LinkGroup& group)
+    {
+        if (!name_substring_index_usable_) { return; }
+        std::uint64_t mask{};
+        for (const auto& link : group) { mask |= NameSubstringMask(link.folded_name); }
+        auto& slot = group.front().substring_slot;
+        if (slot != 0)
+        {
+            name_substring_index_[slot - 1].mask = mask;
+            return;
+        }
+        const auto size = name_substring_index_.size();
+        if (size == name_substring_index_.capacity() &&
+            !ReserveNameSubstringIndexUnlocked(size + (std::max)(std::size_t{256}, size / 16))) { return; }
+        name_substring_index_.push_back({ mask, &group });
+        slot = static_cast<std::uint32_t>(name_substring_index_.size());
+    }
+
+    void FastIndex::RemoveNameSubstringIndexEntryUnlocked(const std::uint32_t slot) noexcept
+    {
+        if (!name_substring_index_usable_ || slot == 0) { return; }
+        if (slot != name_substring_index_.size())
+        {
+            auto& moved = name_substring_index_[slot - 1];
+            moved = name_substring_index_.back();
+            moved.group->front().substring_slot = slot;
+        }
+        name_substring_index_.pop_back();
     }
 
     void FastIndex::SetInternalExcludedRoots(std::vector<std::wstring> roots)
@@ -612,6 +702,7 @@ namespace blink::index
         const auto started = std::chrono::steady_clock::now();
         std::scoped_lock lock(mutex_);
         ClearNamePrefixIndexUnlocked();
+        ClearNameSubstringIndexUnlocked();
         links_.clear();
         extension_index_.clear();
         snapshot_ = {};
@@ -1082,6 +1173,7 @@ namespace blink::index
                     const auto before = CachedNameBytes(existing);
                     existing.folded_name = FoldCase(existing.name);
                     stats_.resident_bytes = stats_.resident_bytes - before + CachedNameBytes(existing);
+                    UpdateNameSubstringIndexUnlocked(links);
                 }
                 const bool old_directory = (existing.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                 existing.attributes = link.attributes;
@@ -1113,6 +1205,7 @@ namespace blink::index
         links.push_back(std::move(cached));
         stats_.resident_bytes += CachedNameBytes(links.back());
         AddNamePrefixIndexEntryUnlocked(links, links.back());
+        UpdateNameSubstringIndexUnlocked(links);
         AddExtensionIndexEntryUnlocked(link);
         ++stats_.links;
         if (new_identity)
@@ -1142,6 +1235,7 @@ namespace blink::index
             was_directory = was_directory || (existing.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         }
         const auto before = links.size();
+        const auto substring_slot = links.empty() ? 0 : links.front().substring_slot;
         std::uint64_t removed_name_bytes{};
         std::uint64_t removed_name_prefix{};
         std::unordered_set<std::wstring> removed_extensions;
@@ -1168,6 +1262,12 @@ namespace blink::index
         {
             stats_.resident_bytes -= removed_name_bytes;
             RemoveNamePrefixIndexEntryUnlocked(links, removed_name_prefix);
+            if (links.empty()) { RemoveNameSubstringIndexEntryUnlocked(substring_slot); }
+            else
+            {
+                links.front().substring_slot = substring_slot;
+                UpdateNameSubstringIndexUnlocked(links);
+            }
             for (const std::wstring& extension : removed_extensions)
             {
                 RemoveExtensionIndexEntryUnlocked(link.identity, extension);
@@ -1218,7 +1318,7 @@ namespace blink::index
         stats_.links = 0;
         stats_.unique_files = links_.size();
         stats_.directories = 0;
-        stats_.resident_bytes = links_.size() * sizeof(Link) + NamePrefixIndexBytesUnlocked();
+        stats_.resident_bytes = links_.size() * sizeof(Link) + NamePrefixIndexBytesUnlocked() + NameSubstringIndexBytesUnlocked();
         for (const auto& [identity, links] : links_)
         {
             bool is_directory = false;
@@ -1370,6 +1470,7 @@ namespace blink::index
 
         std::vector<FastSearchResult> results;
         std::uint64_t links_examined{};
+        std::uint64_t name_signatures_examined{};
 
         // Name/extension predicates are cheap and do not require path
         // reconstruction.  Keep a per-query parent-path cache only for the
@@ -1517,12 +1618,49 @@ namespace blink::index
             }
             return false;
         };
+        const auto try_collect_substring = [&] {
+            if (options.prefix || !options.use_derived_name_substring_index || !name_substring_index_usable_ ||
+                query.size() < 6 || name_substring_index_.size() < 256) { return false; }
+            const auto query_mask = NameSubstringMask(query);
+            if (std::popcount(query_mask) < 3) { return false; }
+
+            // A common short stem often fills the cap in the original order.
+            // Use the prefix bucket as a cheap density hint before probing.
+            if (options.limit != 0 && query.size() <= 8)
+            {
+                const auto names = name_prefix_index_.find(NamePrefixKey(query));
+                if (names != name_prefix_index_.end() && names->second.size() / 4 >= options.limit) { return false; }
+            }
+
+            constexpr std::size_t max_candidate_groups = 24'576;
+            std::size_t candidate_groups{};
+            auto remaining = options.limit;
+            std::vector<const LinkGroup*> matches;
+            for (const auto& entry : name_substring_index_)
+            {
+                ++name_signatures_examined;
+                if ((entry.mask & query_mask) != query_mask) { continue; }
+                if (++candidate_groups > max_candidate_groups) { return false; }
+
+                bool group_matches = false;
+                for (const auto& link : *entry.group)
+                {
+                    ++links_examined;
+                    if (!matches_name(link)) { continue; }
+                    if (options.limit != 0 && --remaining == 0) { return false; }
+                    group_matches = true;
+                }
+                if (group_matches) { matches.push_back(entry.group); }
+            }
+            collect(matches, [](const auto* group) { return group; });
+            return true;
+        };
 
         if (timing != nullptr)
         {
             MarkFastSearchTiming(timing->candidate_selection_start_us, timing->request_received);
         }
-        bool used_name_prefix = false;
+        bool used_name_candidates = false;
         if (!extension.empty() && options.use_derived_extension_index)
         {
             const auto bucket = extension_index_.find(extension);
@@ -1542,18 +1680,22 @@ namespace blink::index
             {
                 constexpr std::size_t max_prefix_groups = 8192;
                 const auto bucket = name_prefix_index_.find(prefix);
-                used_name_prefix = bucket == name_prefix_index_.end();
+                used_name_candidates = bucket == name_prefix_index_.end();
                 // If enough names pass the cheap predicates to reach the
                 // cap, preserve the original traversal without building
                 // paths for a provisional result set.
-                if (!used_name_prefix && bucket->second.size() <= max_prefix_groups &&
+                if (!used_name_candidates && bucket->second.size() <= max_prefix_groups &&
                     !could_reach_limit(bucket->second))
                 {
                     collect(bucket->second, [](const auto* group) { return group; });
-                    used_name_prefix = true;
+                    used_name_candidates = true;
                 }
             }
-            if (!used_name_prefix) { collect_all(); }
+            else
+            {
+                used_name_candidates = try_collect_substring();
+            }
+            if (!used_name_candidates) { collect_all(); }
         }
 
         if (timing != nullptr)
@@ -1576,7 +1718,7 @@ namespace blink::index
             const auto same_path = [&](const FastSearchResult& left, const FastSearchResult& right) {
                 return compare_path(left, right) == CSTR_EQUAL;
             };
-            if (used_name_prefix && std::adjacent_find(results.begin(), results.end(), same_path) != results.end())
+            if (used_name_candidates && std::adjacent_find(results.begin(), results.end(), same_path) != results.end())
             {
                 results.clear();
                 collect_all();
@@ -1587,6 +1729,7 @@ namespace blink::index
         if (timing != nullptr)
         {
             timing->links_examined.store(links_examined, std::memory_order_release);
+            timing->name_signatures_examined.store(name_signatures_examined, std::memory_order_release);
             timing->result_count.store(results.size(), std::memory_order_release);
             MarkFastSearchTiming(timing->search_end_us, timing->request_received);
         }
@@ -1816,8 +1959,10 @@ namespace blink::index
                 links_.swap(prepared.links_);
                 extension_index_.swap(prepared.extension_index_);
                 name_prefix_index_.swap(prepared.name_prefix_index_);
+                name_substring_index_.swap(prepared.name_substring_index_);
                 std::swap(name_prefix_pointer_slots_, prepared.name_prefix_pointer_slots_);
                 std::swap(name_prefix_index_usable_, prepared.name_prefix_index_usable_);
+                std::swap(name_substring_index_usable_, prepared.name_substring_index_usable_);
                 std::swap(snapshot_, prepared.snapshot_);
                 std::swap(stats_, prepared.stats_);
             }
@@ -1854,6 +1999,7 @@ namespace blink::index
     {
         std::scoped_lock lock(mutex_);
         ClearNamePrefixIndexUnlocked();
+        ClearNameSubstringIndexUnlocked();
         links_.clear();
         extension_index_.clear();
         snapshot_ = {};

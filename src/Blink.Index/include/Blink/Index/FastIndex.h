@@ -109,6 +109,8 @@ namespace blink::index
         DWORD excluded_attributes{};
         // Test/reference switch. Production uses derived name prefixes.
         bool use_derived_name_prefix_index{ true };
+        // Test/reference switch for the in-memory substring filter.
+        bool use_derived_name_substring_index{ true };
     };
 
     struct FastSearchResult
@@ -154,6 +156,7 @@ namespace blink::index
         std::atomic<std::int64_t> sorting_start_us{ -1 };
         std::atomic<std::int64_t> sorting_end_us{ -1 };
         std::atomic<std::uint64_t> links_examined{};
+        std::atomic<std::uint64_t> name_signatures_examined{};
         std::atomic<std::uint64_t> result_count{};
     };
 
@@ -205,11 +208,19 @@ namespace blink::index
             core::FileIdentity parent_identity{};
             std::wstring name;
             DWORD attributes{};
+            // The first link owns the group's one-based substring slot.
+            std::uint32_t substring_slot{};
             std::int64_t last_usn{};
             std::wstring folded_name;
         };
 
         using LinkGroup = std::vector<Link>;
+
+        struct NameSubstringEntry
+        {
+            std::uint64_t mask{};
+            LinkGroup* group{};
+        };
 
         struct InternalExcludedRootIdentity
         {
@@ -234,6 +245,11 @@ namespace blink::index
         void AddNamePrefixIndexEntryUnlocked(const LinkGroup& group, const Link& link);
         void RemoveNamePrefixIndexEntryUnlocked(const LinkGroup& group, std::uint64_t prefix);
         [[nodiscard]] std::uint64_t NamePrefixIndexBytesUnlocked() const noexcept;
+        void ClearNameSubstringIndexUnlocked() noexcept;
+        [[nodiscard]] bool ReserveNameSubstringIndexUnlocked(std::size_t capacity) noexcept;
+        void UpdateNameSubstringIndexUnlocked(LinkGroup& group);
+        void RemoveNameSubstringIndexEntryUnlocked(std::uint32_t slot) noexcept;
+        [[nodiscard]] std::uint64_t NameSubstringIndexBytesUnlocked() const noexcept;
 
         [[nodiscard]] bool CatchUpUnlocked(
             const std::wstring& path,
@@ -277,6 +293,9 @@ namespace blink::index
         std::unordered_map<std::uint64_t, std::vector<const LinkGroup*>> name_prefix_index_;
         std::uint64_t name_prefix_pointer_slots_{};
         bool name_prefix_index_usable_{ true };
+        // One compact signature per link group, scanned sequentially.
+        std::vector<NameSubstringEntry> name_substring_index_;
+        bool name_substring_index_usable_{ true };
         FastIndexSnapshot snapshot_;
         FastIndexStats stats_;
     };

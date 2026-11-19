@@ -51,7 +51,7 @@ G03b最新记录（2026-11-11）：逐级下级目录菜单已实现；两配置
 | G15 | P1 | 标题/Mica/浅深色与基础UIA已做，激活、高对比、全部缩放/多屏/文本放大未完成矩阵 | IMPLEMENTED_NEEDS_MANUAL | main `BuildWindowFrame/SyncWindowFrameTheme`、App.xaml、现有框架检查 | 保留系统caption按钮/Snap/命中测试，不用自绘替换；本轮125%观察不能代替所有倍率和读屏验收 |
 | G16 | P1 | 每标签有路径/历史/排序/视图/选择/search；G03a地址草稿在切Tab时取消，同Tab自动刷新保留；滚动offset与完整会话持久化未完成 | PARTIAL | `TabRecord/TabUiState/TabWindowState`、`AddressBarState`、`PresentActiveTab` | 地址草稿不跨Tab或重启持久化；不把UI控件变成唯一真相源；用户切标签/关闭不能复活异步结果；会话落盘另立切片 |
 | G17 | P1 | 顶部New已接真实新建目录，原生More已接7个真实动作；ShellNew模板/快捷方式、系统动态顶部动作及Blink设置页仍缺 | PARTIAL | `NewFolderOperation/FolderNameDialog/FolderCommandPolicy`、G02展示与命令绑定 | 系统Office等注册项动态获取；无实际模板不伪造Word/ZIP；设置仅承诺Blink自身可兑现部分 |
-| G18 | P1 | 两盘索引已恢复，服务支持启动载入、增量保存期间可读和完整文件名候选查找，客户端支持逐卷交付 | PARTIAL | `SearchState/Coordinator/Presentation`、`Blink.Index*` | 实机 D 盘精确名称暖测 64.9→15.3 ms，原有保存可读与多卷交付数据分别记录。持续负荷、WinUI 首屏和 Everything 同机对照待测。见[搜索实测](SEARCH_RESPONSE_VALIDATION.md) |
+| G18 | P1 | 服务支持两盘启动载入、增量保存期间可读、完整名称和稀疏子串候选查找，客户端支持逐卷交付 | PARTIAL | `SearchState/Coordinator/Presentation`、`Blink.Index*` | 实机 D 盘稀疏片段命中暖测 70.5→15.5 ms。精确名称、保存可读和多卷交付证据分别记录。持续负荷、WinUI 首屏和 Everything 同机对照待测。见[搜索实测](SEARCH_RESPONSE_VALIDATION.md) |
 | G19 | P2 | 回收站浏览/恢复/清空、操作Undo/Redo未产品化 | DEFERRED | 当前仅 `DeleteOperation` 回收站提交，非回收站浏览器 | 不绑定假Ctrl+Z/Y，输入框自身编辑撤销仍由文本控件处理；不可把清空放普通目录菜单 |
 | G20 | P2 | 特殊Shell Namespace、MTP、图库、库、网络发现、云盘状态未原生管理 | DEFERRED | `Location`当前ThisPC/本地folder，Provider为原型 | 逐项区分系统跳转/有限操作/暂缓；路径不存在时不能造“文件夹”，不承诺替代完整Shell Namespace |
 | G21 | P2 | SFTP/WebDAV/自建网盘仍属既有后续Provider路线 | DEFERRED | `Blink.Provider.Contracts/Client/Host/Fake` | 保留原架构，协议权限/断线/上传状态按远端事实；系统已挂载盘不等于Blink已有SFTP连接管理 |

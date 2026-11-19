@@ -58,6 +58,7 @@ namespace blink::index
         {
             std::scoped_lock lock(index.mutex_);
             index.ClearNamePrefixIndexUnlocked();
+            index.ClearNameSubstringIndexUnlocked();
             index.links_.clear();
             index.extension_index_.clear();
             index.snapshot_ = {};
@@ -150,6 +151,19 @@ namespace blink::index
             auto lock = WriteLock(index);
             index.ClearNamePrefixIndexUnlocked();
             index.name_prefix_index_usable_ = false;
+        }
+
+        static std::uint64_t NameSubstringIndexBytes(const FastIndex& index)
+        {
+            std::shared_lock lock(index.mutex_);
+            return index.NameSubstringIndexBytesUnlocked();
+        }
+
+        static void DisableNameSubstringIndex(FastIndex& index)
+        {
+            auto lock = WriteLock(index);
+            index.ClearNameSubstringIndexUnlocked();
+            index.name_substring_index_usable_ = false;
         }
 
         static bool CountersMatchRecount(FastIndex& index)
@@ -487,6 +501,7 @@ namespace
         const auto derived = SearchKeys(index, options);
         options.use_derived_extension_index = false;
         options.use_derived_name_prefix_index = false;
+        options.use_derived_name_substring_index = false;
         const auto reference = SearchKeys(index, options);
         return derived == reference;
     }
@@ -998,6 +1013,7 @@ namespace
         query.text = L"rar"; query.limit = 0;
         bool short_or_substring = matches_reference(index, query, &short_timing) && short_timing.links_examined.load() == index.Stats().links;
         query.prefix = false; query.text = L"Report";
+        query.use_derived_name_substring_index = false;
         FastSearchTiming substring_timing(start_now());
         check(short_or_substring && matches_reference(index, query, &substring_timing) &&
             substring_timing.links_examined.load() == index.Stats().links, L"index_name_prefix_short_and_substring_preserve_reference_scan");
@@ -1056,25 +1072,157 @@ namespace
         return passed;
     }
 
-    [[nodiscard]] int MeasureNamePrefixIndex(const wchar_t* store, const std::wstring& root,
-        const std::wstring& known_name, const std::wstring& common_prefix)
+    [[nodiscard]] bool RunNameSubstringIndexTests()
+    {
+        namespace fs = std::filesystem;
+        using namespace blink::index;
+        using Spec = FastIndexTestAccess::Spec;
+        using Clock = std::chrono::steady_clock;
+        bool passed = true;
+        const auto check = [&](const bool value, const wchar_t* name) {
+            passed &= value;
+            WriteUtf8Line(std::wstring(value ? L"PASS " : L"FAIL ") + name);
+        };
+        DWORD serial{};
+        const bool volume = GetVolumeInformationW(L"D:\\", nullptr, 0, &serial, nullptr, nullptr, nullptr, 0) != FALSE;
+        check(volume, L"index_name_substring_fixture_volume");
+        if (!volume) { return false; }
+        const auto identity = [serial](const std::uint64_t value) {
+            blink::core::FileIdentity result; result.valid = true; result.volume_serial = serial;
+            std::memcpy(result.file_id.data(), &value, sizeof(value)); return result;
+        };
+        const auto root = identity(1), folder = identity(2), nested = identity(3), file = identity(4);
+        const Spec original{ file, folder, L"Alpha-FILAMENT-score.txt", FILE_ATTRIBUTE_ARCHIVE, 11 };
+        const Spec alias{ file, nested, L"Beta-filament-copy.txt", FILE_ATTRIBUTE_ARCHIVE, 12 };
+        const Spec unicode{ identity(7), folder, L"Plan-\u03A9\u03BC\u03AD\u03B3\u03B1-\u4e2d\u65e5.txt", FILE_ATTRIBUTE_ARCHIVE, 15 };
+        const Spec tail{ identity(5000), folder, L"Last-Obsidian.txt", FILE_ATTRIBUTE_ARCHIVE, 16 };
+        std::vector<Spec> records{
+            { folder, root, L"SubstringFixture", FILE_ATTRIBUTE_DIRECTORY, 2 },
+            { nested, folder, L"Nested", FILE_ATTRIBUTE_DIRECTORY, 3 },
+            original, alias, unicode,
+            { identity(5), folder, L"Hidden-filament.txt", FILE_ATTRIBUTE_HIDDEN, 13 },
+            { identity(6), folder, L"System-filament.txt", FILE_ATTRIBUTE_SYSTEM, 14 },
+            { identity(8), folder, L"Parel-Brittle.txt", FILE_ATTRIBUTE_ARCHIVE, 16 },
+            { identity(9), folder, L"parel-brittle.txt", FILE_ATTRIBUTE_ARCHIVE, 17 },
+        };
+        for (std::uint64_t number = 100; number < 1100; ++number)
+        {
+            records.push_back({ identity(number), folder, L"Unrelated-" + std::to_wstring(number) + L".log",
+                FILE_ATTRIBUTE_ARCHIVE, static_cast<std::int64_t>(number) });
+        }
+        FastIndex engine;
+        FastIndexTestAccess::Reset(engine, root, serial);
+        FastIndexTestAccess::Seed(engine, records);
+        const bool tail_added = FastIndexTestAccess::Add(engine, tail);
+        const auto compare = [](const FastIndex& index, FastSearchOptions query, FastSearchTiming* timing = nullptr) {
+            const auto derived = index.Search(query, timing);
+            query.use_derived_name_substring_index = false;
+            return SameOrderedSearchResults(derived, index.Search(query));
+        };
+        FastSearchOptions filament;
+        filament.text = L"fiLaMent";
+        filament.excluded_attributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+        FastSearchTiming hit_timing(Clock::now());
+        const auto hits = engine.Search(filament);
+        check(tail_added && hits.size() == 2 && std::all_of(hits.begin(), hits.end(), [&](const auto& hit) {
+            return hit.identity == file && hit.name.find(L'-') < 6;
+        }) && compare(engine, filament, &hit_timing) && hit_timing.name_signatures_examined.load() == engine.Stats().unique_files &&
+            hit_timing.links_examined.load() < engine.Stats().links / 10 && FastIndexTestAccess::CountersMatchRecount(engine),
+            L"index_name_substring_sparse_interior_match_preserves_hard_links");
+        auto query = filament;
+        query.text = L"zqxunique-missing";
+        FastSearchTiming missing_timing(Clock::now());
+        check(engine.Search(query).empty() && compare(engine, query, &missing_timing) &&
+            missing_timing.name_signatures_examined.load() == engine.Stats().unique_files &&
+            missing_timing.links_examined.load() < engine.Stats().links / 10, L"index_name_substring_sparse_miss_checks_few_names");
+        query.text = L"lamen";
+        FastSearchTiming short_timing(Clock::now());
+        check(compare(engine, query, &short_timing) && short_timing.name_signatures_examined.load() == 0 &&
+            short_timing.links_examined.load() == engine.Stats().links, L"index_name_substring_short_query_uses_early_scan");
+        query = filament; query.limit = 1;
+        check(engine.Search(query).size() == 1 && compare(engine, query), L"index_name_substring_cap_keeps_reference_first_link");
+        query = filament; query.path_prefix = L"d:\\SubstringFixture\\"; query.direct_children = true;
+        const auto direct = engine.Search(query);
+        check(direct.size() == 1 && direct.front().name == original.name && compare(engine, query),
+            L"index_name_substring_direct_scope_and_visibility_match_reference");
+        query = filament; query.text = L"\u03C9\u03BC\u03AD\u03B3\u03B1-\u4e2d";
+        FastSearchTiming unicode_timing(Clock::now());
+        const auto unicode_hits = engine.Search(query);
+        check(unicode_hits.size() == 1 && unicode_hits.front().name == unicode.name &&
+            compare(engine, query, &unicode_timing) && unicode_timing.name_signatures_examined.load() != 0,
+            L"index_name_substring_ordinal_unicode_uses_folded_utf16");
+        query.text = L"brittle"; query.limit = 0;
+        FastSearchTiming ties(Clock::now());
+        check(engine.Search(query).size() == 2 && compare(engine, query, &ties) && ties.name_signatures_examined.load() != 0 &&
+            ties.links_examined.load() >= engine.Stats().links, L"index_name_substring_equal_paths_keep_original_tie_order");
+
+        const Spec renamed{ file, folder, L"Alpha-Quartz-file.txt", FILE_ATTRIBUTE_ARCHIVE, 18 };
+        const bool renamed_ok = FastIndexTestAccess::Apply(engine, original, USN_REASON_RENAME_OLD_NAME) &&
+            FastIndexTestAccess::Apply(engine, renamed, USN_REASON_RENAME_NEW_NAME);
+        const auto after_rename = engine.Search(filament);
+        auto quartz = filament; quartz.text = L"quartz";
+        check(renamed_ok && after_rename.size() == 1 && after_rename.front().name == alias.name &&
+            engine.Search(quartz).size() == 1 && compare(engine, filament) && compare(engine, quartz),
+            L"index_name_substring_transfer_slot_after_removing_first_hard_link");
+
+        const bool removed = FastIndexTestAccess::Apply(engine, alias, USN_REASON_FILE_DELETE) &&
+            FastIndexTestAccess::Apply(engine, renamed, USN_REASON_FILE_DELETE);
+        auto last = filament; last.text = L"obsidian";
+        check(removed && engine.Search(filament).empty() && engine.Search(quartz).empty() &&
+            engine.Search(last).size() == 1 && compare(engine, quartz) && compare(engine, last),
+            L"index_name_substring_erase_group_updates_the_moved_tail_slot");
+        const Spec new_tail{ tail.identity, folder, L"Last-Granite.txt", FILE_ATTRIBUTE_ARCHIVE, 19 };
+        const bool moved_tail = FastIndexTestAccess::Apply(engine, tail, USN_REASON_RENAME_OLD_NAME) &&
+            FastIndexTestAccess::Apply(engine, new_tail, USN_REASON_RENAME_NEW_NAME);
+        auto granite = filament; granite.text = L"granite";
+        check(moved_tail && engine.Search(last).empty() && engine.Search(granite).size() == 1 &&
+            compare(engine, granite) && FastIndexTestAccess::CountersMatchRecount(engine),
+            L"index_name_substring_update_mutates_the_correct_transferred_slot");
+
+        const auto fixture = fs::absolute(fs::path(L".build") / L"index-name-substring-fixtures" /
+            (L"pid-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64())));
+        struct Cleanup { fs::path path; ~Cleanup() { std::error_code error; fs::remove_all(path, error); } } cleanup{ fixture };
+        fs::create_directories(fixture);
+        const auto store = (fixture / L"substring.blink5").wstring();
+        DWORD error{};
+        FastIndex loaded;
+        const bool loaded_ok = engine.Save(store, &error) && FastIndex::ValidateStoreFile(store, &error) &&
+            loaded.Load(store, L"D:\\", &error);
+        check(loaded_ok && FastIndexTestAccess::NameSubstringIndexBytes(loaded) != 0 &&
+            SameOrderedSearchResults(engine.Search(granite), loaded.Search(granite)) && compare(loaded, granite),
+            L"index_name_substring_rebuilds_signatures_from_existing_store");
+        FastIndexTestAccess::DisableNameSubstringIndex(loaded);
+        FastSearchTiming disabled(Clock::now());
+        check(loaded_ok && compare(loaded, granite, &disabled) && disabled.name_signatures_examined.load() == 0 &&
+            loaded.Search(granite).size() == 1 && FastIndexTestAccess::CountersMatchRecount(loaded),
+            L"index_name_substring_disabled_buffer_uses_full_scan");
+        loaded.Clear();
+        check(loaded.Stats().links == 0 && FastIndexTestAccess::NameSubstringIndexBytes(loaded) == 0 &&
+            loaded.Search(granite).empty(), L"index_name_substring_clear_frees_the_compact_buffer");
+        return passed;
+    }
+
+    [[nodiscard]] int MeasureNameIndex(const wchar_t* store, const std::wstring& root,
+        const std::wstring& known_name, const std::wstring& common_text, const bool prefix_benchmark)
     {
         using namespace blink::index;
         using Clock = std::chrono::steady_clock;
         FastIndex index;
         DWORD error{};
         const auto begin_load = Clock::now();
-        if (known_name.size() < 4 || common_prefix.size() != 4 ||
+        const std::wstring label_prefix = prefix_benchmark ? L"NAME_PREFIX_" : L"NAME_SUBSTRING_";
+        if (known_name.size() < 4 || common_text.size() < 4 || (prefix_benchmark && common_text.size() != 4) ||
             !index.Load(store, root, &error))
         {
-            WriteUtf8Line(L"NAME_PREFIX_BENCH load_error=" + std::to_wstring(error));
+            WriteUtf8Line(label_prefix + L"BENCH load_error=" + std::to_wstring(error));
             return 97;
         }
         const auto load_ms = std::chrono::duration<double, std::milli>(Clock::now() - begin_load).count();
         const auto stats = index.Stats();
-        WriteUtf8Line(L"NAME_PREFIX_BENCH load_ms=" + std::to_wstring(load_ms) +
+        WriteUtf8Line(label_prefix + L"BENCH load_ms=" + std::to_wstring(load_ms) +
             L" store_links=" + std::to_wstring(stats.links) + L" estimated_total_bytes=" + std::to_wstring(stats.resident_bytes) +
-            L" estimated_prefix_bytes=" + std::to_wstring(FastIndexTestAccess::NamePrefixIndexBytes(index)));
+            L" estimated_prefix_bytes=" + std::to_wstring(FastIndexTestAccess::NamePrefixIndexBytes(index)) +
+            L" estimated_substring_bytes=" + std::to_wstring(FastIndexTestAccess::NameSubstringIndexBytes(index)));
         struct Scenario
         {
             const wchar_t* name;
@@ -1082,13 +1230,20 @@ namespace
             bool prefix;
             std::size_t limit;
         };
-        const Scenario scenarios[]{
+        const auto scenarios = prefix_benchmark ? std::vector<Scenario>{
             { L"full_name_hit", known_name, true, 1000 },
             { L"full_name_miss", L"QZXQ-UNIQUE-BLINK-BENCH-MISS-20261119", true, 1000 },
-            { L"four_character_prefix", common_prefix, true, 200 },
-            { L"three_character_prefix", common_prefix.substr(0, 3), true, 200 },
+            { L"four_character_prefix", common_text, true, 200 },
+            { L"three_character_prefix", common_text.substr(0, 3), true, 200 },
             { L"wide_substring", L"a", false, 200 },
             { L"sparse_substring", L"Blink.Phase1", false, 200 },
+        } : std::vector<Scenario>{
+            { L"sparse_name_hit", known_name, false, 200 },
+            { L"absent_text", L"QZXQ-UNIQUE-BLINK-BENCH-MISS-20261119", false, 200 },
+            { L"common_name", common_text, false, 200 },
+            { L"three_character_text", common_text.substr(0, 3), false, 200 },
+            { L"wide_substring", L"a", false, 200 },
+            { L"four_character_text", known_name.substr(0, 4), false, 200 },
         };
         bool passed = true;
         for (unsigned round = 0; round <= 8; ++round)
@@ -1100,16 +1255,18 @@ namespace
                     std::vector<FastSearchResult> hits;
                     double ms{};
                     std::uint64_t visits{};
+                    std::uint64_t signatures{};
                 };
                 const auto sample = [&](const bool derived) {
                     FastSearchOptions options;
                     options.text = scenario.query; options.prefix = scenario.prefix; options.limit = scenario.limit;
                     options.excluded_attributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
-                    options.use_derived_name_prefix_index = derived;
+                    options.use_derived_name_prefix_index = !prefix_benchmark || derived;
+                    options.use_derived_name_substring_index = prefix_benchmark || derived;
                     FastSearchTiming timing(Clock::now());
                     auto hits = index.Search(options, &timing);
                     const auto ms = std::chrono::duration<double, std::milli>(Clock::now() - timing.request_received).count();
-                    return Result{ std::move(hits), ms, timing.links_examined.load() };
+                    return Result{ std::move(hits), ms, timing.links_examined.load(), timing.name_signatures_examined.load() };
                 };
                 const bool derived_first = round % 2 != 0;
                 const auto first = sample(derived_first);
@@ -1118,12 +1275,13 @@ namespace
                 const auto& derived = derived_first ? first : second;
                 const std::wstring_view label(scenario.name);
                 const bool ok = SameOrderedSearchResults(reference.hits, derived.hits) &&
-                    (label != L"full_name_hit" || !derived.hits.empty()) &&
-                    (label != L"full_name_miss" || derived.hits.empty());
+                    ((label != L"full_name_hit" && label != L"sparse_name_hit") || !derived.hits.empty()) &&
+                    ((label != L"full_name_miss" && label != L"absent_text") || derived.hits.empty());
                 passed &= ok;
-                WriteUtf8Line(L"NAME_PREFIX_SAMPLE scenario=" + std::wstring(label) + L" round=" + std::to_wstring(round) +
+                WriteUtf8Line(label_prefix + L"SAMPLE scenario=" + std::wstring(label) + L" round=" + std::to_wstring(round) +
                     L" reference_ms=" + std::to_wstring(reference.ms) + L" derived_ms=" + std::to_wstring(derived.ms) +
                     L" reference_visits=" + std::to_wstring(reference.visits) + L" derived_visits=" + std::to_wstring(derived.visits) +
+                    L" signature_visits=" + std::to_wstring(derived.signatures) +
                     L" count=" + std::to_wstring(derived.hits.size()) + L" same=" + (ok ? L"1" : L"0"));
             }
         }
@@ -1348,6 +1506,7 @@ namespace
             {
                 query.options.use_derived_extension_index = false;
                 query.options.use_derived_name_prefix_index = false;
+                query.options.use_derived_name_substring_index = false;
             }
             query.expected_path = expected_path;
             query.outside_path = outside_path;
@@ -2399,13 +2558,18 @@ int wmain(int argc, wchar_t* argv[])
             if (suite == L"search-visibility-wire") { return RunSearchVisibilityWireTests() ? 0 : 95; }
             if (suite == L"search-serving") { return RunConcurrentIndexSearchTests() ? 0 : 96; }
             if (suite == L"search-name-prefix") { return RunNamePrefixIndexTests() ? 0 : 97; }
+            if (suite == L"search-name-substring") { return RunNameSubstringIndexTests() ? 0 : 98; }
         }
-        std::wcerr << L"usage: Blink.Phase05.Tests.exe [--search-index-only] --suite search-correctness|search-visibility-wire|search-serving|search-name-prefix\n";
+        std::wcerr << L"usage: Blink.Phase05.Tests.exe [--search-index-only] --suite search-correctness|search-visibility-wire|search-serving|search-name-prefix|search-name-substring\n";
         return 2;
     }
-    if (argc == 6 && std::wstring_view(argv[1]) == L"--benchmark-name-prefix")
+    if (argc == 6)
     {
-        return MeasureNamePrefixIndex(argv[2], argv[3], argv[4], argv[5]);
+        const std::wstring_view command(argv[1]);
+        if (command == L"--benchmark-name-prefix" || command == L"--benchmark-name-substring")
+        {
+            return MeasureNameIndex(argv[2], argv[3], argv[4], argv[5], command == L"--benchmark-name-prefix");
+        }
     }
     if (argc > 1 && std::wstring(argv[1]) == L"--offline-search")
     {
@@ -2440,7 +2604,8 @@ int wmain(int argc, wchar_t* argv[])
         const bool wire = RunSearchVisibilityWireTests();
         const bool serving = RunConcurrentIndexSearchTests();
         const bool name_prefix = RunNamePrefixIndexTests();
-        return correctness && wire && serving && name_prefix ? 0 : 94;
+        const bool name_substring = RunNameSubstringIndexTests();
+        return correctness && wire && serving && name_prefix && name_substring ? 0 : 94;
     }
 
     if (!RunProgressSnapshotUnitTest())
@@ -2450,6 +2615,7 @@ int wmain(int argc, wchar_t* argv[])
     if (!RunSearchCorrectnessTests()) { return 94; }
     if (!RunSearchVisibilityWireTests()) { return 95; }
     if (!RunNamePrefixIndexTests()) { return 97; }
+    if (!RunNameSubstringIndexTests()) { return 98; }
 
     const std::wstring service_exe = FullPath(L"x64\\Debug\\Blink.IndexService.exe");
     const std::wstring data_root = L".build\\phase05-service-data";
