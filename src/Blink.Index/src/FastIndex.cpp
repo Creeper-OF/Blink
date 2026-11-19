@@ -1230,15 +1230,8 @@ namespace blink::index
         std::wstring direct_parent = path_prefix;
         while (direct_parent.size() > 3 && direct_parent.back() == L'\\') { direct_parent.pop_back(); }
 
-        struct ResolvedCandidate
-        {
-            const Link* link{};
-            std::wstring full_path;
-        };
-
-        std::vector<const Link*> candidate_links;
-        std::vector<ResolvedCandidate> resolved_candidates;
         std::vector<FastSearchResult> results;
+        std::uint64_t links_examined{};
 
         // Name/extension predicates are cheap and do not require path
         // reconstruction.  Keep a per-query parent-path cache only for the
@@ -1305,154 +1298,112 @@ namespace blink::index
         };
 
 
-        const auto finish_timing = [&]()
+        const auto matches_name = [&](const Link& link)
         {
-            if (timing != nullptr)
+            if ((link.attributes & options.excluded_attributes) != 0) { return false; }
+            const std::wstring& name = link.folded_name;
+            if (!query.empty() &&
+                !(options.prefix ? name.starts_with(query) : name.find(query) != std::wstring::npos))
             {
-                timing->result_count.store(results.size(), std::memory_order_release);
-                MarkFastSearchTiming(timing->search_end_us, timing->request_received);
+                return false;
+            }
+            if (extension.empty()) { return true; }
+            const auto dot = name.find_last_of(L'.');
+            const auto separator = name.find_last_of(L"\\/");
+            return dot != std::wstring::npos && dot != 0 &&
+                (separator == std::wstring::npos || dot >= separator) &&
+                std::wstring_view(name).substr(dot) == extension;
+        };
+
+        const auto path_in_scope = [&](const Link& link) -> std::wstring
+        {
+            if (SameCanonicalUsnIdentity(link.identity, snapshot_.root_identity))
+            {
+                return options.direct_children ? std::wstring{} : snapshot_.volume_root;
+            }
+            const auto* parent = resolve_parent_path(link.parent_identity);
+            if (parent == nullptr || parent->empty()) { return {}; }
+            if (options.direct_children && (direct_parent.empty() ||
+                CompareStringOrdinal(parent->c_str(), static_cast<int>(parent->size()),
+                    direct_parent.c_str(), static_cast<int>(direct_parent.size()), TRUE) != CSTR_EQUAL))
+            {
+                return {};
+            }
+            auto path = core::JoinPath(*parent, link.name);
+            if (!path_prefix.empty() && !path_prefix_is_volume_root &&
+                !StartsWithInsensitive(*parent, path_prefix) && !StartsWithInsensitive(path, path_prefix))
+            {
+                return {};
+            }
+            return path;
+        };
+
+        // Keep the original traversal order. Only a resolved, in-scope,
+        // visible link consumes the result limit.
+        const auto collect = [&](const auto& groups, const auto& get_links)
+        {
+            for (const auto& group : groups)
+            {
+                const auto* links = get_links(group);
+                if (!links) { continue; }
+                for (const Link& link : *links)
+                {
+                    if (!matches_name(link)) { continue; }
+                    auto path = path_in_scope(link);
+                    if (path.empty() || IsInternalExcludedResolvedPathUnlocked(path)) { continue; }
+                    results.push_back(FastSearchResult{
+                        link.identity, link.parent_identity, link.name, std::move(path),
+                        link.attributes, (link.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0, link.last_usn });
+                    if (options.limit != 0 && results.size() == options.limit)
+                    {
+                        links_examined += static_cast<std::uint64_t>(&link - links->data()) + 1;
+                        return;
+                    }
+                }
+                links_examined += links->size();
             }
         };
 
         if (timing != nullptr)
         {
-            MarkFastSearchTiming(timing->candidate_filter_start_us, timing->request_received);
+            MarkFastSearchTiming(timing->candidate_selection_start_us, timing->request_received);
         }
-
-        const auto append_matching_links = [&](const std::vector<Link>& links)
-        {
-            for (const Link& link : links)
-            {
-                if ((link.attributes & options.excluded_attributes) != 0) { continue; }
-                const std::wstring& name = link.folded_name;
-                const bool text_match = query.empty() ||
-                    (options.prefix ? name.starts_with(query) : name.find(query) != std::wstring::npos);
-                if (!text_match)
-                {
-                    continue;
-                }
-                if (!extension.empty())
-                {
-                    const auto dot = name.find_last_of(L'.');
-                    const auto separator = name.find_last_of(L"\\/");
-                    if (dot == std::wstring::npos || dot == 0 || (separator != std::wstring::npos && dot < separator) ||
-                        std::wstring_view(name).substr(dot) != extension) { continue; }
-                }
-                candidate_links.push_back(&link);
-            }
-        };
-
         if (!extension.empty() && options.use_derived_extension_index)
         {
             const auto bucket = extension_index_.find(extension);
             if (bucket != extension_index_.end())
             {
-                for (const core::FileIdentity& identity : bucket->second)
-                {
+                collect(bucket->second, [&](const auto& identity) -> const std::vector<Link>* {
                     const auto links = links_.find(identity);
-                    if (links != links_.end())
-                    {
-                        append_matching_links(links->second);
-                    }
-                }
+                    return links == links_.end() ? nullptr : &links->second;
+                });
             }
         }
         else
         {
-            for (const auto& [identity, links] : links_)
-            {
-                (void)identity;
-                append_matching_links(links);
-            }
+            collect(links_, [](const auto& entry) { return &entry.second; });
         }
 
         if (timing != nullptr)
         {
-            MarkFastSearchTiming(timing->candidate_filter_end_us, timing->request_received);
-            MarkFastSearchTiming(timing->path_resolution_start_us, timing->request_received);
+            MarkFastSearchTiming(timing->candidate_selection_end_us, timing->request_received);
+            timing->links_examined.store(links_examined, std::memory_order_release);
         }
-
-        resolved_candidates.reserve(options.limit ? (std::min)(candidate_links.size(), options.limit) : candidate_links.size());
-        for (const Link* link : candidate_links)
+        if (options.limit == 0 || results.size() < options.limit)
         {
-            std::wstring full_path;
-            if (SameCanonicalUsnIdentity(link->identity, snapshot_.root_identity))
-            {
-                if (options.direct_children) { continue; }
-                full_path = snapshot_.volume_root;
-            }
-            else
-            {
-                const std::wstring* parent_path = resolve_parent_path(link->parent_identity);
-                if (parent_path == nullptr || parent_path->empty()) { continue; }
-                if (options.direct_children && (direct_parent.empty() ||
-                    CompareStringOrdinal(parent_path->c_str(), static_cast<int>(parent_path->size()),
-                        direct_parent.c_str(), static_cast<int>(direct_parent.size()), TRUE) != CSTR_EQUAL))
-                { continue; }
-                full_path = core::JoinPath(*parent_path, link->name);
-                if (!path_prefix.empty() && !path_prefix_is_volume_root &&
-                    !StartsWithInsensitive(*parent_path, path_prefix) && !StartsWithInsensitive(full_path, path_prefix))
-                { continue; }
-            }
-            if (IsInternalExcludedResolvedPathUnlocked(full_path))
-            {
-                continue;
-            }
-            resolved_candidates.push_back(ResolvedCandidate{ link, std::move(full_path) });
-            if (options.limit && resolved_candidates.size() >= options.limit) { break; }
-        }
-
-        if (timing != nullptr)
-        {
-            MarkFastSearchTiming(timing->path_resolution_end_us, timing->request_received);
-            MarkFastSearchTiming(timing->result_construction_start_us, timing->request_received);
-        }
-
-        results.reserve(std::min<std::size_t>(
-            resolved_candidates.size(),
-            options.limit == 0 ? resolved_candidates.size() : options.limit));
-        for (const ResolvedCandidate& candidate : resolved_candidates)
-        {
-            const Link& link = *candidate.link;
-            FastSearchResult result;
-            result.identity = link.identity;
-            result.parent_identity = link.parent_identity;
-            result.name = link.name;
-            result.full_path = candidate.full_path;
-            result.attributes = link.attributes;
-            result.is_directory = (link.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-            result.last_usn = link.last_usn;
-            results.push_back(std::move(result));
-            if (options.limit != 0 && results.size() >= options.limit)
-            {
-                if (timing != nullptr)
-                {
-                    MarkFastSearchTiming(timing->result_construction_end_us, timing->request_received);
-                }
-                finish_timing();
-                return results;
-            }
-        }
-
-        if (timing != nullptr)
-        {
-            MarkFastSearchTiming(timing->result_construction_end_us, timing->request_received);
-            MarkFastSearchTiming(timing->sorting_start_us, timing->request_received);
-        }
-
-        std::sort(
-            results.begin(),
-            results.end(),
-            [](const FastSearchResult& left, const FastSearchResult& right)
+            if (timing != nullptr) { MarkFastSearchTiming(timing->sorting_start_us, timing->request_received); }
+            std::sort(results.begin(), results.end(), [](const FastSearchResult& left, const FastSearchResult& right)
             {
                 return CompareStringOrdinal(left.full_path.data(), static_cast<int>(left.full_path.size()),
                     right.full_path.data(), static_cast<int>(right.full_path.size()), TRUE) == CSTR_LESS_THAN;
             });
+            if (timing != nullptr) { MarkFastSearchTiming(timing->sorting_end_us, timing->request_received); }
+        }
         if (timing != nullptr)
         {
-            MarkFastSearchTiming(timing->sorting_end_us, timing->request_received);
+            timing->result_count.store(results.size(), std::memory_order_release);
+            MarkFastSearchTiming(timing->search_end_us, timing->request_received);
         }
-        finish_timing();
         return results;
     }
 

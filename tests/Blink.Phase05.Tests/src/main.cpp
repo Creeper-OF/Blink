@@ -409,10 +409,9 @@ namespace
         std::wstring extension;
         std::wstring path_prefix;
         std::vector<double> samples_ms;
-        std::vector<double> candidate_filter_ms;
-        std::vector<double> path_resolution_ms;
-        std::vector<double> result_construction_ms;
+        std::vector<double> candidate_selection_ms;
         std::vector<double> sorting_ms;
+        std::uint64_t links_examined{};
         std::size_t result_count{};
         bool over_five_seconds{};
     };
@@ -700,7 +699,10 @@ namespace
                 static_cast<DWORD>(FILE_ATTRIBUTE_ARCHIVE | (index < 1005 ? FILE_ATTRIBUTE_HIDDEN : FILE_ATTRIBUTE_SYSTEM)), 3 });
         }
         options.limit = 16;
-        const auto old_cap = crowded.Search(options);
+        blink::index::FastSearchTiming timing(std::chrono::steady_clock::now());
+        const auto old_cap = crowded.Search(options, &timing);
+        check(seeded && old_cap.size() == 16 && timing.links_examined.load() == 16,
+            L"index_search_stops_examining_links_at_the_accepted_result_limit");
         check(seeded && old_cap.size() == 16 && std::all_of(old_cap.begin(), old_cap.end(), [](const auto& hit) {
             return (hit.attributes & excluded) != 0;
         }), L"index_visibility_fixture_has_over_1000_hidden_and_system_hits_before_legacy_cap");
@@ -1147,7 +1149,7 @@ namespace
             L"record_type,query_type,query_text,extension,path_prefix,result_count,expected_path,"
             L"expected_identity,matching_identity,expected_path_match,scope_valid,outside_scope_hits,additional_expected_path,"
             L"reference_result_count,reference_equal,status,min_ms,median_ms,p95_ms,max_ms,"
-            L"candidate_filter_median_ms,path_resolution_median_ms,result_construction_median_ms,sorting_median_ms\n";
+            L"candidate_selection_median_ms,sorting_median_ms,links_examined\n";
         bool correctness_passed = true;
 
         for (const OfflineSearchCase& query : correctness_cases)
@@ -1229,7 +1231,7 @@ namespace
                 (expected_path_match ? L"true" : L"false") + L"," +
                 (scope_valid ? L"true" : L"false") + L"," + std::to_wstring(outside_scope_hits) + L"," +
                 CsvQuote(query.additional_expected_path) + L"," + std::to_wstring(reference_result_count) + L"," +
-                (reference_equal ? L"true" : L"false") + L"," + status + L",,,,,,,,\n";
+                (reference_equal ? L"true" : L"false") + L"," + status + L",,,,,,,\n";
             WriteUtf8Line(
                 L"offline_search_correctness " + query.name + L" status=" + status +
                 L" result_count=" + std::to_wstring(hits.size()) +
@@ -1253,9 +1255,7 @@ namespace
             benchmark.extension = query.options.extension;
             benchmark.path_prefix = query.options.path_prefix;
             benchmark.samples_ms.reserve(sample_count);
-            benchmark.candidate_filter_ms.reserve(sample_count);
-            benchmark.path_resolution_ms.reserve(sample_count);
-            benchmark.result_construction_ms.reserve(sample_count);
+            benchmark.candidate_selection_ms.reserve(sample_count);
             benchmark.sorting_ms.reserve(sample_count);
             for (std::size_t sample = 0; sample < sample_count; ++sample)
             {
@@ -1265,19 +1265,14 @@ namespace
                 const auto elapsed = std::chrono::duration<double, std::milli>(
                     std::chrono::steady_clock::now() - started).count();
                 benchmark.samples_ms.push_back(elapsed);
-                benchmark.candidate_filter_ms.push_back(TimingStageMilliseconds(
-                    timing.candidate_filter_start_us,
-                    timing.candidate_filter_end_us));
-                benchmark.path_resolution_ms.push_back(TimingStageMilliseconds(
-                    timing.path_resolution_start_us,
-                    timing.path_resolution_end_us));
-                benchmark.result_construction_ms.push_back(TimingStageMilliseconds(
-                    timing.result_construction_start_us,
-                    timing.result_construction_end_us));
+                benchmark.candidate_selection_ms.push_back(TimingStageMilliseconds(
+                    timing.candidate_selection_start_us,
+                    timing.candidate_selection_end_us));
                 benchmark.sorting_ms.push_back(TimingStageMilliseconds(
                     timing.sorting_start_us,
                     timing.sorting_end_us));
                 benchmark.result_count = hits.size();
+                benchmark.links_examined = timing.links_examined.load(std::memory_order_acquire);
             }
             benchmark.over_five_seconds = *std::max_element(
                 benchmark.samples_ms.begin(), benchmark.samples_ms.end()) >= 5000.0;
@@ -1285,9 +1280,7 @@ namespace
             const double maximum = *std::max_element(benchmark.samples_ms.begin(), benchmark.samples_ms.end());
             const double median = Percentile(benchmark.samples_ms, 0.50);
             const double p95 = Percentile(benchmark.samples_ms, 0.95);
-            const double candidate_filter_median = Percentile(benchmark.candidate_filter_ms, 0.50);
-            const double path_resolution_median = Percentile(benchmark.path_resolution_ms, 0.50);
-            const double result_construction_median = Percentile(benchmark.result_construction_ms, 0.50);
+            const double candidate_selection_median = Percentile(benchmark.candidate_selection_ms, 0.50);
             const double sorting_median = Percentile(benchmark.sorting_ms, 0.50);
             const std::wstring status = benchmark.over_five_seconds ? L"OVER_5S" : L"PASS";
             csv += L"benchmark," + CsvQuote(benchmark.name) + L"," + CsvQuote(benchmark.text) + L"," +
@@ -1295,10 +1288,8 @@ namespace
                 std::to_wstring(benchmark.result_count) + L",,,true,true,true,0,,0,true," + status + L"," +
                 std::to_wstring(minimum) + L"," + std::to_wstring(median) + L"," +
                 std::to_wstring(p95) + L"," + std::to_wstring(maximum) + L"," +
-                std::to_wstring(candidate_filter_median) + L"," +
-                std::to_wstring(path_resolution_median) + L"," +
-                std::to_wstring(result_construction_median) + L"," +
-                std::to_wstring(sorting_median) + L"\n";
+                std::to_wstring(candidate_selection_median) + L"," +
+                std::to_wstring(sorting_median) + L"," + std::to_wstring(benchmark.links_examined) + L"\n";
             WriteUtf8Line(
                 L"offline_search_benchmark " + benchmark.name +
                 L" samples=" + std::to_wstring(sample_count) +
@@ -1307,10 +1298,9 @@ namespace
                 L" median_ms=" + std::to_wstring(median) +
                 L" p95_ms=" + std::to_wstring(p95) +
                 L" max_ms=" + std::to_wstring(maximum) +
-                L" candidate_filter_median_ms=" + std::to_wstring(candidate_filter_median) +
-                L" path_resolution_median_ms=" + std::to_wstring(path_resolution_median) +
-                L" result_construction_median_ms=" + std::to_wstring(result_construction_median) +
+                L" candidate_selection_median_ms=" + std::to_wstring(candidate_selection_median) +
                 L" sorting_median_ms=" + std::to_wstring(sorting_median) +
+                L" links_examined=" + std::to_wstring(benchmark.links_examined) +
                 L" status=" + status);
             benchmarks.push_back(std::move(benchmark));
         }

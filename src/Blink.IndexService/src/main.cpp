@@ -408,6 +408,24 @@ namespace blink::index::service
             return (std::filesystem::path(data_root) / L"index" / (drive + L".blink5")).wstring();
         }
 
+        [[nodiscard]] std::vector<std::wstring> ExistingFixedVolumeStores(const std::wstring& data_root)
+        {
+            std::vector<std::wstring> roots;
+            const DWORD mounted = GetLogicalDrives();
+            for (DWORD letter = 0; letter < 26; ++letter)
+            {
+                if ((mounted & (1u << letter)) == 0) { continue; }
+                const std::wstring root{ static_cast<wchar_t>(L'A' + letter), L':', L'\\' };
+                std::error_code error;
+                if (std::filesystem::is_regular_file(StorePathFor(data_root, root), error) &&
+                    GetDriveTypeW(root.c_str()) == DRIVE_FIXED)
+                {
+                    roots.push_back(root);
+                }
+            }
+            return roots;
+        }
+
         [[nodiscard]] std::uint64_t FileSize(const std::wstring& path)
         {
             CREATEFILE3_EXTENDED_PARAMETERS parameters{};
@@ -814,11 +832,22 @@ namespace blink::index::service
 
         void SchedulerLoop()
         {
+            // Restore existing stores after a service start, even if the user
+            // does not open Blink. Use the same single operation as a load
+            // requested by a client. Stale or absent stores still need Build.
+            const auto startup_roots = ExistingFixedVolumeStores(data_root_);
+            auto next_startup_root = startup_roots.begin();
             while (scheduler_running_.load())
             {
                 if (stop_event_ != nullptr && WaitForSingleObject(stop_event_, 1000) != WAIT_TIMEOUT)
                 {
                     break;
+                }
+
+                if (next_startup_root != startup_roots.end())
+                {
+                    if (TryLoadStore(*next_startup_root)) { ++next_startup_root; }
+                    continue;
                 }
 
                 std::wstring volume;
@@ -1653,15 +1682,24 @@ namespace blink::index::service
             return true;
         }
 
-        void StartLoadOperation(const std::wstring& normalized)
+        // A true result means the store was already resident or queued. A
+        // busy result leaves the caller free to try on the scheduler's next tick.
+        [[nodiscard]] bool TryLoadStore(const std::wstring& normalized)
         {
+            const auto key = Lower(normalized);
+            {
+                std::scoped_lock lock(state_mutex_);
+                if (resident_indexes_.contains(key)) { return true; }
+                if (operation_.running) { return false; }
+            }
             const auto loaded = std::make_shared<FastIndex>();
             loaded->SetInternalExcludedRoots({ data_root_ });
             std::thread completed;
             std::uint64_t operation_id = 0;
             std::shared_ptr<ProgressState> progress;
             std::unique_lock lock(state_mutex_);
-            if (operation_.running || resident_indexes_.contains(Lower(normalized))) { return; }
+            if (resident_indexes_.contains(key)) { return true; }
+            if (operation_.running) { return false; }
             if (operation_thread_.joinable()) { completed = std::move(operation_thread_); }
             operation_id = ++next_operation_id_;
             operation_.id = operation_id;
@@ -1712,6 +1750,7 @@ namespace blink::index::service
                 });
             lock.unlock();
             if (completed.joinable()) { completed.detach(); }
+            return true;
         }
 
         [[nodiscard]] bool EnsureLoaded(const std::wstring& volume_root, ipc::Response& response,
@@ -1768,7 +1807,7 @@ namespace blink::index::service
                 response.message = L"The requested volume store is not available or corrupt; initial indexing is required";
                 return false;
             }
-            StartLoadOperation(normalized);
+            (void)TryLoadStore(normalized);
             response.status = ipc::ResponseStatus::Busy;
             response.error = ERROR_IO_PENDING;
             response.index_state = ipc::IndexState::Rebuilding;

@@ -128,14 +128,11 @@ namespace blink::index
         std::atomic<std::int64_t> lock_acquired_us{ -1 };
         std::atomic<std::int64_t> search_start_us{ -1 };
         std::atomic<std::int64_t> search_end_us{ -1 };
-        std::atomic<std::int64_t> candidate_filter_start_us{ -1 };
-        std::atomic<std::int64_t> candidate_filter_end_us{ -1 };
-        std::atomic<std::int64_t> path_resolution_start_us{ -1 };
-        std::atomic<std::int64_t> path_resolution_end_us{ -1 };
-        std::atomic<std::int64_t> result_construction_start_us{ -1 };
-        std::atomic<std::int64_t> result_construction_end_us{ -1 };
+        std::atomic<std::int64_t> candidate_selection_start_us{ -1 };
+        std::atomic<std::int64_t> candidate_selection_end_us{ -1 };
         std::atomic<std::int64_t> sorting_start_us{ -1 };
         std::atomic<std::int64_t> sorting_end_us{ -1 };
+        std::atomic<std::uint64_t> links_examined{};
         std::atomic<std::uint64_t> result_count{};
     };
 
