@@ -38,7 +38,7 @@ DataObject验证格式/medium所有权与完成协议；Session验证真实STA�
 .\scripts\run-blink-search-smoke.ps1 -Configuration Release -Feature All
 ```
 
-`All` 顺序启动五个独立进程，也能只选择其中一个功能复测：
+`All` 顺序启动六个独立进程，也能只选择其中一个功能复测：
 
 | Feature | 原生组 | 预期检查数 |
 | --- | --- | --- |
@@ -47,8 +47,9 @@ DataObject验证格式/medium所有权与完成协议；Session验证真实STA�
 | Visibility | search-visibility | 56 |
 | Index | search-correctness | 32 |
 | Wire | search-visibility-wire | 16 |
+| Serving | search-serving | 10 |
 
-前三组使用Phase1测试程序；后两组使用Phase05并显式带`--search-index-only --suite`离线前缀。上批Phase05不认识新suite时仍进入已支持的离线分支，随后由精确检查数识别版本不符；不能让旧程序掉入服务原型流程。`-TestBinaryPath`、`-IndexTestBinaryPath`可分别指定明确二进制。
+前三组使用 Phase1 测试程序，后三组使用 Phase05 并带 `--search-index-only --suite` 离线前缀。`-TestBinaryPath` 和 `-IndexTestBinaryPath` 可分别指定二进制。Serving 使用可控保存阶段验证并发行为和 BLK5 回读。
 
 每项保存日志、退出码、精确检查数及二进制SHA，同一程序的跨组SHA必须一致。脚本不编译、不操作前台或正式服务；完整Phase1与受影响的离线索引回归另跑：
 
@@ -61,7 +62,7 @@ Phase05无参数是会启动服务原型的历史入口，不作为本批普通�
 
 ## 真实服务搜索与夹具恢复
 
-2026-11-19 已恢复 C/D 索引，正式服务更新为 PID 24932，启动载入和两盘就绪已验证。真实搜索夹具首次 NOT_READY，复用同一夹具后 23 项通过。默认 Blink 主程序为 `e59f39d`。实际引擎与 IPC 耗时见[搜索实测](SEARCH_RESPONSE_VALIDATION.md)。真实服务入口在普通用户 PowerShell、项目根运行：
+2026-11-19 已部署保存期间可查询的正式服务（PID 15836）。启动载入、C/D 就绪和 23 个真实服务检查均通过。保存阶段实测与 Busy 采样见[搜索实测](SEARCH_RESPONSE_VALIDATION.md)。真实服务入口在普通用户 PowerShell、项目根运行：
 
 ```powershell
 .\scripts\run-blink-live-search-smoke.ps1

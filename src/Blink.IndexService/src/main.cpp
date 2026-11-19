@@ -1646,31 +1646,16 @@ namespace blink::index::service
             progress->Publish(snapshot);
         }
 
-        [[nodiscard]] bool FillRunningOperationResponse(ipc::Response& response,
-            const std::wstring& requested_volume) const
+        // Caller holds state_mutex_. Progress reads never acquire the index lock.
+        void FillBusyResponse(ipc::Response& response) const
         {
-            std::shared_ptr<ProgressState> progress;
-            {
-                std::scoped_lock lock(state_mutex_);
-                if (!operation_.running)
-                {
-                    return false;
-                }
-                if (Lower(operation_.volume_root) != Lower(requested_volume) &&
-                    resident_indexes_.contains(Lower(requested_volume)))
-                {
-                    return false;
-                }
-                progress = operation_.progress;
-            }
-            if (progress == nullptr)
-            {
-                return false;
-            }
-
-            const ProgressSnapshot snapshot = progress->Read();
             response.status = ipc::ResponseStatus::Busy;
             response.error = ERROR_IO_PENDING;
+            response.message = L"Index operation is running";
+            response.index_state = ipc::IndexState::CatchingUp;
+            if (!operation_.running || !operation_.progress) { return; }
+
+            const ProgressSnapshot snapshot = operation_.progress->Read();
             response.operation_id = snapshot.operation_id;
             response.index_state = snapshot.index_state;
             response.records_seen = snapshot.records_seen;
@@ -1678,8 +1663,6 @@ namespace blink::index::service
             response.directories = snapshot.directories;
             response.index_bytes = snapshot.index_bytes;
             response.last_usn = snapshot.last_usn;
-            response.message = L"Index operation is running";
-            return true;
         }
 
         // A true result means the store was already resident or queued. A
@@ -1754,7 +1737,7 @@ namespace blink::index::service
         }
 
         [[nodiscard]] bool EnsureLoaded(const std::wstring& volume_root, ipc::Response& response,
-            std::shared_ptr<FastIndex>& loaded)
+            std::shared_ptr<FastIndex>& loaded, bool for_search = false)
         {
             const std::wstring normalized = NormalizeVolumeRoot(volume_root);
             if (normalized.empty())
@@ -1765,24 +1748,20 @@ namespace blink::index::service
                 response.index_state = ipc::IndexState::Unavailable;
                 return false;
             }
-            if (FillRunningOperationResponse(response, normalized)) { return false; }
+            const auto key = Lower(normalized);
             {
                 std::scoped_lock lock(state_mutex_);
-                const auto resident = resident_indexes_.find(Lower(normalized));
+                const auto resident = resident_indexes_.find(key);
+                const bool same_operation = operation_.running && Lower(operation_.volume_root) == key;
                 if (resident != resident_indexes_.end() &&
-                    (!operation_.running || Lower(operation_.volume_root) != Lower(normalized)))
+                    (!same_operation || (for_search && operation_.progress && CanSearchWhileSaving(operation_.progress->Read()))))
                 {
                     loaded = resident->second;
                     return true;
                 }
                 if (operation_.running)
                 {
-                    response.status = ipc::ResponseStatus::Busy;
-                    response.error = ERROR_IO_PENDING;
-                    response.operation_id = operation_.id;
-                    response.message = L"Index operation is running";
-                    response.index_state = operation_.initial || operation_.loading
-                        ? ipc::IndexState::Rebuilding : ipc::IndexState::CatchingUp;
+                    FillBusyResponse(response);
                     return false;
                 }
                 if (operation_.loading && Lower(operation_.volume_root) == Lower(normalized) &&
@@ -1833,23 +1812,12 @@ namespace blink::index::service
                 response.error = ERROR_INVALID_STATE;
                 return ipc::IndexState::RebuildRequired;
             }
-            const JournalState journal = QueryUsnJournal(volume_root);
-            if (!journal.available)
-            {
-                response.error = journal.error;
-                return ipc::IndexState::Unavailable;
-            }
+            const auto journal = QueryUsnJournal(volume_root);
+            const auto state = CheckFastIndexReadState(snapshot, journal);
             response.journal_id = journal.journal_id;
             response.last_usn = snapshot.last_usn;
-            if (journal.journal_id != snapshot.journal_id ||
-                snapshot.last_usn < journal.first_usn ||
-                (journal.lowest_valid_usn > 0 && snapshot.last_usn < journal.lowest_valid_usn))
-            {
-                response.error = ERROR_JOURNAL_ENTRY_DELETED;
-                return ipc::IndexState::RebuildRequired;
-            }
-            response.error = snapshot.error;
-            return ToIndexState(snapshot.health);
+            response.error = state.error;
+            return ToIndexState(state.health);
         }
 
         void CopyStatsToResponse(ipc::Response& response, std::shared_ptr<FastIndex> loaded = {}) const
@@ -2064,10 +2032,12 @@ namespace blink::index::service
                     {
                         DWORD save_error = ERROR_SUCCESS;
                         const auto save_started = std::chrono::steady_clock::now();
-                        PublishSavingProgress(progress, operation_id, initial, stats);
                         if (initial || stats.user_mutations_applied > 0)
                         {
-                            if (!current->Save(StorePathFor(data_root_, normalized), &save_error))
+                            if (!current->Save(StorePathFor(data_root_, normalized), &save_error, [&]()
+                            {
+                                PublishSavingProgress(progress, operation_id, initial, stats);
+                            }))
                             {
                                 success = false;
                                 operation_error = save_error;
@@ -2216,25 +2186,10 @@ namespace blink::index::service
                 return response;
             }
             std::shared_ptr<FastIndex> loaded;
-            if (!EnsureLoaded(request.volume_root, response, loaded))
+            if (!EnsureLoaded(request.volume_root, response, loaded, true))
             {
                 return response;
             }
-            response.index_state = RefreshIndexState(request.volume_root, response, loaded);
-            if (response.error == ERROR_IO_PENDING)
-            {
-                response.status = ipc::ResponseStatus::Busy;
-                response.message = L"An index operation is running for the requested volume";
-                return response;
-            }
-            if (response.index_state != ipc::IndexState::Healthy && response.index_state != ipc::IndexState::CatchingUp)
-            {
-                response.status = ipc::ResponseStatus::Failed;
-                response.message = ipc::IndexStateName(response.index_state);
-                CopyStatsToResponse(response, loaded);
-                return response;
-            }
-
             FastSearchOptions options;
             options.text = request.text;
             options.prefix = request.prefix;
@@ -2248,33 +2203,53 @@ namespace blink::index::service
                 request.type == ipc::RequestType::SearchWithHiddenDirectChildren)
             { options.excluded_attributes = FILE_ATTRIBUTE_SYSTEM; }
             options.limit = std::min<std::size_t>(request.limit == 0 ? 1000 : request.limit, 1000);
-            const auto hits = loaded->Search(options, search_timing);
-            response.results.reserve(hits.size());
-            for (const FastSearchResult& hit : hits)
+            const auto journal = QueryUsnJournal(request.volume_root);
+            auto query = loaded->TrySearch(options, journal, search_timing);
+            {
+                std::scoped_lock lock(state_mutex_);
+                const auto key = Lower(NormalizeVolumeRoot(request.volume_root));
+                const auto resident = resident_indexes_.find(key);
+                const bool replacing = operation_.running && (operation_.initial || operation_.loading) &&
+                    Lower(operation_.volume_root) == key;
+                if (!query || replacing || resident == resident_indexes_.end() || resident->second != loaded)
+                {
+                    FillBusyResponse(response);
+                    return response;
+                }
+            }
+
+            response.index_state = ToIndexState(query->state.health);
+            response.error = query->state.error;
+            response.records_seen = query->stats.records_seen;
+            response.files = query->stats.files;
+            response.directories = query->stats.directories;
+            response.index_bytes = query->stats.index_bytes;
+            response.journal_id = journal.journal_id;
+            response.last_usn = query->last_usn;
+            if (response.error != ERROR_SUCCESS ||
+                (response.index_state != ipc::IndexState::Healthy && response.index_state != ipc::IndexState::CatchingUp))
+            {
+                response.status = ipc::ResponseStatus::Failed;
+                if (response.error == ERROR_SUCCESS) { response.error = ERROR_NOT_READY; }
+                response.message = ipc::IndexStateName(response.index_state);
+                return response;
+            }
+
+            response.results.reserve(query->hits.size());
+            for (auto& hit : query->hits)
             {
                 ipc::SearchHit result;
                 result.identity = hit.identity;
                 result.parent_identity = hit.parent_identity;
-                result.name = hit.name;
-                result.full_path = hit.full_path;
+                result.name = std::move(hit.name);
+                result.full_path = std::move(hit.full_path);
                 result.attributes = hit.attributes;
                 result.is_directory = hit.is_directory;
                 result.last_usn = hit.last_usn;
                 response.results.push_back(std::move(result));
             }
             response.status = ipc::ResponseStatus::Ok;
-            response.error = ERROR_SUCCESS;
             response.message = L"Fast index search completed";
-            CopyStatsToResponse(response, loaded);
-            const auto observed = loaded->Snapshot();
-            response.index_state = ToIndexState(observed.health);
-            if (response.index_state != ipc::IndexState::Healthy && response.index_state != ipc::IndexState::CatchingUp)
-            {
-                response.status = ipc::ResponseStatus::Failed;
-                response.error = observed.error ? observed.error : ERROR_NOT_READY;
-                response.message = ipc::IndexStateName(response.index_state);
-                response.results.clear();
-            }
             return response;
         }
 

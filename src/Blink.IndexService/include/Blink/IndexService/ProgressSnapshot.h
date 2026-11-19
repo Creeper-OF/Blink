@@ -34,6 +34,12 @@ namespace blink::index::service
         bool completed{};
     };
 
+    [[nodiscard]] inline bool CanSearchWhileSaving(const ProgressSnapshot& snapshot) noexcept
+    {
+        return !snapshot.initial && !snapshot.completed && snapshot.stage == ProgressStage::Saving &&
+            snapshot.index_state == ipc::IndexState::CatchingUp && snapshot.error == ERROR_SUCCESS;
+    }
+
     // The mutex protects only the small value copy.  Callers must prepare the
     // snapshot before Publish and must never perform I/O or call FastIndex
     // while this mutex is held.

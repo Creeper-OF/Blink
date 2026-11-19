@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <optional>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -118,6 +120,23 @@ namespace blink::index
         std::int64_t last_usn{};
     };
 
+    struct FastIndexReadState
+    {
+        FastIndexHealth health{};
+        DWORD error{};
+    };
+
+    [[nodiscard]] FastIndexReadState CheckFastIndexReadState(
+        const FastIndexSnapshot& snapshot, const JournalState& journal) noexcept;
+
+    struct FastIndexQueryResult
+    {
+        FastIndexReadState state;
+        FastIndexStats stats;
+        std::int64_t last_usn{};
+        std::vector<FastSearchResult> hits;
+    };
+
     struct FastSearchTiming
     {
         explicit FastSearchTiming(std::chrono::steady_clock::time_point received) noexcept
@@ -154,13 +173,20 @@ namespace blink::index
             FastIndexStats* stats = nullptr,
             const FastIndexProgressCallback& progress = {});
 
-        [[nodiscard]] bool Save(const std::wstring& path, DWORD* error = nullptr) const;
+        // Called once with a stable shared view, before writing the temporary
+        // store. The callback must not reenter the index.
+        [[nodiscard]] bool Save(const std::wstring& path, DWORD* error = nullptr,
+            const std::function<void()>& on_save_started = {}) const;
         [[nodiscard]] bool Load(const std::wstring& path, const std::wstring& expected_root, DWORD* error = nullptr);
         [[nodiscard]] static bool ValidateStoreFile(const std::wstring& path, DWORD* error = nullptr);
 
         [[nodiscard]] std::vector<FastSearchResult> Search(
             const FastSearchOptions& options,
             FastSearchTiming* timing = nullptr) const;
+        // An active writer yields nullopt. Result state, counters and hits
+        // all describe the same index view.
+        [[nodiscard]] std::optional<FastIndexQueryResult> TrySearch(
+            const FastSearchOptions& options, const JournalState& journal, FastSearchTiming* timing = nullptr) const;
         [[nodiscard]] FastIndexSnapshot Snapshot() const;
         [[nodiscard]] FastIndexStats Stats() const;
         [[nodiscard]] bool IsLoaded() const;
@@ -211,6 +237,9 @@ namespace blink::index
         [[nodiscard]] bool RemoveLinkUnlocked(const Link& link);
         void UpdateLiveCountStatsUnlocked();
         void RecomputeStatsUnlocked();
+        [[nodiscard]] static std::uint64_t CachedNameBytes(const Link& link) noexcept;
+        [[nodiscard]] std::vector<FastSearchResult> SearchUnlocked(
+            const FastSearchOptions& options, FastSearchTiming* timing) const;
         [[nodiscard]] std::wstring ResolveLinkPathUnlocked(
             const Link& link,
             std::unordered_set<core::FileIdentity, IdentityHash>& visiting,
@@ -222,7 +251,8 @@ namespace blink::index
         [[nodiscard]] bool IsInternalExcludedPathUnlocked(const Link& link) const;
         [[nodiscard]] bool IsInternalExcludedResolvedPathUnlocked(const std::wstring& full_path) const;
 
-        mutable std::mutex mutex_;
+        mutable std::shared_mutex mutex_;
+        mutable std::mutex save_mutex_;
         std::vector<std::wstring> internal_excluded_roots_;
         std::vector<InternalExcludedRootIdentity> internal_excluded_root_identities_;
         std::unordered_map<core::FileIdentity, std::vector<Link>, IdentityHash> links_;

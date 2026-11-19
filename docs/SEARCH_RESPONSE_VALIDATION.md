@@ -1,6 +1,18 @@
 # 搜索正确性、响应与目录范围
 
-本页覆盖 A01–A04 的原生功能测试、正式服务部署及真实自有夹具搜索，并记录 2026-11-19 的索引恢复、启动载入和查询提速。
+本页覆盖 A01–A04 的原生功能测试、正式服务部署及真实自有夹具搜索，并记录索引恢复、启动载入、查询提速和保存期间的查询。
+
+## 保存期间的查询 — 2026-11-19
+
+USN 每批变更应用时直接更新链接、目录、文件和内存估算，收尾无需再遍历全盘统计。BLK5 保存使用同一份只读视图，保持单任务写盘和临时文件替换。正常增量的保存阶段允许搜索。查询尽力获取共享读锁，同一视图提供健康状态、计数与结果，并校验卷序列号及 USN 检查点。写锁被占用时立即返回 Busy。日志断档或换卷仍拒绝提供旧索引结果。
+
+正式服务更新至 `3e84c3aa742aa9dc334c4ebb80b238e65b49b4092383d2d7e4fe55e6a2e02ebe`，PID 15836。启动时两份现存 BLK5 均载入成功，C/D 分别通过只读就绪检查。
+
+用相同的普通用户脚本在 D 盘依次创建自有文件，观测服务写入临时 BLK5。每项均核对查询前后临时文件仍存在，且进度属于同一个尚未完成的保存操作。旧版 3 个操作全部返回 Busy/997，新版 3 个操作都在保存尚未结束时返回准确的自有文件。文件身份、父身份和属性均通过核对。
+
+同一个原生客户端在服务更新前后各发出 72 个只读请求，分别取得 47 与 71 次成功、25 与 1 次 Busy。C 盘成功 11→35，D 盘保持 36。每个请求只尝试一次。正常后台负荷会影响这组短时采样。WinUI 首屏和 Everything 对比另测。
+
+Release 单并发构建服务和 Phase05 用时 15.763 秒。搜索六组 154 PASS，离线 Phase05 69 PASS，包含新增 Serving 10 项。真实服务夹具首次 NOT_READY，复用同一夹具后 23 PASS。原始报告归 `.build/index-serving/integration/`。实际清理旧产物 9,329,508 字节，测试夹具另清 3,362 字节。
 
 ## 启动载入与查询上限 — 2026-11-19
 
@@ -80,7 +92,8 @@ A04：名称和扩展缓存使用Windows invariant uppercase，并以ordinal等�
 - `Visibility`：启动`--suite search-visibility`，契约56 PASS，包含实际factory兼容与旧截断→服务升级→Retry。
 - `Index`：Phase05 离线启动 `--search-index-only --suite search-correctness`，当前契约 32 PASS。
 - `Wire`：Phase05离线启动`--search-index-only --suite search-visibility-wire`，契约16 PASS。
-- `All`：依次Response、Scope、Visibility、Index、Wire；每组独立进程，不并行，均要求0 FAIL/0 SKIP。
+- `Serving`：Phase05 离线启动 `--search-index-only --suite search-serving`，验证真实保存锁、并发查询、写入互斥和断档等 10 项。
+- `All`：顺序运行 Response、Scope、Visibility、Index、Wire、Serving，各组独立进程。
 
 脚本不构建产品，不启动 GUI、不安装或修改服务，也不接触剪贴板。每个子进程保留各自标准输出、错误输出及简明 JSON；记录候选、脚本、日志 SHA256，进程退出码、PASS/FAIL/SKIP 数量和起止时间。文件名含 suite 与配置；重复运行更新该 suite/配置的当前记录。每次调用另有独立 Feature/config summary，按 run_id 和报告 SHA 关联。
 

@@ -704,19 +704,9 @@ namespace blink::index
         stats_.usn_records = stats_.records_seen - records_before_usn;
         stats_.usn_read_seconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - started).count();
-        if (!completed)
-        {
-            snapshot_.error = local_error;
-            stats_.error = local_error;
-        }
-        else
-        {
-            snapshot_.health = FastIndexHealth::Healthy;
-            snapshot_.error = ERROR_SUCCESS;
-            stats_.health = snapshot_.health;
-            stats_.error = ERROR_SUCCESS;
-        }
-        RecomputeStatsUnlocked();
+        snapshot_.error = completed ? ERROR_SUCCESS : local_error;
+        stats_.health = snapshot_.health;
+        stats_.error = snapshot_.error;
         if (stats != nullptr)
         {
             *stats = stats_;
@@ -1011,7 +1001,12 @@ namespace blink::index
         {
             if (existing.parent_identity == link.parent_identity && existing.name == link.name)
             {
-                if (existing.folded_name.empty()) { existing.folded_name = FoldCase(existing.name); }
+                if (existing.folded_name.empty())
+                {
+                    const auto before = CachedNameBytes(existing);
+                    existing.folded_name = FoldCase(existing.name);
+                    stats_.resident_bytes = stats_.resident_bytes - before + CachedNameBytes(existing);
+                }
                 const bool old_directory = (existing.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                 existing.attributes = link.attributes;
                 existing.last_usn = link.last_usn;
@@ -1040,11 +1035,13 @@ namespace blink::index
         Link cached = link;
         cached.folded_name = FoldCase(cached.name);
         links.push_back(std::move(cached));
+        stats_.resident_bytes += CachedNameBytes(links.back());
         AddExtensionIndexEntryUnlocked(link);
         ++stats_.links;
         if (new_identity)
         {
             ++stats_.unique_files;
+            stats_.resident_bytes += sizeof(Link);
         }
         if (!was_directory && (link.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
         {
@@ -1068,12 +1065,14 @@ namespace blink::index
             was_directory = was_directory || (existing.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         }
         const auto before = links.size();
+        std::uint64_t removed_name_bytes{};
         std::unordered_set<std::wstring> removed_extensions;
         for (const Link& existing : links)
         {
             if (existing.parent_identity == link.parent_identity && existing.name == link.name)
             {
                 removed_extensions.insert(FoldExtension(existing.name));
+                removed_name_bytes += CachedNameBytes(existing);
             }
         }
         links.erase(
@@ -1088,6 +1087,7 @@ namespace blink::index
         const bool removed = before != links.size();
         if (removed)
         {
+            stats_.resident_bytes -= removed_name_bytes;
             for (const std::wstring& extension : removed_extensions)
             {
                 RemoveExtensionIndexEntryUnlocked(link.identity, extension);
@@ -1111,6 +1111,7 @@ namespace blink::index
             if (removed && stats_.unique_files != 0)
             {
                 --stats_.unique_files;
+                stats_.resident_bytes -= sizeof(Link);
             }
         }
         if (removed)
@@ -1127,6 +1128,11 @@ namespace blink::index
             : 0;
     }
 
+    std::uint64_t FastIndex::CachedNameBytes(const Link& link) noexcept
+    {
+        return (link.name.capacity() + link.folded_name.capacity()) * sizeof(wchar_t);
+    }
+
     void FastIndex::RecomputeStatsUnlocked()
     {
         stats_.links = 0;
@@ -1139,8 +1145,7 @@ namespace blink::index
             for (const Link& link : links)
             {
                 ++stats_.links;
-                stats_.resident_bytes += link.name.capacity() * sizeof(wchar_t);
-                stats_.resident_bytes += link.folded_name.capacity() * sizeof(wchar_t);
+                stats_.resident_bytes += CachedNameBytes(link);
                 is_directory = is_directory || (link.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
             }
             if (is_directory)
@@ -1207,6 +1212,29 @@ namespace blink::index
         return ResolveLinkPathUnlocked(it->second.front(), visiting, depth);
     }
 
+    FastIndexReadState CheckFastIndexReadState(
+        const FastIndexSnapshot& snapshot, const JournalState& journal) noexcept
+    {
+        if (!snapshot.root_identity.valid)
+        {
+            return { FastIndexHealth::RebuildRequired, ERROR_INVALID_STATE };
+        }
+        if (!journal.available)
+        {
+            return { FastIndexHealth::Unavailable, journal.error };
+        }
+        if (journal.volume_serial && snapshot.volume_serial && journal.volume_serial != snapshot.volume_serial)
+        {
+            return { FastIndexHealth::RebuildRequired, ERROR_VOLUME_NOT_SUPPORTED };
+        }
+        if (journal.journal_id != snapshot.journal_id || snapshot.last_usn < journal.first_usn ||
+            (journal.lowest_valid_usn > 0 && snapshot.last_usn < journal.lowest_valid_usn))
+        {
+            return { FastIndexHealth::RebuildRequired, ERROR_JOURNAL_ENTRY_DELETED };
+        }
+        return { snapshot.health, snapshot.error };
+    }
+
     std::vector<FastSearchResult> FastIndex::Search(
         const FastSearchOptions& options,
         FastSearchTiming* timing) const
@@ -1215,7 +1243,37 @@ namespace blink::index
         {
             MarkFastSearchTiming(timing->lock_wait_start_us, timing->request_received);
         }
-        std::scoped_lock lock(mutex_);
+        std::shared_lock lock(mutex_);
+        return SearchUnlocked(options, timing);
+    }
+
+    std::optional<FastIndexQueryResult> FastIndex::TrySearch(
+        const FastSearchOptions& options, const JournalState& journal, FastSearchTiming* timing) const
+    {
+        if (timing != nullptr)
+        {
+            MarkFastSearchTiming(timing->lock_wait_start_us, timing->request_received);
+        }
+        std::shared_lock lock(mutex_, std::try_to_lock);
+        if (!lock.owns_lock())
+        {
+            return std::nullopt;
+        }
+        FastIndexQueryResult result;
+        result.state = CheckFastIndexReadState(snapshot_, journal);
+        result.stats = stats_;
+        result.last_usn = snapshot_.last_usn;
+        if (result.state.error == ERROR_SUCCESS &&
+            (result.state.health == FastIndexHealth::Healthy || result.state.health == FastIndexHealth::CatchingUp))
+        {
+            result.hits = SearchUnlocked(options, timing);
+        }
+        return result;
+    }
+
+    std::vector<FastSearchResult> FastIndex::SearchUnlocked(
+        const FastSearchOptions& options, FastSearchTiming* timing) const
+    {
         if (timing != nullptr)
         {
             MarkFastSearchTiming(timing->lock_acquired_us, timing->request_received);
@@ -1407,25 +1465,29 @@ namespace blink::index
         return results;
     }
 
-    bool FastIndex::Save(const std::wstring& path, DWORD* error) const
+    bool FastIndex::Save(const std::wstring& path, DWORD* error,
+        const std::function<void()>& on_save_started) const
     {
         SetError(error, ERROR_SUCCESS);
-        std::scoped_lock lock(mutex_);
+        // Keep the per-process temporary file single-writer for this index,
+        // while allowing searches of the same stable view during serialization.
+        std::scoped_lock save_lock(save_mutex_);
+        std::shared_lock lock(mutex_);
         if (!snapshot_.root_identity.valid || snapshot_.volume_serial == 0 || path.empty())
         {
             SetError(error, ERROR_INVALID_STATE);
             return false;
         }
 
-        std::uint64_t link_count = 0;
-        for (const auto& [identity, links] : links_)
-        {
-            link_count += links.size();
-        }
+        const auto link_count = stats_.links;
         if (link_count > kMaxStoredLinks)
         {
             SetError(error, ERROR_FILE_TOO_LARGE);
             return false;
+        }
+        if (on_save_started)
+        {
+            on_save_started();
         }
 
         const std::wstring temp_path = path + L".tmp." + std::to_wstring(GetCurrentProcessId());
@@ -1638,13 +1700,13 @@ namespace blink::index
 
     FastIndexSnapshot FastIndex::Snapshot() const
     {
-        std::scoped_lock lock(mutex_);
+        std::shared_lock lock(mutex_);
         return snapshot_;
     }
 
     FastIndexStats FastIndex::Stats() const
     {
-        std::scoped_lock lock(mutex_);
+        std::shared_lock lock(mutex_);
         FastIndexStats result = stats_;
         result.health = snapshot_.health;
         result.error = snapshot_.error;
@@ -1653,7 +1715,7 @@ namespace blink::index
 
     bool FastIndex::IsLoaded() const
     {
-        std::scoped_lock lock(mutex_);
+        std::shared_lock lock(mutex_);
         return snapshot_.root_identity.valid && !snapshot_.volume_root.empty();
     }
 

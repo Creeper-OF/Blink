@@ -16,6 +16,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <iterator>
 #include <iostream>
@@ -124,6 +125,26 @@ namespace blink::index
             std::memcpy(&record.file_reference, spec.identity.file_id.data(), sizeof(record.file_reference));
             std::memcpy(&record.parent_reference, spec.parent_identity.file_id.data(), sizeof(record.parent_reference));
             return index.ApplyRecordUnlocked(record);
+        }
+
+        static std::unique_lock<std::shared_mutex> WriteLock(FastIndex& index)
+        {
+            return std::unique_lock{ index.mutex_ };
+        }
+
+        static bool CanMutate(FastIndex& index)
+        {
+            return std::unique_lock{ index.mutex_, std::try_to_lock }.owns_lock();
+        }
+
+        static bool CountersMatchRecount(FastIndex& index)
+        {
+            auto lock = WriteLock(index);
+            const auto incremental = index.stats_;
+            index.RecomputeStatsUnlocked();
+            return incremental.links == index.stats_.links && incremental.unique_files == index.stats_.unique_files &&
+                incremental.directories == index.stats_.directories && incremental.files == index.stats_.files &&
+                incremental.resident_bytes == index.stats_.resident_bytes;
         }
     };
 }
@@ -1335,6 +1356,152 @@ namespace
         return correctness_passed ? (benchmark_over_five_seconds ? 24 : 0) : 25;
     }
 
+    [[nodiscard]] bool RunConcurrentIndexSearchTests()
+    {
+        using namespace blink::index;
+        using namespace std::chrono_literals;
+        namespace fs = std::filesystem;
+        using service::CanSearchWhileSaving;
+        using service::ProgressSnapshot;
+        using service::ProgressStage;
+
+        bool passed = true;
+        const auto check = [&](bool condition, const wchar_t* name)
+        {
+            passed = passed && condition;
+            WriteUtf8Line(std::wstring(condition ? L"PASS " : L"FAIL ") + name);
+        };
+        ProgressSnapshot progress;
+        progress.stage = ProgressStage::Saving;
+        progress.index_state = ipc::IndexState::CatchingUp;
+        check(CanSearchWhileSaving(progress), L"index_serving_saved_incremental_view_is_searchable");
+        auto other = progress;
+        other.initial = true;
+        bool blocked = !CanSearchWhileSaving(other);
+        other = progress;
+        other.stage = ProgressStage::CatchingUpUsn;
+        blocked &= !CanSearchWhileSaving(other);
+        other.stage = ProgressStage::LoadingStore;
+        blocked &= !CanSearchWhileSaving(other);
+        other = progress;
+        other.error = ERROR_WRITE_FAULT;
+        blocked &= !CanSearchWhileSaving(other);
+        other = progress;
+        other.completed = true;
+        check(blocked && !CanSearchWhileSaving(other), L"index_serving_rebuild_loading_and_active_mutations_are_blocked");
+
+        DWORD serial{};
+        if (!GetVolumeInformationW(L"D:\\", nullptr, 0, &serial, nullptr, nullptr, nullptr, 0))
+        {
+            WriteUtf8Line(L"FAIL index_serving_fixture_volume_available");
+            return false;
+        }
+        const auto identity = [serial](std::uint64_t number)
+        {
+            blink::core::FileIdentity value;
+            value.volume_serial = serial;
+            value.valid = true;
+            std::memcpy(value.file_id.data(), &number, sizeof(number));
+            return value;
+        };
+        FastIndex index;
+        const auto root = identity(1), file = identity(2), folder_id = identity(3);
+        FastIndexTestAccess::Reset(index, root, serial);
+        const FastIndexTestAccess::Spec item{ file, root, L"published-checkpoint.txt", FILE_ATTRIBUTE_ARCHIVE, 2 };
+        const FastIndexTestAccess::Spec alias{ file, folder_id, L"removed-checkpoint-alias.txt", FILE_ATTRIBUTE_ARCHIVE, 3 };
+        const FastIndexTestAccess::Spec folder{ folder_id, root, L"Folder", FILE_ATTRIBUTE_DIRECTORY, 2 };
+        const bool mutated = FastIndexTestAccess::Add(index, item) && FastIndexTestAccess::Add(index, folder) &&
+            FastIndexTestAccess::Add(index, alias) && FastIndexTestAccess::Remove(index, alias);
+        const auto stats = index.Stats();
+        check(mutated && stats.links == 2 && stats.unique_files == 2 && stats.directories == 1 && stats.files == 1 &&
+            FastIndexTestAccess::CountersMatchRecount(index), L"index_serving_incremental_counters_cover_hard_link_add_and_remove");
+
+        const auto fixture = fs::absolute(fs::path(L".build") / L"index-serving-fixtures" /
+            (L"pid-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64())));
+        fs::create_directories(fixture.parent_path());
+        if (!fs::create_directory(fixture))
+        {
+            WriteUtf8Line(L"FAIL index_serving_create_owned_fixture_directory");
+            return false;
+        }
+        const auto store = fixture / L"d.blink5";
+        FastSearchOptions options;
+        options.text = item.name;
+        JournalState journal;
+        journal.available = true;
+        journal.volume_serial = serial;
+        journal.journal_id = 123;
+        journal.first_usn = 1;
+        journal.next_usn = 100;
+        const auto contains_item = [&item](const std::optional<FastIndexQueryResult>& result)
+        {
+            return result && result->state.health == FastIndexHealth::Healthy && result->state.error == ERROR_SUCCESS &&
+                result->last_usn == 1 && result->hits.size() == 1 && result->hits[0].identity == item.identity &&
+                result->hits[0].name == item.name && result->hits[0].parent_identity == item.parent_identity;
+        };
+
+        std::promise<void> started, resume;
+        auto started_future = started.get_future();
+        auto resume_future = resume.get_future();
+        DWORD save_error{};
+        auto save = std::async(std::launch::async, [&]()
+        {
+            return index.Save(store.wstring(), &save_error, [&]()
+            {
+                started.set_value();
+                resume_future.wait();
+            });
+        });
+        const bool saving = started_future.wait_for(5s) == std::future_status::ready;
+        const bool result_during_save = saving && contains_item(index.TrySearch(options, journal));
+        const bool cannot_mutate = saving && !FastIndexTestAccess::CanMutate(index);
+        const bool save_still_pending = save.wait_for(0ms) == std::future_status::timeout;
+        resume.set_value();
+        const bool saved = save.get();
+        check(result_during_save && save_still_pending, L"index_serving_real_save_allows_search_to_finish_while_save_is_pending");
+        check(cannot_mutate && save_still_pending, L"index_serving_real_save_keeps_mutators_out_of_the_stable_view");
+
+        auto wrong_journal = journal;
+        wrong_journal.journal_id++;
+        auto gap = journal;
+        gap.lowest_valid_usn = 2;
+        auto wrong_volume = journal;
+        wrong_volume.volume_serial++;
+        const auto rejected = [&index, &options](const auto& j, DWORD error)
+        {
+            const auto result = index.TrySearch(options, j);
+            return result && result->state.health == FastIndexHealth::RebuildRequired &&
+                result->state.error == error && result->hits.empty();
+        };
+        check(rejected(wrong_journal, ERROR_JOURNAL_ENTRY_DELETED) && rejected(gap, ERROR_JOURNAL_ENTRY_DELETED) &&
+            rejected(wrong_volume, ERROR_VOLUME_NOT_SUPPORTED), L"index_serving_rejects_outdated_or_replaced_volume_checkpoint");
+
+        auto writer = FastIndexTestAccess::WriteLock(index);
+        auto try_read = std::async(std::launch::async, [&]() { return index.TrySearch(options, journal); });
+        const bool returned_during_writer = try_read.wait_for(2s) == std::future_status::ready;
+        writer.unlock();
+        check(returned_during_writer && !try_read.get(), L"index_serving_query_returns_busy_without_waiting_for_active_writer");
+
+        FastIndex loaded;
+        DWORD error{};
+        check(saved && save_error == ERROR_SUCCESS && loaded.Load(store.wstring(), L"D:\\", &error) &&
+            contains_item(loaded.TrySearch(options, journal)) && loaded.Stats().links == stats.links,
+            L"index_serving_checkpoint_reopens_preserving_identity_and_record_count");
+        check(!index.Save((fixture / L"missing" / L"d.blink5").wstring(), &error) && error != ERROR_SUCCESS &&
+            contains_item(index.TrySearch(options, journal)), L"index_serving_failed_save_preserves_in_memory_search");
+        std::error_code cleanup_error;
+        std::uintmax_t bytes{};
+        if (fs::is_regular_file(store))
+        {
+            bytes = fs::file_size(store);
+            (void)fs::remove(store, cleanup_error);
+        }
+        check(!cleanup_error && fs::remove(fixture, cleanup_error) && !cleanup_error,
+            L"index_serving_owned_checkpoint_fixture_removed");
+        WriteUtf8Line(L"index_serving_fixture_cleanup_bytes=" + std::to_wstring(bytes));
+        return passed;
+    }
+
     [[nodiscard]] bool RunProgressSnapshotUnitTest()
     {
         using blink::index::service::ProgressSnapshot;
@@ -2010,8 +2177,9 @@ int wmain(int argc, wchar_t* argv[])
             const std::wstring suite = argv[suite_argument];
             if (suite == L"search-correctness") { return RunSearchCorrectnessTests() ? 0 : 94; }
             if (suite == L"search-visibility-wire") { return RunSearchVisibilityWireTests() ? 0 : 95; }
+            if (suite == L"search-serving") { return RunConcurrentIndexSearchTests() ? 0 : 96; }
         }
-        std::wcerr << L"usage: Blink.Phase05.Tests.exe [--search-index-only] --suite search-correctness|search-visibility-wire\n";
+        std::wcerr << L"usage: Blink.Phase05.Tests.exe [--search-index-only] --suite search-correctness|search-visibility-wire|search-serving\n";
         return 2;
     }
     if (argc > 1 && std::wstring(argv[1]) == L"--offline-search")
@@ -2045,7 +2213,8 @@ int wmain(int argc, wchar_t* argv[])
         if (!RunLoadIsolationUnitTest()) { return 93; }
         const bool correctness = RunSearchCorrectnessTests();
         const bool wire = RunSearchVisibilityWireTests();
-        return correctness && wire ? 0 : 94;
+        const bool serving = RunConcurrentIndexSearchTests();
+        return correctness && wire && serving ? 0 : 94;
     }
 
     if (!RunProgressSnapshotUnitTest())
