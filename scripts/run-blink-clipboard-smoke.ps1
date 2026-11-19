@@ -43,7 +43,7 @@ function Invoke-ClipboardSuite($Definition,[string]$SharedBinarySha){
   feature_pass_count=0;unique_feature_pass_count=0
   suite_marker_count=0;completion_marker_count=0;completion_result=$null
   stdout=$stdoutPath;stdout_sha256=$null;stderr=$stderrPath;stderr_sha256=$null;report_path=$reportPath;failure=$null
-  scope='Headless exact suite only. DataObject/Session/Controller use injected objects and sequence sources; no live Clipboard, GUI, real file transfer or performance acceptance.'
+  scope='Headless exact suite. Source uses GUID-owned filesystem fixtures and native Shell objects; Sender injects Clipboard APIs. No system Clipboard transfer, GUI or performance acceptance.'
  }
  # Preserve the original Presentation report fields for existing consumers.
  if($Definition.name -ceq 'Presentation'){$record.presentation_pass_count=0;$record.unique_presentation_pass_count=0}
@@ -116,7 +116,7 @@ $batch=[ordered]@{
  started_utc=[DateTime]::UtcNow.ToString('o');ended_utc=$null;script_sha256=$scriptSha
  test_binary=$TestBinaryPath;test_binary_sha256=$sharedSha;features=$selected;results=@();process_launch_count=0
  counts=[ordered]@{PASS=0;FAIL=0;SKIP=0};failure=$null
- scope='Four isolated headless groups, sequential processes; group counts are subsets of full Phase1, never additive to its full-regression total.'
+ scope='Six isolated headless groups, sequential processes; native Shell/filesystem fixtures and injected Clipboard APIs, without system Clipboard or GUI. Group counts are subsets of full Phase1 and are not additive.'
 }
 try{
  Save-FeatureReport $batch $batchPath
