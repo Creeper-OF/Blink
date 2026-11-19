@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Blink/Core/FileTypes.h"
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -8,6 +9,9 @@
 
 namespace blink::app
 {
+    class TabState;
+    inline constexpr std::size_t MaximumShellMenuItems = 1024;
+
     enum class ShellMenuCommand : std::uint32_t
     {
         None = 0, CopyFullPath = 1, CopyParentPath = 2, Locate = 3,
@@ -37,6 +41,8 @@ namespace blink::app
 
     [[nodiscard]] std::wstring BuildShellMenuCommandLine(const std::wstring& host,
         const ShellMenuRequest& request, std::uintptr_t cancel_handle = 0);
+    // Copies the complete committed selection, without filesystem I/O.
+    [[nodiscard]] DWORD CaptureFolderShellMenuRequest(const TabState& state, ShellMenuRequest& request);
     // Captures one absolute directory, including a drive root, independently
     // of the active file-list selection. Resets request before capture; set
     // owner/position/locale/verb after success. Metadata I/O: call on a worker.

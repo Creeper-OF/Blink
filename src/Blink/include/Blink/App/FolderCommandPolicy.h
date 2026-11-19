@@ -7,7 +7,7 @@ namespace blink::app
 {
     enum class FolderCommand
     {
-        Open, Cut, Copy, Rename, Delete, PermanentDelete, Properties,
+        Open, Cut, Copy, Rename, Delete, PermanentDelete, Properties, ItemDetails,
         Paste, NewFolder, Refresh, CopyFullPath, CopyParentPath,
         ViewDetails, ViewList, ViewGrid,
         SortName, SortType, SortSize, SortModified, SortAscending, SortDescending,
@@ -89,6 +89,7 @@ namespace blink::app
             if (state.mutation_busy) { return FolderCommandStatus::Busy; }
             return state.has_directory_identity && state.has_open_target ? FolderCommandStatus::Ready : FolderCommandStatus::TargetUnavailable;
         case FolderCommand::Properties:
+        case FolderCommand::ItemDetails:
             if (!state.is_folder) { return FolderCommandStatus::FolderRequired; }
             if (!state.selected_count) { return FolderCommandStatus::SelectionRequired; }
             return state.has_directory_identity && (state.selected_count > 1 || state.has_open_target) ?
@@ -130,6 +131,7 @@ namespace blink::app
         case FolderCommand::Delete: return L"Command.Delete";
         case FolderCommand::PermanentDelete: return L"Command.PermanentDelete";
         case FolderCommand::Properties: return L"Command.Properties";
+        case FolderCommand::ItemDetails: return L"Command.ItemDetails";
         case FolderCommand::Paste: return L"Command.Paste";
         case FolderCommand::NewFolder: return L"Command.NewFolder";
         case FolderCommand::Refresh: return L"Toolbar.Refresh";

@@ -45,7 +45,7 @@ namespace blink::app
         if (IsOpen() || request.entries.empty()) { return false; }
         auto ui = std::make_shared<Ui>(); ui->localization = localization; ui->request = std::move(request); ui->failed = std::move(failed);
         ui->dialog = ContentDialog(); ui->dialog.XamlRoot(root);
-        ui->dialog.Title(box_value(hstring(localization.GetString(L"Command.Properties"))));
+        ui->dialog.Title(box_value(hstring(localization.GetString(L"Command.ItemDetails"))));
         ui->dialog.CloseButtonText(hstring(localization.GetString(L"Properties.Close"))); ui->dialog.DefaultButton(ContentDialogButton::Close);
         Automation::AutomationProperties::SetAutomationId(ui->dialog, L"ItemPropertiesDialog");
         StackPanel content; content.Spacing(12); content.MinWidth(320);

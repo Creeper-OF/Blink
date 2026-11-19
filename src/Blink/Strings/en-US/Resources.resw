@@ -119,6 +119,7 @@
   <data name="Command.Properties" xml:space="preserve">
     <value>Properties</value>
   </data>
+  <data name="Command.ItemDetails" xml:space="preserve"><value>Blink details</value></data>
   <data name="Command.Paste" xml:space="preserve">
     <value>Paste</value>
   </data>
@@ -431,6 +432,7 @@
   <data name="Properties.ReadFailed" xml:space="preserve"><value>The properties window could not be opened. Refresh the folder and try again.</value><comment>Read-only file properties and directory totals.</comment></data>
   <data name="Properties.FolderNote" xml:space="preserve"><value>Folder totals include descendants. Link targets are excluded; hardlink names are counted separately.</value><comment>Read-only file properties and directory totals.</comment></data>
   <data name="Properties.CaptureFailed" xml:space="preserve"><value>The selection could not be read. Refresh the folder or select no more than 1024 items.</value></data>
+  <data name="Properties.SystemFailed" xml:space="preserve"><value>Cannot open Windows properties ({0}).</value></data>
   <data name="DragDrop.Busy" xml:space="preserve"><value>Another file operation is in progress.</value></data>
   <data name="DragDrop.InvalidTarget" xml:space="preserve"><value>Drop onto an available folder or drive.</value></data>
   <data name="DragDrop.Preparing" xml:space="preserve"><value>Preparing file transfer…</value></data>

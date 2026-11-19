@@ -1,7 +1,9 @@
 #include "Blink/App/ShellContextMenu.h"
+#include "Blink/App/TabState.h"
 
 #include <charconv>
 #include <filesystem>
+#include <iterator>
 #include <pathcch.h>
 #include <set>
 
@@ -57,6 +59,23 @@ namespace blink::app
         }
         if (cancel_handle) { result += L" --cancel-handle " + std::to_wstring(cancel_handle); }
         return result;
+    }
+
+    DWORD CaptureFolderShellMenuRequest(const TabState& state, ShellMenuRequest& request)
+    {
+        request = {};
+        const auto snapshot = state.PresentationSnapshot();
+        const auto parent = state.CommittedDirectoryIdentity();
+        if (!snapshot.committed_location.IsFolder() || snapshot.has_pending || !parent.valid ||
+            snapshot.selected_count == 0) { return ERROR_INVALID_PARAMETER; }
+        if (snapshot.selected_count > MaximumShellMenuItems) { return ERROR_TOO_MANY_NAMES; }
+        auto rows = state.SelectedCommittedRows(MaximumShellMenuItems);
+        if (!rows || rows->size() != snapshot.selected_count) { return ERROR_FILE_INVALID; }
+        request.additional_entries.assign(std::make_move_iterator(rows->begin() + 1),
+            std::make_move_iterator(rows->end()));
+        request.entry = std::move(rows->front());
+        request.parent_identity = parent;
+        return ERROR_SUCCESS;
     }
 
     DWORD CaptureDirectoryShellMenuRequest(const std::wstring& path,

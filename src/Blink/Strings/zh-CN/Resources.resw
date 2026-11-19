@@ -119,6 +119,7 @@
   <data name="Command.Properties" xml:space="preserve">
     <value>属性</value>
   </data>
+  <data name="Command.ItemDetails" xml:space="preserve"><value>Blink 详情</value></data>
   <data name="Command.Paste" xml:space="preserve">
     <value>粘贴</value>
   </data>
@@ -431,6 +432,7 @@
   <data name="Properties.ReadFailed" xml:space="preserve"><value>无法打开属性窗口，请刷新文件夹后重试。</value><comment>Read-only file properties and directory totals.</comment></data>
   <data name="Properties.FolderNote" xml:space="preserve"><value>文件夹大小包含子项；不累计链接目标，硬链接按名称分别统计。</value><comment>Read-only file properties and directory totals.</comment></data>
   <data name="Properties.CaptureFailed" xml:space="preserve"><value>无法读取所选项目，请刷新文件夹或选择不超过 1024 项。</value></data>
+  <data name="Properties.SystemFailed" xml:space="preserve"><value>无法打开 Windows 属性页（{0}）。</value></data>
   <data name="DragDrop.Busy" xml:space="preserve"><value>另一个文件操作正在进行。</value></data>
   <data name="DragDrop.InvalidTarget" xml:space="preserve"><value>请拖放到可用的文件夹或驱动器。</value></data>
   <data name="DragDrop.Preparing" xml:space="preserve"><value>正在准备文件传输…</value></data>

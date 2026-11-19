@@ -233,10 +233,12 @@ bool RunItemPropertiesTests()
             "properties_this_pc_or_empty_selection_clears_output");
         FolderCommandCapabilities capabilities{ true, false, 2, true, true, true };
         passed &= Check(EvaluateFolderCommand(FolderCommand::Properties, capabilities) == FolderCommandStatus::Ready &&
+            EvaluateFolderCommand(FolderCommand::ItemDetails, capabilities) == FolderCommandStatus::Ready &&
             EvaluateFolderCommand(FolderCommand::Delete, capabilities) == FolderCommandStatus::Busy,
             "properties_multi_selection_read_is_available_while_mutation_queue_is_busy");
         capabilities.busy = true;
-        passed &= Check(EvaluateFolderCommand(FolderCommand::Properties, capabilities) == FolderCommandStatus::Busy,
+        passed &= Check(EvaluateFolderCommand(FolderCommand::Properties, capabilities) == FolderCommandStatus::Busy &&
+            EvaluateFolderCommand(FolderCommand::ItemDetails, capabilities) == FolderCommandStatus::Busy,
             "properties_command_respects_pending_browse_busy_state");
     }
     return passed;

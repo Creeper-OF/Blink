@@ -187,6 +187,52 @@ bool RunSearchContextMenuTests()
         folder_menu.additional_entries = { Entry(sources / L"目录结果") };
         passed &= Check(ValidateShellMenuRequest(folder_menu) == ERROR_SUCCESS,
             "folder_shell_menu_accepts_file_and_directory_siblings_together");
+        {
+            TabState state;
+            const auto nav = state.Navigate(sources.wstring());
+            if (!nav || state.CommitBrowse(*nav, blink::core::EnumerateDirectory(sources.wstring())).status != CommitBrowseStatus::Committed)
+            { throw std::runtime_error("folder properties fixture browse"); }
+            state.SetRowSelection({ MakeRowIdentity(Entry(file)) });
+            ShellMenuRequest request;
+            auto error = CaptureFolderShellMenuRequest(state, request);
+            passed &= Check(error == ERROR_SUCCESS && request.entry.full_path == file.wstring() &&
+                request.additional_entries.empty() && ValidateShellMenuRequest(request) == ERROR_SUCCESS,
+                "folder_properties_captures_single_committed_selection");
+            (void)state.SelectAllRows();
+            error = CaptureFolderShellMenuRequest(state, request);
+            request.verb = L"properties";
+            const auto args = Arguments(BuildShellMenuCommandLine(L"Blink.ShellMenuHost.exe", request));
+            passed &= Check(error == ERROR_SUCCESS && request.additional_entries.size() == 1 &&
+                request.entry.is_directory != request.additional_entries.front().is_directory &&
+                request.parent_identity == folder_menu.parent_identity && ValidateShellMenuRequest(request) == ERROR_SUCCESS &&
+                Argument(args, L"--verb") == L"properties" &&
+                Argument(args, L"--additional-path") == request.additional_entries.front().full_path,
+                "folder_properties_sends_complete_mixed_selection_to_shell");
+            (void)state.Navigate(behind.wstring());
+            passed &= Check(CaptureFolderShellMenuRequest(state, request) == ERROR_INVALID_PARAMETER &&
+                request.entry.full_path.empty() && request.additional_entries.empty() && !request.parent_identity.valid,
+                "folder_properties_clears_stale_selection_while_navigating");
+        }
+        {
+            TabState state;
+            const auto nav = state.Navigate(sources.wstring());
+            auto listing = blink::core::EnumerateDirectory(sources.wstring());
+            auto row = Entry(file);
+            listing.entries.clear();
+            for (std::size_t i = 0; i <= MaximumShellMenuItems; ++i)
+            {
+                row.name = L"item-" + std::to_wstring(i) + L".txt";
+                row.full_path = (sources / row.name).wstring();
+                listing.entries.push_back(row);
+            }
+            if (!nav || state.CommitBrowse(*nav, std::move(listing)).status != CommitBrowseStatus::Committed)
+            { throw std::runtime_error("folder properties large selection fixture"); }
+            (void)state.SelectAllRows();
+            auto request = folder_menu;
+            passed &= Check(CaptureFolderShellMenuRequest(state, request) == ERROR_TOO_MANY_NAMES &&
+                request.entry.full_path.empty() && request.additional_entries.empty(),
+                "folder_properties_rejects_unsupported_selection_without_truncating");
+        }
         const auto directory_path = (sources / L"目录结果").wstring();
         const auto directory_entry = Entry(directory_path);
         ShellMenuRequest captured_menu;

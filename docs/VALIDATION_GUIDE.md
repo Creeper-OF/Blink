@@ -13,6 +13,19 @@
 
 本次原生回归全部检查约 33–54 秒，产品编译约 15–16 分钟。源码没变而脚本修正时，直接复测对应脚本，不重编产品。开发台构建使用本批 candidate OutDir，避免覆盖正在运行的正式索引服务；具体环境见 LOCAL_ENVIRONMENT。
 
+## Windows 属性与 Blink 详情
+
+```powershell
+& .\x64\Release\Blink.Phase1.Tests.exe --suite shell-context-menu
+& .\x64\Release\Blink.Phase1.Tests.exe --suite item-properties
+```
+
+第一个入口验证普通目录的单选、同父混选、过期和越限请求，以及搜索、系统菜单协议和目录身份。第二个入口验证 Blink 自有详情的只读统计、取消和部分失败。两组包含在无参完整 Phase1 中。
+
+普通目录的右键「属性」、命令栏「更多」中的「属性」和 Alt+Enter 复用进程外 Windows 属性页。Blink 右键中的「Blink 详情」单独打开只读统计。实际页签由 Windows 按对象类型、权限和扩展提供。窗口验证应确认真实属性页、目标对应所选项、正常关闭和选中状态。只记录收到系统命令回复时，仍需观察属性页是否真正出现。
+
+2026-11-20 同一 Release 通过系统菜单 53 项、只读详情 36 项和完整 Phase1 2005 PASS / 0 FAIL / 4 既有权限 SKIP。实机用自有目录完成文件右键、目录 Alt+Enter、命令栏混选、右键混选、Blink 详情、快捷方式六项。原生页由自有的 ShellMenuHost 子进程显示，核对混选实际包含的文件和文件夹，以及快捷方式的目标路径。关闭后核对原目录与原多选。先前失败的窗口探针分别遇到系统标签角色、WinUI 可见文字和快捷方式初始标签页假设，修正后原候选重测。操作不修改属性或权限。原始记录归本机 `.build/shell-properties/integration/`。
+
 ## Clipboard结果、呈现与原对象接收
 
 ```powershell

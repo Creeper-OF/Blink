@@ -104,7 +104,7 @@ B-VIEW 的输入仅自有 PID/HWND InputSite 键盘消息及 WinUI UIA，未使�
 | EXP-KEY-25 | Ctrl+Shift+N | 普通列表新建文件夹对话框；导航焦点使用捕获目录；搜索结果未接此创建命令 | G06c-NEW #03实际在所点父目录创建并自动刷新，不借用背后文件区；完整文本/IME组合待验 | 部分PASS（G06c自有导航目录）；其余组合NOT RUN |
 | EXP-KEY-26 | Delete | 普通/搜索列表与导航目录走回收站删除；Ctrl/Alt修饰不转普通删除 | TextBox Delete应只删字符；导航菜单适用性已验，实际普通回收站UI仍未执行，回收失败不转永久删除 | IMPLEMENTED_NEEDS_MANUAL / 普通回收站UI NOT RUN |
 | EXP-KEY-27 | Shift+Delete | 普通/搜索列表与导航目录沿原永久删除确认；文本框保留文本编辑语义 | H-SEARCH-UI #15为历史搜索项确认；G06c-DELETE #08/#09实际验证自有非空导航目录默认Cancel/Enter及明确确认后的精确删除/树自动刷新 | IMPLEMENTED_VERIFIED（所列自有导航目录及历史搜索分支）；其他焦点/文本/IME组合NOT RUN |
-| EXP-KEY-28 | Alt+Enter | 普通列表 Blink 只读属性；搜索列表 Windows 原生属性 | 两处存在产品差异；文本焦点不应启动背后属性 | PARTIAL / NOT RUN |
+| EXP-KEY-28 | Alt+Enter | 普通列表按已选项打开 Windows 属性页，搜索列表沿用系统属性页 | 普通目录的原生属性窗口和关闭返回已通过。文本焦点和搜索快捷键组合单独核对 | PARTIAL |
 | EXP-KEY-29 | Shift+F10、菜单键 Apps | 列表打开 Blink 主菜单，搜索在 PreviewKeyDown 先处理 | TextBox 使用其文本菜单；H-SEARCH-UI #14 覆盖搜索 Shift+F10，普通空列表可聚焦 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
 | EXP-KEY-30 | Ctrl+Z、Ctrl+Y | 没有文件操作撤销/重做日志或绑定 | TextBox 的编辑撤销/重做由控件管理；不能扩展成文件撤销成功 | DEFERRED（文件操作）/ NOT RUN |
 | EXP-KEY-31 | Ctrl+Shift+数字 | 未接 Explorer 视图数字快捷键 | 已有 Details/List/Grid 菜单/工具栏不等于所有 8 视图键 | DEFERRED / NOT RUN |
@@ -163,10 +163,10 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 
 | 测试编号 | 对象/入口 | 当前事实 | 状态/既有执行 |
 | --- | --- | --- | --- |
-| EXP-PROP-01 | 普通单选/多选、Alt+Enter | Blink `ItemPropertiesDialog` 只读；worker 读名称/路径/类型/大小/分配/时间/属性与目录统计、取消/部分失败 | IMPLEMENTED_VERIFIED（H-FOLDER-UI #15、T-PROP）/ NOT RUN |
+| EXP-PROP-01 | 普通单选/多选、Alt+Enter | 从提交的列表选中集合构造同父请求，通过 ShellMenuHost 打开 Windows 属性页。右键「Blink 详情」独立使用 `ItemPropertiesDialog` | 本机 G11 六项窗口通过。原生专项 `shell-context-menu`、`item-properties` |
 | EXP-PROP-02 | 搜索文件/目录、Alt+Enter | ShellMenuHost `--verb properties`，Windows 属性页/扩展页由系统决定，helper 保活并正常关闭 | IMPLEMENTED_VERIFIED（H-SEARCH-UI #09/#10、H-SHELL）/ NOT RUN |
-| EXP-PROP-03 | 普通 SystemOptions > 属性 | 原生经典菜单 properties 由 InvokeCommand 执行，不等于普通 primary Properties 已改原生 | OS_DEPENDENT；该路径组合 NOT RUN |
-| EXP-PROP-04 | ACL/只读隐藏编辑、共享、自定义/以前版本、驱动器/快捷方式/混选页签 | Blink 自有窗口没有编辑这些属性；系统页签条件依赖对象/注册 | PARTIAL / NOT RUN；不得固定承诺所有页签 |
+| EXP-PROP-03 | 普通 SystemOptions > 属性 | 经典菜单由 Windows 提供，普通属性入口也调用同一宿主 | OS_DEPENDENT，经典菜单内的组合 NOT RUN |
+| EXP-PROP-04 | ACL/只读隐藏编辑、共享、自定义/以前版本、驱动器/快捷方式/混选页签 | 快捷方式实测进入对应系统页并显示真实目标。混选系统页显示整体统计 | PARTIAL，设备和属性编辑矩阵待验 |
 
 ### 4.3 文件系统与 Namespace 矩阵
 
@@ -197,7 +197,7 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 | EXP-NAV-02 | 新建/切换/关闭活动和非活动 Tab、关闭最后 Tab；各自路径/历史/排序/视图/选择/草稿隔离；关闭后旧回调不复活 | B-VIEW #07–09/#12 两现有 Tab、第三新 Tab、临时 Tab 关闭及旧 top peer；T-TAB/T-SEARCH native 重跑 | 部分 PASS：路径/视图独立、Hidden 同步及旧 top peer；最后/非活动关闭、全部草稿与键盘范围 GUI NOT RUN |
 | EXP-NAV-03 | 外部新增/改名/删除/属性改变、监听失败/目录删除/卷失效，恢复后无二次虚假刷新/陈旧页 | T-WATCH/T-NAV；真实设备移除待验 | NOT RUN |
 | EXP-MENU-01 | 普通文件单选：txt/exe/图片/媒体/脚本/lnk/无关联；正确对象、禁用、实际打开和扩展项 | H-FOLDER-UI 只覆盖自有代表性文件；完整类型表未跑 | NOT RUN |
-| EXP-MENU-02 | 普通目录单选：Open/Rename/Copy/Cut/Paste/Properties，动作目标准确 | H-FOLDER-UI #08/#10/#15/#18；普通属性仅只读 | NOT RUN |
+| EXP-MENU-02 | 普通目录单选：Open/Rename/Copy/Cut/Paste/Properties，动作目标准确 | 历史 H-FOLDER-UI #08/#10/#15/#18。当前「属性」走 Windows，Blink 详情独立保留 | 完整组合 NOT RUN |
 | EXP-MENU-03 | 多文件、多目录、混合，右键保持权威集合；共同命令正确、完整路径 CRLF、父目录去重 | T-ROW/T-CLIP/T-SHELL；H-FOLDER-UI #05–07/#16。原生同父多选菜单已测，混选全部手势未测 | NOT RUN |
 | EXP-MENU-04 | 真空白背景菜单：Paste/NewFolder/Refresh/View/Sort，不读旧 item ticket，不显示不适用文件动作 | H-FOLDER-UI #09/#11–14 | NOT RUN |
 | EXP-MENU-05 | 搜索文件/目录：路径/身份重验、Open/Locate/Copy/Cut、父目录 Paste、Properties/F2/Delete，旧 query/Tab peer 失效 | T-SEARCH/T-SHELL；H-SEARCH-UI；当前单选 | NOT RUN |

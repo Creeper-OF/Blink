@@ -3707,8 +3707,18 @@ int wmain(int argc, wchar_t* argv[])
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
+            if (suite == L"shell-context-menu" || suite == L"item-properties")
+            {
+                winrt::init_apartment(winrt::apartment_type::multi_threaded);
+                const bool details = suite == L"item-properties";
+                const bool passed = details ? RunItemPropertiesTests() : RunSearchContextMenuTests();
+                std::cout << (details ? "item_properties_tests=" : "shell_context_menu_tests=")
+                    << (passed ? "PASS" : "FAIL") << "\n";
+                winrt::uninit_apartment();
+                return passed ? 0 : 1;
+            }
         }
-        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|search-delivery|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender]"
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|search-delivery|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender|shell-context-menu|item-properties]"
             " or --live-index-probe <options> or --measure-search-delivery <D:\\fixture.txt>\n";
         return 2;
     }

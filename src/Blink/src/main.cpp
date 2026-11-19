@@ -1661,7 +1661,7 @@ struct App : AppT<App>
         operation_watch_id_ = id; if (!id) { RestoreOperationWatches(0); }
         RenderFileOperationStatus();
     }
-    void ShowSelectedProperties()
+    void ShowSelectedItemDetails()
     {
         const auto* tab = ActiveTab();
         if (!tab || tab->search_visible || IsOperationDialogOpen()) { return; }
@@ -3551,8 +3551,7 @@ struct App : AppT<App>
                         const auto failure = [weak](const HRESULT hr) {
                             if (const auto live = weak.get(); live && !live->window_style_closed_)
                             {
-                                wchar_t code[16]{}; swprintf_s(code, L"0x%08X", static_cast<unsigned>(hr));
-                                live->status_.Text(hstring(live->localization_.Format(L"Search.MenuError", code)));
+                                live->ReportShellMenuError(hr, true);
                             }
                         };
                         if (error) { failure(HRESULT_FROM_WIN32(error)); return; }
@@ -3567,11 +3566,11 @@ struct App : AppT<App>
                                     });
                                 });
                         }
-                        catch (...) { failure(E_FAIL); }
+                        catch (...) { failure(winrt::to_hresult()); }
                     });
                 });
         }
-        catch (...) { status_.Text(hstring(localization_.Format(L"Search.MenuError", L"0x80004005"))); }
+        catch (...) { ReportShellMenuError(winrt::to_hresult(), true); }
     }
 
     void ShowTargetContextMenu(TargetMenuContext context, const FrameworkElement& anchor,
@@ -3981,7 +3980,7 @@ struct App : AppT<App>
         context.selected_count = ActiveState().PresentationSnapshot().selected_count;
         if (row_index && context.location.IsFolder())
         {
-            if (const auto rows = ActiveState().SelectedCommittedRows(blink::app::MaxClipboardFileCount))
+            if (const auto rows = ActiveState().SelectedCommittedRows(blink::app::MaximumShellMenuItems))
             {
                 for (const auto& row : *rows) { context.selected_rows.push_back(blink::app::MakeRowIdentity(row)); }
             }
@@ -4086,7 +4085,10 @@ struct App : AppT<App>
             { ShowFileNameDialog(blink::app::CaptureFileOperationOrigin(*ActiveTab()), source->name, {}, source); }
             break;
         case FolderCommand::Properties:
-            ShowSelectedProperties();
+            ShowFolderSystemContextMenu(context, {}, true);
+            break;
+        case FolderCommand::ItemDetails:
+            ShowSelectedItemDetails();
             break;
         case FolderCommand::Delete:
         case FolderCommand::PermanentDelete:
@@ -4157,34 +4159,48 @@ struct App : AppT<App>
         if (command != ShellMenuCommand::None) { ExecuteFolderCommand(mapped, context); }
     }
 
-    void ShowFolderSystemContextMenu(const FolderMenuContext& context, const Windows::Foundation::Point position)
+    void ReportShellMenuError(const HRESULT error, const bool properties)
     {
-        CancelTargetPropertiesWork();
-        if (!IsFolderMenuContextCurrent(context)) { return; }
-        const auto rows = ActiveState().SelectedCommittedRows(blink::app::MaxClipboardFileCount);
-        if (!rows || rows->empty() || !context.location.IsFolder()) { return; }
-        blink::app::ShellMenuRequest request;
-        request.entry = rows->front();
-        request.parent_identity = ActiveState().CommittedDirectoryIdentity();
-        request.additional_entries.assign(rows->begin() + 1, rows->end());
-        request.locale = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"zh-CN" : L"en-US";
-        request.extended = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-        check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(&request.owner));
-        const auto client = entries_.TransformToVisual(nullptr).TransformPoint(position);
-        const auto scale = entries_.XamlRoot().RasterizationScale();
-        request.position = { static_cast<LONG>(std::lround(client.X * scale)),
-            static_cast<LONG>(std::lround(client.Y * scale)) };
-        if (!ClientToScreen(request.owner, &request.position))
-        { ShowClipboardCopyError(GetLastError()); return; }
-        DismissSearchContextMenu();
-        if (folder_menu_) { folder_menu_.Hide(); }
-        folder_system_menu_context_ = context;
-        const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+        wchar_t code[16]{};
+        swprintf_s(code, L"0x%08X", static_cast<unsigned>(error));
+        status_.Text(hstring(localization_.Format(properties ? L"Properties.SystemFailed" : L"Search.MenuError", code)));
+    }
+
+    void ShowFolderSystemContextMenu(const FolderMenuContext& context, const Windows::Foundation::Point position,
+        const bool properties = false)
+    {
+        if (!IsFolderMenuContextCurrent(context) || (properties && IsOperationDialogOpen())) { return; }
         try
         {
+            blink::app::ShellMenuRequest request;
+            const auto error = blink::app::CaptureFolderShellMenuRequest(ActiveState(), request);
+            if (error != ERROR_SUCCESS)
+            {
+                if (properties && error == ERROR_TOO_MANY_NAMES)
+                { status_.Text(hstring(localization_.GetString(L"Properties.CaptureFailed"))); }
+                else { ReportShellMenuError(HRESULT_FROM_WIN32(error), properties); }
+                return;
+            }
+            request.locale = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"zh-CN" : L"en-US";
+            check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(&request.owner));
+            if (properties) { request.verb = L"properties"; }
+            else
+            {
+                request.extended = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                const auto client = entries_.TransformToVisual(nullptr).TransformPoint(position);
+                const auto scale = entries_.XamlRoot().RasterizationScale();
+                request.position = { static_cast<LONG>(std::lround(client.X * scale)),
+                    static_cast<LONG>(std::lround(client.Y * scale)) };
+                if (!ClientToScreen(request.owner, &request.position)) { winrt::throw_last_error(); }
+            }
+            CancelTargetPropertiesWork();
+            DismissSearchContextMenu();
+            if (folder_menu_) { folder_menu_.Hide(); }
+            folder_system_menu_context_ = context;
+            const auto weak = get_weak(); const auto dispatcher = dispatcher_;
             (void)shell_context_menu_.Show(std::move(request),
-                [weak, dispatcher, context](std::uint64_t generation, blink::app::ShellMenuResult result) {
-                    (void)dispatcher.TryEnqueue([weak, context, generation, result] {
+                [weak, dispatcher, context, properties](std::uint64_t generation, blink::app::ShellMenuResult result) {
+                    (void)dispatcher.TryEnqueue([weak, context, properties, generation, result] {
                         if (const auto app = weak.get(); app && app->shell_context_menu_.IsCurrent(generation) &&
                             app->folder_system_menu_context_ && app->IsFolderMenuContextCurrent(context))
                         {
@@ -4193,10 +4209,7 @@ struct App : AppT<App>
                             if (result.kind == ShellMenuResultKind::BlinkCommand)
                             { app->ExecuteFolderShellCommand(result.command, context); }
                             else if (result.kind == ShellMenuResultKind::Error)
-                            {
-                                wchar_t code[16]{}; swprintf_s(code, L"0x%08X", static_cast<unsigned>(result.error));
-                                app->status_.Text(hstring(app->localization_.Format(L"Search.MenuError", code)));
-                            }
+                            { app->ReportShellMenuError(result.error, properties); }
                             else if (result.kind == ShellMenuResultKind::NativeCommand)
                             { app->status_.Text(hstring(app->localization_.GetString(L"Search.NativeDispatched"))); }
                         }
@@ -4206,7 +4219,7 @@ struct App : AppT<App>
         catch (...)
         {
             CancelFolderSystemMenu();
-            status_.Text(hstring(localization_.Format(L"Search.MenuError", L"0x80004005")));
+            ReportShellMenuError(winrt::to_hresult(), properties);
         }
     }
 
@@ -4257,6 +4270,7 @@ struct App : AppT<App>
         case FolderCommand::Rename: glyph = L"\xE8AC"; shortcut = L"F2"; break;
         case FolderCommand::Delete: glyph = L"\xE74D"; shortcut = L"Delete"; break;
         case FolderCommand::Properties: glyph = L"\xE946"; shortcut = L"Alt+Enter"; break;
+        case FolderCommand::ItemDetails: glyph = L"\xE9D5"; break;
         case FolderCommand::NewFolder: glyph = L"\xE8F4"; shortcut = L"Ctrl+Shift+N"; break;
         case FolderCommand::Refresh: glyph = L"\xE72C"; shortcut = L"F5"; break;
         case FolderCommand::ViewDetails: glyph = L"\xE9D5"; break;
@@ -4382,6 +4396,7 @@ struct App : AppT<App>
             add(FolderCommand::Rename, L"ContextRename");
             add(FolderCommand::Delete, L"ContextDelete");
             add(FolderCommand::Properties, L"ContextProperties");
+            add(FolderCommand::ItemDetails, L"ContextItemDetails");
             folder_menu_.Items().Append(MenuFlyoutSeparator());
             if (context.location.IsFolder())
             {
@@ -4513,8 +4528,9 @@ struct App : AppT<App>
             AddAccelerator(control, key, modifiers, [weak_app, command] {
                 if (auto app = weak_app.get())
                 {
-                    auto row = app->ResolveRowIndexFromElement(
-                        FocusManager::GetFocusedElement(app->entries_.XamlRoot()));
+                    std::optional<std::size_t> row;
+                    if (command != blink::app::FolderCommand::Properties)
+                    { row = app->ResolveRowIndexFromElement(FocusManager::GetFocusedElement(app->entries_.XamlRoot())); }
                     if (!row && app->entries_.SelectedItems().Size())
                     {
                         row = app->RowIndexForItem(app->entries_.SelectedItems().GetAt(0));
@@ -6357,9 +6373,9 @@ struct App : AppT<App>
             (void)shell_context_menu_.Show(std::move(selection), screen, owner,
                 PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"zh-CN" : L"en-US",
                 (GetKeyState(VK_SHIFT) & 0x8000) != 0, properties,
-                [weak, dispatcher, owner_generation](std::uint64_t generation, blink::app::SearchContextSelection selected,
+                [weak, dispatcher, owner_generation, properties](std::uint64_t generation, blink::app::SearchContextSelection selected,
                     blink::app::SearchActionTarget, blink::app::ShellMenuResult result) {
-                    (void)dispatcher.TryEnqueue([weak, generation, owner_generation, selected = std::move(selected), result]() mutable {
+                    (void)dispatcher.TryEnqueue([weak, generation, owner_generation, properties, selected = std::move(selected), result]() mutable {
                         if (auto app = weak.get(); app && app->shell_context_menu_.IsCurrent(generation) &&
                             app->SearchContextCurrent(selected, owner_generation))
                         {
@@ -6368,10 +6384,7 @@ struct App : AppT<App>
                             if (result.kind == ShellMenuResultKind::BlinkCommand)
                             { app->ExecuteSearchContextCommand(std::move(selected), result.command); }
                             else if (result.kind == ShellMenuResultKind::Error)
-                            {
-                                wchar_t code[16]{}; swprintf_s(code, L"0x%08X", static_cast<unsigned>(result.error));
-                                app->status_.Text(hstring(app->localization_.Format(L"Search.MenuError", code)));
-                            }
+                            { app->ReportShellMenuError(result.error, properties); }
                             else if (result.kind == ShellMenuResultKind::NativeCommand)
                             { app->status_.Text(hstring(app->localization_.GetString(L"Search.NativeDispatched"))); }
                         }
@@ -6381,7 +6394,7 @@ struct App : AppT<App>
         catch (...)
         {
             DismissSearchContextMenu();
-            status_.Text(hstring(localization_.Format(L"Search.MenuError", L"0x80004005")));
+            ReportShellMenuError(winrt::to_hresult(), properties);
         }
     }
 
