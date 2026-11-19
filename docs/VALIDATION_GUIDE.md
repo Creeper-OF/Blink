@@ -38,7 +38,7 @@ DataObject验证格式/medium所有权与完成协议；Session验证真实STA�
 .\scripts\run-blink-search-smoke.ps1 -Configuration Release -Feature All
 ```
 
-`All` 顺序启动七个独立进程，也可用 `-Feature Delivery` 等选项单独复测。
+`All` 顺序启动八个独立进程，也可用 `-Feature Delivery` 或 `-Feature NamePrefix` 等选项单独复测。
 
 | Feature | 原生组 | 预期检查数 |
 | --- | --- | --- |
@@ -49,8 +49,9 @@ DataObject验证格式/medium所有权与完成协议；Session验证真实STA�
 | Index | search-correctness | 32 |
 | Wire | search-visibility-wire | 16 |
 | Serving | search-serving | 10 |
+| NamePrefix | search-name-prefix | 14 |
 
-前四组使用 Phase1 测试程序，后三组使用 Phase05 并带 `--search-index-only --suite` 离线前缀。`-TestBinaryPath` 和 `-IndexTestBinaryPath` 可分别指定二进制。Delivery 用可控的慢卷验证提前交付、可见结果命令、追加顺序、失败卷重试和取消。Serving 使用可控保存阶段验证并发行为和 BLK5 回读。
+前四组使用 Phase1 测试程序，后四组使用 Phase05 并带 `--search-index-only --suite` 离线前缀。`-TestBinaryPath` 和 `-IndexTestBinaryPath` 可分别指定二进制。Delivery 用可控的慢卷验证提前交付、可见结果命令、追加顺序、失败卷重试和取消。Serving 使用可控保存阶段验证并发行为和 BLK5 回读。NamePrefix 对照原扫描的条目、顺序及候选数，并验证增量更新和 BLK5 加载。
 
 每项保存日志、退出码、精确检查数及二进制SHA，同一程序的跨组SHA必须一致。脚本不编译、不操作前台或正式服务；完整Phase1与受影响的离线索引回归另跑：
 
@@ -68,6 +69,14 @@ Phase05无参数是会启动服务原型的历史入口，不作为本批普通�
 ```
 
 同一测试程序交替运行串行最终交付和并发逐卷交付，覆盖双卷宽泛名称、双卷精确名称和单卷精确名称。第 0 轮检查就绪并预热，后续 6 轮记录首批与完成时间。探针只读正式服务，计时终点在客户端回调或搜索任务完成，窗口呈现另测。
+
+用同一份现有 BLK5 的只读副本对照新旧引擎路径时，提供该卷、一个已收录的文件名以及四字符常用前缀。
+
+```powershell
+& .\x64\Release\Blink.Phase05.Tests.exe --benchmark-name-prefix $StoreCopy $VolumeRoot $KnownFileName $CommonPrefix
+```
+
+探针在同一次载入后交替运行查询，逐项核对路径、身份、属性、USN 和顺序。第 0 轮为预热，后续 8 轮用于比较引擎耗时和候选检查次数。
 
 ## 真实服务搜索与夹具恢复
 

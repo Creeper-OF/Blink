@@ -107,6 +107,8 @@ namespace blink::index
         // Exclude these attribute bits before path resolution and result limit.
         // Zero retains the existing unfiltered Search contract.
         DWORD excluded_attributes{};
+        // Test/reference switch. Production uses derived name prefixes.
+        bool use_derived_name_prefix_index{ true };
     };
 
     struct FastSearchResult
@@ -207,6 +209,8 @@ namespace blink::index
             std::wstring folded_name;
         };
 
+        using LinkGroup = std::vector<Link>;
+
         struct InternalExcludedRootIdentity
         {
             // Keep the complete FILE_ID_INFO-derived identity for long-term
@@ -225,7 +229,11 @@ namespace blink::index
         void RemoveExtensionIndexEntryUnlocked(
             const core::FileIdentity& identity,
             const std::wstring& extension);
-        void RebuildExtensionIndexUnlocked();
+        void RebuildSearchIndexesUnlocked();
+        void ClearNamePrefixIndexUnlocked() noexcept;
+        void AddNamePrefixIndexEntryUnlocked(const LinkGroup& group, const Link& link);
+        void RemoveNamePrefixIndexEntryUnlocked(const LinkGroup& group, std::uint64_t prefix);
+        [[nodiscard]] std::uint64_t NamePrefixIndexBytesUnlocked() const noexcept;
 
         [[nodiscard]] bool CatchUpUnlocked(
             const std::wstring& path,
@@ -255,7 +263,7 @@ namespace blink::index
         mutable std::mutex save_mutex_;
         std::vector<std::wstring> internal_excluded_roots_;
         std::vector<InternalExcludedRootIdentity> internal_excluded_root_identities_;
-        std::unordered_map<core::FileIdentity, std::vector<Link>, IdentityHash> links_;
+        std::unordered_map<core::FileIdentity, LinkGroup, IdentityHash> links_;
         // Derived acceleration structure only. links_ remains authoritative;
         // this map is rebuilt after BLK5 Load and maintained with USN link
         // mutations. A FileIdentity bucket intentionally expands to all hard
@@ -263,6 +271,12 @@ namespace blink::index
         std::unordered_map<
             std::wstring,
             std::unordered_set<core::FileIdentity, IdentityHash>> extension_index_;
+        // The vectors point to whole groups in links_. Map rehash and changes
+        // within a group keep its address valid. Remove membership before
+        // erasing a group, and swap both maps together when loading a store.
+        std::unordered_map<std::uint64_t, std::vector<const LinkGroup*>> name_prefix_index_;
+        std::uint64_t name_prefix_pointer_slots_{};
+        bool name_prefix_index_usable_{ true };
         FastIndexSnapshot snapshot_;
         FastIndexStats stats_;
     };

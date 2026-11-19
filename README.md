@@ -8,6 +8,8 @@ Blink 是一个使用 C++20、C++/WinRT 和 WinUI 3 开发的 Windows 文件管�
 
 当前优先级为功能实现、响应效率和易用性，体积优化后置。同批功能集中实现、统一构建、逐功能验证，沿用自有文件身份模型和唯一文件操作队列。规则见[AGENTS.md](AGENTS.md)、[维护规则](docs/WORKSPACE_MAINTENANCE.md)及[验证指南](docs/VALIDATION_GUIDE.md)。
 
+完整文件名和较长前缀查询可以从内存索引直接缩小候选范围。正式服务已用原有 C、D 两盘索引启动。实机 D 盘精确名称暖测从 64.9 降到 15.3 毫秒，见[搜索实测](docs/SEARCH_RESPONSE_VALIDATION.md)。
+
 多盘搜索最多同时查询两个卷。已校验的卷先显示，后返回的结果追加到列表。当前选中项可继续打开、定位或使用右键菜单。见[搜索实测](docs/SEARCH_RESPONSE_VALIDATION.md)。
 
 C、D 两盘索引已恢复。服务启动时载入既有索引，正常增量写盘时仍可搜索。实机三个保存操作均返回了正确文件，72 次混合请求的 Busy 从 25 次降至 1 次。详见[搜索实测](docs/SEARCH_RESPONSE_VALIDATION.md)。

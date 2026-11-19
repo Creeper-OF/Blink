@@ -27,6 +27,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -56,6 +57,7 @@ namespace blink::index
             const std::wstring& volume_root = L"D:\\")
         {
             std::scoped_lock lock(index.mutex_);
+            index.ClearNamePrefixIndexUnlocked();
             index.links_.clear();
             index.extension_index_.clear();
             index.snapshot_ = {};
@@ -88,7 +90,7 @@ namespace blink::index
                 link.last_usn = spec.last_usn;
                 index.links_[link.identity].push_back(std::move(link));
             }
-            index.RebuildExtensionIndexUnlocked();
+            index.RebuildSearchIndexesUnlocked();
             index.RecomputeStatsUnlocked();
         }
 
@@ -135,6 +137,19 @@ namespace blink::index
         static bool CanMutate(FastIndex& index)
         {
             return std::unique_lock{ index.mutex_, std::try_to_lock }.owns_lock();
+        }
+
+        static std::uint64_t NamePrefixIndexBytes(const FastIndex& index)
+        {
+            std::shared_lock lock(index.mutex_);
+            return index.NamePrefixIndexBytesUnlocked();
+        }
+
+        static void DisableNamePrefixIndex(FastIndex& index)
+        {
+            auto lock = WriteLock(index);
+            index.ClearNamePrefixIndexUnlocked();
+            index.name_prefix_index_usable_ = false;
         }
 
         static bool CountersMatchRecount(FastIndex& index)
@@ -471,6 +486,7 @@ namespace
     {
         const auto derived = SearchKeys(index, options);
         options.use_derived_extension_index = false;
+        options.use_derived_name_prefix_index = false;
         const auto reference = SearchKeys(index, options);
         return derived == reference;
     }
@@ -911,6 +927,209 @@ namespace
         return passed;
     }
 
+    [[nodiscard]] bool SameOrderedSearchResults(const std::vector<blink::index::FastSearchResult>& left,
+        const std::vector<blink::index::FastSearchResult>& right)
+    {
+        return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](const auto& a, const auto& b) {
+            return a.identity == b.identity && a.parent_identity == b.parent_identity && a.name == b.name &&
+                a.full_path == b.full_path && a.attributes == b.attributes && a.is_directory == b.is_directory && a.last_usn == b.last_usn;
+        });
+    }
+
+    [[nodiscard]] bool RunNamePrefixIndexTests()
+    {
+        namespace fs = std::filesystem;
+        using namespace blink::index;
+        using Spec = FastIndexTestAccess::Spec;
+        bool passed = true;
+        const auto check = [&](const bool value, const wchar_t* name) {
+            passed &= value;
+            WriteUtf8Line(std::wstring(value ? L"PASS " : L"FAIL ") + name);
+        };
+        DWORD serial{};
+        const bool volume = GetVolumeInformationW(L"D:\\", nullptr, 0, &serial, nullptr, nullptr, nullptr, 0) != FALSE;
+        check(volume, L"index_name_prefix_fixture_volume");
+        if (!volume) { return false; }
+        const auto identity = [serial](const std::uint64_t value) {
+            blink::core::FileIdentity result; result.valid = true; result.volume_serial = serial;
+            std::memcpy(result.file_id.data(), &value, sizeof(value)); return result;
+        };
+        const auto root = identity(1), parent = identity(2), child = identity(3), file = identity(4);
+        const Spec original{ file, parent, L"Rare-Report.txt", FILE_ATTRIBUTE_ARCHIVE, 11 };
+        const Spec hard_link{ file, child, L"rare-copy.txt", FILE_ATTRIBUTE_ARCHIVE, 12 };
+        const Spec hidden{ identity(5), parent, L"rare-hidden.txt", FILE_ATTRIBUTE_HIDDEN, 13 };
+        const Spec system{ identity(6), parent, L"rare-system.txt", FILE_ATTRIBUTE_SYSTEM, 14 };
+        const Spec unicode{ identity(7), parent, L"Ångström.txt", FILE_ATTRIBUTE_ARCHIVE, 15 };
+        const std::vector<Spec> records{
+            { parent, root, L"PrefixFixture", FILE_ATTRIBUTE_DIRECTORY, 2 },
+            { child, parent, L"Nested", FILE_ATTRIBUTE_DIRECTORY, 3 },
+            original, hard_link, hidden, system, unicode,
+            { identity(8), parent, L"CASE-Equal.txt", FILE_ATTRIBUTE_ARCHIVE, 16 },
+            { identity(9), parent, L"case-equal.txt", FILE_ATTRIBUTE_ARCHIVE, 17 }
+        };
+        FastIndex index;
+        FastIndexTestAccess::Reset(index, root, serial);
+        FastIndexTestAccess::Seed(index, records);
+        const auto start_now = [] { return std::chrono::steady_clock::now(); };
+        FastSearchOptions rare; rare.prefix = true; rare.text = L"rArE"; rare.limit = 1000;
+        rare.excluded_attributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+        const auto matches_reference = [](const FastIndex& engine, FastSearchOptions query, FastSearchTiming* timing = nullptr) {
+            const auto derived = engine.Search(query, timing);
+            query.use_derived_name_prefix_index = false;
+            return SameOrderedSearchResults(derived, engine.Search(query));
+        };
+        bool added = true;
+        for (std::uint64_t number = 100; number < 400; ++number)
+        {
+            added &= FastIndexTestAccess::Add(index, { identity(number), parent, L"Unrelated-" + std::to_wstring(number),
+                FILE_ATTRIBUTE_ARCHIVE, static_cast<std::int64_t>(number) });
+        }
+        const auto rare_hits = index.Search(rare);
+        FastSearchTiming rare_timing(start_now());
+        check(added && rare_hits.size() == 2 && std::all_of(rare_hits.begin(), rare_hits.end(), [&](const auto& hit) {
+            return hit.identity == file;
+        }) && matches_reference(index, rare, &rare_timing) && rare_timing.links_examined.load() < index.Stats().links / 10 &&
+            FastIndexTestAccess::CountersMatchRecount(index), L"index_name_prefix_sparse_query_keeps_hard_links_after_group_growth");
+        FastSearchTiming miss_timing(start_now());
+        auto query = rare; query.text = L"ZQWX-does-not-exist";
+        check(index.Search(query).empty() && matches_reference(index, query, &miss_timing) && miss_timing.links_examined.load() == 0,
+            L"index_name_prefix_absent_bucket_visits_no_links");
+        FastSearchTiming short_timing(start_now());
+        query.text = L"rar"; query.limit = 0;
+        bool short_or_substring = matches_reference(index, query, &short_timing) && short_timing.links_examined.load() == index.Stats().links;
+        query.prefix = false; query.text = L"Report";
+        FastSearchTiming substring_timing(start_now());
+        check(short_or_substring && matches_reference(index, query, &substring_timing) &&
+            substring_timing.links_examined.load() == index.Stats().links, L"index_name_prefix_short_and_substring_preserve_reference_scan");
+        query = rare; query.limit = 1;
+        check(matches_reference(index, query) && index.Search(query).size() == 1, L"index_name_prefix_limit_preserves_original_first_result");
+
+        query = rare; query.path_prefix = L"d:\\PrefixFixture\\"; query.direct_children = true;
+        const auto scoped = index.Search(query);
+        check(scoped.size() == 1 && scoped.front().name == original.name && matches_reference(index, query),
+            L"index_name_prefix_preserves_direct_scope_and_visibility");
+        query = rare; query.text = L"ångs";
+        const auto unicode_hits = index.Search(query);
+        check(unicode_hits.size() == 1 && unicode_hits.front().name == unicode.name && matches_reference(index, query),
+            L"index_name_prefix_uses_the_same_ordinal_unicode_fold");
+        query.text = L"case"; query.limit = 0;
+        FastSearchTiming comparable_paths(start_now());
+        check(index.Search(query).size() == 2 && matches_reference(index, query, &comparable_paths) &&
+            comparable_paths.links_examined.load() >= index.Stats().links, L"index_name_prefix_preserves_case_equal_path_order");
+
+        const Spec renamed{ original.identity, original.parent_identity, L"NewPrefix-Report.txt", original.attributes, 410 };
+        const bool renamed_ok = FastIndexTestAccess::Apply(index, original, USN_REASON_RENAME_OLD_NAME) &&
+            FastIndexTestAccess::Apply(index, renamed, USN_REASON_RENAME_NEW_NAME);
+        const auto remaining = index.Search(rare);
+        query = rare; query.text = L"NewPrefix-Report.txt";
+        check(renamed_ok && remaining.size() == 1 && remaining.front().name == hard_link.name &&
+            index.Search(query).size() == 1 && matches_reference(index, rare) && matches_reference(index, query),
+            L"index_name_prefix_usn_rename_updates_old_and_new_buckets_once");
+        check(FastIndexTestAccess::Apply(index, renamed, USN_REASON_FILE_DELETE) && index.Search(query).empty() &&
+            FastIndexTestAccess::Apply(index, hard_link, USN_REASON_FILE_DELETE) && index.Search(rare).empty() &&
+            matches_reference(index, rare) && FastIndexTestAccess::CountersMatchRecount(index),
+            L"index_name_prefix_delete_removes_membership_before_the_file_group");
+        const Spec created{ identity(401), parent, L"Rare-Created.txt", FILE_ATTRIBUTE_ARCHIVE, 411 };
+        check(FastIndexTestAccess::Apply(index, created, USN_REASON_FILE_CREATE) && index.Search(rare).size() == 1 &&
+            matches_reference(index, rare), L"index_name_prefix_usn_create_repopulates_the_bucket");
+
+        const auto fixture = fs::absolute(fs::path(L".build") / L"index-name-prefix-fixtures" /
+            (L"pid-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64())));
+        struct Cleanup { fs::path path; ~Cleanup() { std::error_code error; fs::remove_all(path, error); } } cleanup{ fixture };
+        fs::create_directories(fixture);
+        const auto store = (fixture / L"prefix.blink5").wstring();
+        DWORD error{};
+        FastIndex loaded;
+        const bool loaded_ok = index.Save(store, &error) && FastIndex::ValidateStoreFile(store, &error) && loaded.Load(store, L"D:\\", &error);
+        check(loaded_ok && FastIndexTestAccess::NamePrefixIndexBytes(loaded) != 0 &&
+            SameOrderedSearchResults(index.Search(rare), loaded.Search(rare)) && matches_reference(loaded, rare) &&
+            FastIndexTestAccess::CountersMatchRecount(loaded), L"index_name_prefix_rebuilds_in_memory_from_the_same_blk5");
+        FastIndexTestAccess::DisableNamePrefixIndex(loaded);
+        FastSearchTiming disabled_timing(start_now());
+        check(loaded_ok && matches_reference(loaded, rare, &disabled_timing) &&
+            SameOrderedSearchResults(loaded.Search(rare), index.Search(rare)) &&
+            disabled_timing.links_examined.load() == loaded.Stats().links && FastIndexTestAccess::NamePrefixIndexBytes(loaded) == 0,
+            L"index_name_prefix_disabled_acceleration_falls_back_without_missing_results");
+        loaded.Clear();
+        check(loaded.Stats().links == 0 && FastIndexTestAccess::NamePrefixIndexBytes(loaded) == 0 && loaded.Search(rare).empty(),
+            L"index_name_prefix_clear_discards_the_derived_buckets");
+        return passed;
+    }
+
+    [[nodiscard]] int MeasureNamePrefixIndex(const wchar_t* store, const std::wstring& root,
+        const std::wstring& known_name, const std::wstring& common_prefix)
+    {
+        using namespace blink::index;
+        using Clock = std::chrono::steady_clock;
+        FastIndex index;
+        DWORD error{};
+        const auto begin_load = Clock::now();
+        if (known_name.size() < 4 || common_prefix.size() != 4 ||
+            !index.Load(store, root, &error))
+        {
+            WriteUtf8Line(L"NAME_PREFIX_BENCH load_error=" + std::to_wstring(error));
+            return 97;
+        }
+        const auto load_ms = std::chrono::duration<double, std::milli>(Clock::now() - begin_load).count();
+        const auto stats = index.Stats();
+        WriteUtf8Line(L"NAME_PREFIX_BENCH load_ms=" + std::to_wstring(load_ms) +
+            L" store_links=" + std::to_wstring(stats.links) + L" estimated_total_bytes=" + std::to_wstring(stats.resident_bytes) +
+            L" estimated_prefix_bytes=" + std::to_wstring(FastIndexTestAccess::NamePrefixIndexBytes(index)));
+        struct Scenario
+        {
+            const wchar_t* name;
+            std::wstring query;
+            bool prefix;
+            std::size_t limit;
+        };
+        const Scenario scenarios[]{
+            { L"full_name_hit", known_name, true, 1000 },
+            { L"full_name_miss", L"QZXQ-UNIQUE-BLINK-BENCH-MISS-20261119", true, 1000 },
+            { L"four_character_prefix", common_prefix, true, 200 },
+            { L"three_character_prefix", common_prefix.substr(0, 3), true, 200 },
+            { L"wide_substring", L"a", false, 200 },
+            { L"sparse_substring", L"Blink.Phase1", false, 200 },
+        };
+        bool passed = true;
+        for (unsigned round = 0; round <= 8; ++round)
+        {
+            for (const auto& scenario : scenarios)
+            {
+                struct Result
+                {
+                    std::vector<FastSearchResult> hits;
+                    double ms{};
+                    std::uint64_t visits{};
+                };
+                const auto sample = [&](const bool derived) {
+                    FastSearchOptions options;
+                    options.text = scenario.query; options.prefix = scenario.prefix; options.limit = scenario.limit;
+                    options.excluded_attributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+                    options.use_derived_name_prefix_index = derived;
+                    FastSearchTiming timing(Clock::now());
+                    auto hits = index.Search(options, &timing);
+                    const auto ms = std::chrono::duration<double, std::milli>(Clock::now() - timing.request_received).count();
+                    return Result{ std::move(hits), ms, timing.links_examined.load() };
+                };
+                const bool derived_first = round % 2 != 0;
+                const auto first = sample(derived_first);
+                const auto second = sample(!derived_first);
+                const auto& reference = derived_first ? second : first;
+                const auto& derived = derived_first ? first : second;
+                const std::wstring_view label(scenario.name);
+                const bool ok = SameOrderedSearchResults(reference.hits, derived.hits) &&
+                    (label != L"full_name_hit" || !derived.hits.empty()) &&
+                    (label != L"full_name_miss" || derived.hits.empty());
+                passed &= ok;
+                WriteUtf8Line(L"NAME_PREFIX_SAMPLE scenario=" + std::wstring(label) + L" round=" + std::to_wstring(round) +
+                    L" reference_ms=" + std::to_wstring(reference.ms) + L" derived_ms=" + std::to_wstring(derived.ms) +
+                    L" reference_visits=" + std::to_wstring(reference.visits) + L" derived_visits=" + std::to_wstring(derived.visits) +
+                    L" count=" + std::to_wstring(derived.hits.size()) + L" same=" + (ok ? L"1" : L"0"));
+            }
+        }
+        return passed ? 0 : 97;
+    }
+
     [[nodiscard]] bool RunLoadIsolationUnitTest()
     {
         namespace fs = std::filesystem;
@@ -1125,9 +1344,10 @@ namespace
             query.options.extension = extension;
             query.options.path_prefix = path_prefix;
             query.options.limit = 200;
-            if (reference_full_scan && !query.options.extension.empty())
+            if (reference_full_scan)
             {
                 query.options.use_derived_extension_index = false;
+                query.options.use_derived_name_prefix_index = false;
             }
             query.expected_path = expected_path;
             query.outside_path = outside_path;
@@ -2178,9 +2398,14 @@ int wmain(int argc, wchar_t* argv[])
             if (suite == L"search-correctness") { return RunSearchCorrectnessTests() ? 0 : 94; }
             if (suite == L"search-visibility-wire") { return RunSearchVisibilityWireTests() ? 0 : 95; }
             if (suite == L"search-serving") { return RunConcurrentIndexSearchTests() ? 0 : 96; }
+            if (suite == L"search-name-prefix") { return RunNamePrefixIndexTests() ? 0 : 97; }
         }
-        std::wcerr << L"usage: Blink.Phase05.Tests.exe [--search-index-only] --suite search-correctness|search-visibility-wire|search-serving\n";
+        std::wcerr << L"usage: Blink.Phase05.Tests.exe [--search-index-only] --suite search-correctness|search-visibility-wire|search-serving|search-name-prefix\n";
         return 2;
+    }
+    if (argc == 6 && std::wstring_view(argv[1]) == L"--benchmark-name-prefix")
+    {
+        return MeasureNamePrefixIndex(argv[2], argv[3], argv[4], argv[5]);
     }
     if (argc > 1 && std::wstring(argv[1]) == L"--offline-search")
     {
@@ -2214,7 +2439,8 @@ int wmain(int argc, wchar_t* argv[])
         const bool correctness = RunSearchCorrectnessTests();
         const bool wire = RunSearchVisibilityWireTests();
         const bool serving = RunConcurrentIndexSearchTests();
-        return correctness && wire && serving ? 0 : 94;
+        const bool name_prefix = RunNamePrefixIndexTests();
+        return correctness && wire && serving && name_prefix ? 0 : 94;
     }
 
     if (!RunProgressSnapshotUnitTest())
@@ -2223,6 +2449,7 @@ int wmain(int argc, wchar_t* argv[])
     }
     if (!RunSearchCorrectnessTests()) { return 94; }
     if (!RunSearchVisibilityWireTests()) { return 95; }
+    if (!RunNamePrefixIndexTests()) { return 97; }
 
     const std::wstring service_exe = FullPath(L"x64\\Debug\\Blink.IndexService.exe");
     const std::wstring data_root = L".build\\phase05-service-data";
