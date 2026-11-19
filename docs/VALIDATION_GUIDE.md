@@ -38,18 +38,19 @@ DataObject验证格式/medium所有权与完成协议；Session验证真实STA�
 .\scripts\run-blink-search-smoke.ps1 -Configuration Release -Feature All
 ```
 
-`All` 顺序启动六个独立进程，也能只选择其中一个功能复测：
+`All` 顺序启动七个独立进程，也可用 `-Feature Delivery` 等选项单独复测。
 
 | Feature | 原生组 | 预期检查数 |
 | --- | --- | --- |
 | Response | search-response | 15 |
 | Scope | search-scope | 25 |
 | Visibility | search-visibility | 56 |
+| Delivery | search-delivery | 10 |
 | Index | search-correctness | 32 |
 | Wire | search-visibility-wire | 16 |
 | Serving | search-serving | 10 |
 
-前三组使用 Phase1 测试程序，后三组使用 Phase05 并带 `--search-index-only --suite` 离线前缀。`-TestBinaryPath` 和 `-IndexTestBinaryPath` 可分别指定二进制。Serving 使用可控保存阶段验证并发行为和 BLK5 回读。
+前四组使用 Phase1 测试程序，后三组使用 Phase05 并带 `--search-index-only --suite` 离线前缀。`-TestBinaryPath` 和 `-IndexTestBinaryPath` 可分别指定二进制。Delivery 用可控的慢卷验证提前交付、可见结果命令、追加顺序、失败卷重试和取消。Serving 使用可控保存阶段验证并发行为和 BLK5 回读。
 
 每项保存日志、退出码、精确检查数及二进制SHA，同一程序的跨组SHA必须一致。脚本不编译、不操作前台或正式服务；完整Phase1与受影响的离线索引回归另跑：
 
@@ -59,6 +60,14 @@ DataObject验证格式/medium所有权与完成协议；Session验证真实STA�
 ```
 
 Phase05无参数是会启动服务原型的历史入口，不作为本批普通回归。详细约定及实际结果见[搜索功能验证](SEARCH_RESPONSE_VALIDATION.md)。调用次数和假IPC行为不能当成真实窗口首屏或Everything对比。
+
+正式服务 C/D 均就绪且 D 盘自有夹具已进入索引后，可在普通用户会话运行客户端对照。参数使用已存在的唯一文本文件路径。
+
+```powershell
+& .\x64\Release\Blink.Phase1.Tests.exe --measure-search-delivery $FixturePath
+```
+
+同一测试程序交替运行串行最终交付和并发逐卷交付，覆盖双卷宽泛名称、双卷精确名称和单卷精确名称。第 0 轮检查就绪并预热，后续 6 轮记录首批与完成时间。探针只读正式服务，计时终点在客户端回调或搜索任务完成，窗口呈现另测。
 
 ## 真实服务搜索与夹具恢复
 

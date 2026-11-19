@@ -213,6 +213,7 @@ namespace blink::app
             (retry && (query != snapshot_.query || snapshot_.stage == SearchStage::Idle))) { return 0; }
         ++snapshot_.generation;
         snapshot_.stage = SearchStage::Searching;
+        snapshot_.revision = 0;
         snapshot_.error = ERROR_SUCCESS;
         if (!retry) { snapshot_.volumes.clear(); snapshot_.scope_identity = {}; }
         else

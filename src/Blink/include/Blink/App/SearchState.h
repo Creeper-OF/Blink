@@ -9,6 +9,10 @@ namespace blink::app
     enum class SearchMode { Substring, Prefix, Extension, Exact };
     inline constexpr std::uint32_t kSearchCandidateLimit = 1000;
     enum class SearchStage { Idle, Searching, Complete, Partial, Unavailable, Closed };
+    [[nodiscard]] constexpr bool HasSearchRows(const SearchStage stage) noexcept
+    {
+        return stage == SearchStage::Searching || stage == SearchStage::Complete || stage == SearchStage::Partial;
+    }
 
     struct SearchQuery
     {
@@ -48,6 +52,7 @@ namespace blink::app
         DWORD error{ ERROR_SUCCESS };
         blink::core::FileIdentity scope_identity;
         std::vector<SearchVolumeResult> volumes;
+        std::uint64_t revision{};
     };
 
     [[nodiscard]] std::wstring SearchDriveRoot(const std::wstring& path);

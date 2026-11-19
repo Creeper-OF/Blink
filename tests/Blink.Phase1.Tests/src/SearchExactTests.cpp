@@ -265,14 +265,16 @@ bool RunSearchResponseTests()
     const auto retried = state->Snapshot();
     passed &= Check(first_done && retry_done && retry_generation > first_generation && publications->load() == 2 &&
         retried.stage == SearchStage::Complete && retried.error == ERROR_SUCCESS && retried.volumes.size() == 2 &&
-        retried.volumes[0].searched && retried.volumes[0].results.size() == 1 &&
-        retried.volumes[0].results.front().hit.name == L"needle-c.txt" && retried.volumes[1].searched,
+        retried.volumes[0].root == L"D:\\" && retried.volumes[0].searched &&
+        retried.volumes[1].root == L"C:\\" && retried.volumes[1].searched && retried.volumes[1].results.size() == 1 &&
+        retried.volumes[1].results.front().hit.name == L"needle-c.txt",
         "search_response_explicit_retry_completes_the_previously_busy_volume");
+    // D was already visible. The newly recovered C result follows it.
     passed &= Check(first_done && retry_done && trace->c_calls == 2 && trace->d_calls == 1 &&
         trace->roots == std::vector<std::wstring>{ L"C:\\", L"D:\\", L"C:\\" } &&
-        first.volumes.size() == 2 && first.volumes[1].results.size() == 1 &&
-        retried.volumes.size() == 2 && retried.volumes[1].results.size() == 1 &&
-        SameSearchLink(first.volumes[1].results.front(), retried.volumes[1].results.front()),
+        first.volumes.size() == 2 && first.volumes[1].root == L"D:\\" && first.volumes[1].results.size() == 1 &&
+        retried.volumes.size() == 2 && retried.volumes[0].root == L"D:\\" && retried.volumes[0].results.size() == 1 &&
+        SameSearchLink(first.volumes[1].results.front(), retried.volumes[0].results.front()),
         "search_response_retry_reuses_successful_volume_results_without_another_transport_call");
     (void)coordinator.Shutdown();
 

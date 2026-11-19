@@ -12,7 +12,7 @@ namespace blink::app
             !tab->search_visible || tab->search_queued || !tab->search_state ||
             !tab->search_state->IsCurrent(selection.query_generation) || !tab->search_snapshot ||
             tab->search_snapshot->generation != selection.query_generation ||
-            (tab->search_snapshot->stage != SearchStage::Complete && tab->search_snapshot->stage != SearchStage::Partial))
+            !HasSearchRows(tab->search_snapshot->stage))
         { return false; }
         return std::any_of(tab->search_snapshot->volumes.begin(), tab->search_snapshot->volumes.end(), [&](const auto& volume) {
             return volume.searched && std::any_of(volume.results.begin(), volume.results.end(), [&](const auto& result) {

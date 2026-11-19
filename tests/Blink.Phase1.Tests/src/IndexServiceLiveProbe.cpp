@@ -5,6 +5,7 @@
 #include "Blink/App/TabWindowState.h"
 #include <objbase.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -262,6 +263,90 @@ namespace
             "scope_nested_delete_converged", converged);
         return converged;
     }
+}
+
+int MeasureSearchDelivery(const wchar_t* fixture_path)
+{
+    const fs::path fixture = fixture_path;
+    const auto path = fixture.wstring();
+    const auto root = SearchDriveRoot(path);
+    if (root != L"D:\\" || !fs::is_regular_file(fixture))
+    { Report(false, "delivery_fixture", root, ERROR_FILE_NOT_FOUND); return 80; }
+    auto query = SearchQuery{ L"a", SearchScope::SelectedVolumes };
+    query.selected_volumes = L"C:;D:";
+    query.excluded_attributes = FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN;
+    auto exact = query;
+    exact.text = fixture.filename().wstring(); exact.mode = SearchMode::Exact;
+    auto single = exact;
+    single.scope = SearchScope::CurrentVolume; single.folder = root; single.selected_volumes.clear();
+    const auto serial_state = std::make_shared<SearchState>();
+    const auto parallel_state = std::make_shared<SearchState>();
+    SearchCoordinator serial(serial_state, MakeSearchExchange(serial_state));
+    SearchCoordinator parallel(parallel_state);
+    const auto sample = [&](const SearchQuery& intent, const char* scenario, const int round, const bool progressive) {
+        const auto state = progressive ? parallel_state : serial_state;
+        auto& coordinator = progressive ? parallel : serial;
+        const bool any_rows = intent.mode != SearchMode::Exact;
+        const auto contains_result = [&](const SearchSnapshot& snapshot) {
+            return std::any_of(snapshot.volumes.begin(), snapshot.volumes.end(), [&](const auto& volume) {
+                return volume.searched && (any_rows ? !volume.results.empty() :
+                    std::any_of(volume.results.begin(), volume.results.end(),
+                        [&](const auto& hit) { return hit.hit.full_path == path; }));
+            });
+        };
+        std::atomic<long long> first_us{ -1 };
+        const auto start = Clock::now();
+        const auto elapsed = [&] { return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count(); };
+        SearchCoordinator::ProgressCallback progress;
+        if (progressive)
+        {
+            progress = [&](const SearchSnapshot& snapshot) {
+                if (first_us.load() < 0 && contains_result(snapshot)) { first_us.store(elapsed()); }
+            };
+        }
+        const auto generation = coordinator.Search(intent, {}, false, std::move(progress));
+        const auto action = coordinator.CurrentAction();
+        if (!generation || !action) { return Report(false, "delivery_start", root, ERROR_BUSY); }
+        action.get();
+        const auto final_us = elapsed();
+        const auto snapshot = state->Snapshot();
+        const auto matching = contains_result(snapshot);
+        const auto early_us = first_us.load();
+        const auto expected_volumes = intent.scope == SearchScope::CurrentVolume ? 1u : 2u;
+        const bool ok = snapshot.generation == generation && snapshot.stage == SearchStage::Complete &&
+            snapshot.volumes.size() == expected_volumes && matching;
+        std::cout << "DELIVERY " << (ok ? "OK" : "FAIL") << " scenario=" << scenario << " round=" << round <<
+            " mode=" << (progressive ? "parallel" : "serial") << " first_us=" <<
+            (early_us >= 0 ? early_us : matching ? final_us : -1) << " final_us=" << final_us <<
+            " early=" << (early_us >= 0) << " error=" << snapshot.error;
+        for (const auto& volume : snapshot.volumes)
+        { std::cout << ' ' << static_cast<char>(volume.root.front()) << "_hits=" << volume.results.size(); }
+        std::cout << std::endl;
+        return ok;
+    };
+    const auto run = [&](const int round, const bool progressive) {
+        bool passed = sample(query, "two-volume-wide", round, progressive);
+        passed &= sample(exact, "two-volume-exact", round, progressive);
+        passed &= sample(single, "one-volume-exact", round, progressive);
+        return passed;
+    };
+    try
+    {
+        // Swap the order on alternate rounds. Round zero checks readiness and
+        // warms both persistent clients. The existing index is read-only.
+        bool passed = run(0, false);
+        passed &= run(0, true);
+        if (!passed) { return 82; }
+        for (int round = 1; round <= 6; ++round)
+        {
+            const bool parallel_first = (round % 2) == 0;
+            passed &= run(round, parallel_first);
+            passed &= run(round, !parallel_first);
+        }
+        return passed ? 0 : 82;
+    }
+    catch (const winrt::hresult_error& error)
+    { Report(false, "delivery_exception", root, static_cast<DWORD>(error.code().value)); return 86; }
 }
 
 int RunIndexServiceLiveProbe(const int argc, wchar_t* argv[])

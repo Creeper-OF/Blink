@@ -12,7 +12,7 @@
 
 | 编号/优先级 | 源码证据与触发条件 | 结论、处理顺序 |
 | --- | --- | --- |
-| A01 / P1，已修 | 审计基线abf4f9f的Busy重试占约120秒；逐盘Collect仅最终publish | 本轮MakeSearchExchange每卷一次有界响应，Busy交Collect继续其它盘；Retry保留成功卷，取消/所有权保留。独立15项及Release完整1688/0/4通过；真实UI首屏待测，仍逐卷串行 |
+| A01 / P1，已修 | 审计基线abf4f9f的Busy重试占约120秒；逐盘Collect仅最终publish | 先去掉内部 Busy 重试，再实现最多两卷并发、逐卷交付。重试保留成功卷，取消仍持有旧任务至退出。WinUI 首屏待测，见[搜索实测](SEARCH_RESPONSE_VALIDATION.md) |
 | A02 / P2，服务已更新/真实搜索已验 | 审计基线先limit后按Hidden/System过滤，可见命中被挤占 | 本批在索引候选/路径/limit前按窗口0/4/6策略过滤；新命令兼容原帧，旧服务截断明确未完整。应用56/索引31/帧16独立项及1744/0/4、离线58/0/0通过；正式服务已更新，真实23项搜索检查通过，UI仍待验 |
 | A03 / P2，已修 | 审计基线逐结果重复解析scope和parent目录链 | 本轮按单次Filter的精确canonical拼写复用，批尾鲜读实际scope与唯一parent，Open/Locate仍独立重验。独立25项及Release全回归通过；200同父读取1002→8为调用计数，非UI耗时 |
 | A04 / P2，服务已更新/真实搜索已验 | 审计基线std::towlower依赖默认CRT locale，非ASCII匹配不一致 | 本批使用Windows invariant uppercase/ordinal，名称与原始扩展缓存一致，Load/USN重建；无全局locale或拼写规范化。31项核心例及BLK5往返通过；Greek最终形按实际系统ordinal oracle，不假定语言学等价 |
@@ -26,6 +26,8 @@
 CRT大小写语义参考微软[towlower](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/tolower-tolower-towlower-tolower-l-towlower-l?view=msvc-170)与[默认C locale](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale?view=msvc-170)说明；实际修正仍以当前SDK及功能例为准。
 
 ## 当前功能与验证事实
+
+2026-11-19 多卷结果交付。应用最多同时查两卷，后返回的结果追加，显式重试保留已完成卷的位置。正式服务暖测中，双卷宽泛及精确名称首批结果中位数分别为 25.1 和 66.9 ms。独立七组 164 PASS，完整 Phase1 2001 PASS / 0 FAIL / 4 既有权限 SKIP。窗口锁屏时保留候选，见[搜索实测](SEARCH_RESPONSE_VALIDATION.md)。
 
 2026-11-19 保存期间查询。索引统计改为增量维护，已应用的索引视图在 BLK5 写盘时可搜索。受控实机测试从 3 次 Busy 变为 3 次准确返回自有文件，常规 72 次请求从 25 次 Busy 降至 1 次。新增并发专项 10 项、完整离线 69 项和真实服务 23 项通过。持续高负荷与 WinUI 首屏仍待验证，见[搜索实测](SEARCH_RESPONSE_VALIDATION.md)。
 

@@ -1,4 +1,5 @@
 #include "SearchIntegrationTests.h"
+#include "Blink/App/SearchContextCommands.h"
 #include "Blink/App/SearchResultValidation.h"
 #include "Blink/App/TabWindowState.h"
 #include "Blink/App/SearchRequestQueue.h"
@@ -348,6 +349,164 @@ namespace
         (void)coordinator.Shutdown();
         return passed;
     }
+}
+
+bool RunSearchDeliveryTests()
+{
+    using namespace blink::app;
+    using namespace std::chrono_literals;
+    namespace ipc = blink::index::ipc;
+    bool passed = true;
+    const std::wstring c = L"C:\\", d = L"D:\\", e = L"E:\\";
+    const auto hit_on = [](const std::wstring& root) {
+        ipc::SearchHit hit;
+        hit.identity = { 77, { 9 }, true }; hit.parent_identity = { 77, { 1 }, true };
+        hit.name = L"file.txt"; hit.full_path = root + hit.name; hit.attributes = FILE_ATTRIBUTE_ARCHIVE;
+        return hit;
+    };
+    constexpr std::uint64_t serial = 0x20000004dULL;
+    const auto resolve = [serial](const std::wstring& root) { return SearchFolderScope{ root, { serial, { 1 }, true }, ERROR_SUCCESS }; };
+    TabRecord tab;
+    tab.id = 1; tab.search_state = std::make_shared<SearchState>(); tab.EnterSearch();
+    const auto release = std::make_shared<std::promise<void>>();
+    const auto wait_for_slow_volume = release->get_future().share();
+    const auto retry_ready = std::make_shared<std::atomic_bool>();
+    const auto c_calls = std::make_shared<std::atomic_uint>();
+    const auto d_calls = std::make_shared<std::atomic_uint>();
+    auto exchange = [=](ipc::Request request) {
+        auto hit = hit_on(request.volume_root);
+        if (request.volume_root == c)
+        {
+            ++*c_calls;
+            if (retry_ready->load()) { return ScopeReply({ hit }); }
+            (void)wait_for_slow_volume.wait_for(5s);
+            auto reply = ScopeReply();
+            reply.response.status = ipc::ResponseStatus::Busy; reply.response.error = ERROR_IO_PENDING;
+            reply.response.index_state = ipc::IndexState::CatchingUp;
+            return reply;
+        }
+        ++*d_calls;
+        auto hidden = hit; hidden.name = L"hidden-file.txt"; hidden.full_path = d + hidden.name;
+        hidden.attributes |= FILE_ATTRIBUTE_HIDDEN;
+        return ScopeReply({ hidden, hit });
+    };
+    SearchCoordinator coordinator(tab.search_state, exchange, [=] { return std::vector{ c, d, d }; }, resolve, {}, exchange);
+    SearchQuery query{ L"file" };
+    query.excluded_attributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
+    const auto published = std::make_shared<std::promise<SearchSnapshot>>();
+    auto first = published->get_future();
+    const auto generation = coordinator.Search(query, {}, false, [published](const auto& snapshot) { published->set_value(snapshot); });
+    const bool received = first.wait_for(3s) == std::future_status::ready;
+    const bool still_searching = tab.search_state->Snapshot().stage == SearchStage::Searching;
+    release->set_value();
+    const auto progress = received ? first.get() : SearchSnapshot{};
+    const auto early = BuildSearchView(progress, {}, std::nullopt);
+    passed &= Check(generation && received && still_searching && progress.generation == generation && progress.revision == 1 &&
+        progress.stage == SearchStage::Searching && progress.volumes.size() == 1 && progress.volumes.front().root == d,
+        "search_delivery_ready_volume_publishes_while_earlier_volume_is_blocked");
+    const bool valid_hit = early.rows.size() == 1 && early.rows.front().hit.full_path == d + L"file.txt" &&
+        early.rows.front().hit.identity.volume_serial == serial && early.rows.front().hit.parent_identity.volume_serial == serial;
+    tab.search_snapshot = std::make_shared<SearchSnapshot>(progress);
+    const SearchContextSelection selected{ tab.id, generation, valid_hit ? early.rows.front() : SearchResult{} };
+    auto unknown = selected;
+    unknown.result.hit.full_path = d + L"hidden-file.txt"; unknown.result.hit.name = L"hidden-file.txt";
+    passed &= Check(valid_hit && IsSearchContextCurrent(selected, &tab) && !IsSearchContextCurrent(unknown, &tab),
+        "search_delivery_only_exposes_validated_visible_links_to_result_commands");
+
+    const bool finished = Finished(coordinator.CurrentAction());
+    const auto partial = tab.search_state->Snapshot();
+    const auto partial_view = BuildSearchView(partial, {}, selected.result);
+    passed &= Check(finished && partial.stage == SearchStage::Partial && partial.error == ERROR_IO_PENDING &&
+        partial.revision == 2 && partial.volumes.size() == 2 && partial.volumes.front().root == d &&
+        partial_view.selected_index == 0 && CanAppendSearchRows(early.rows, partial_view.rows) && *c_calls == 1 && *d_calls == 1,
+        "search_delivery_partial_finish_preserves_the_first_row_and_selection");
+
+    retry_ready->store(true);
+    const bool retried = SubmitScopeQuery(coordinator, query, true);
+    const auto complete = tab.search_state->Snapshot();
+    const auto complete_view = BuildSearchView(complete, {}, selected.result);
+    passed &= Check(retried && complete.stage == SearchStage::Complete && complete.revision == 1 &&
+        complete_view.rows.size() == 2 && complete_view.selected_index == 0 &&
+        CanAppendSearchRows(partial_view.rows, complete_view.rows) && *c_calls == 2 && *d_calls == 1 &&
+        !IsSearchContextCurrent(selected, &tab),
+        "search_delivery_retry_only_queries_unfinished_volume_and_rejects_old_context");
+    auto replaced = complete_view.rows;
+    auto reordered = complete_view.rows;
+    if (replaced.size() == 2) { replaced.front().hit.attributes |= FILE_ATTRIBUTE_HIDDEN; std::swap(reordered.front(), reordered.back()); }
+    passed &= Check(complete_view.rows.size() == 2 && !CanAppendSearchRows(partial_view.rows, replaced) &&
+        !CanAppendSearchRows(partial_view.rows, reordered) && !CanAppendSearchRows(complete_view.rows, partial_view.rows),
+        "search_delivery_view_rebuilds_for_replacement_reordering_or_removed_rows");
+
+    const auto companion_calls = std::make_shared<std::atomic_uint>();
+    const auto single_state = std::make_shared<SearchState>();
+    SearchCoordinator single(single_state, exchange, {}, resolve, {}, [companion_calls](auto) {
+        ++*companion_calls; return ScopeReply();
+    });
+    const bool single_finished = SubmitScopeQuery(single, { L"file", SearchScope::CurrentVolume, SearchMode::Substring, d });
+    const auto one = single_state->Snapshot();
+    passed &= Check(single_finished && one.stage == SearchStage::Complete && one.volumes.size() == 1 &&
+        one.volumes.front().root == d && *companion_calls == 0, "search_delivery_single_volume_does_not_open_companion_connection");
+
+    const auto folder = d + L"Folder";
+    const auto folder_state = std::make_shared<SearchState>();
+    const auto folder_calls = std::make_shared<std::atomic_uint>();
+    const auto replaced_scope = std::make_shared<std::atomic_bool>();
+    SearchCoordinator folder_search(folder_state, [=](ipc::Request request) {
+        ++*folder_calls;
+        auto hit = hit_on(request.volume_root);
+        hit.full_path = folder + L"\\" + hit.name;
+        return ScopeReply({ hit });
+    }, {}, resolve, [replaced_scope](const auto&, SearchVolumeResult& volume) {
+        if (replaced_scope->load())
+        { volume.searched = false; volume.error = ERROR_FILE_INVALID; volume.results.clear(); }
+    });
+    const SearchQuery folder_query{ L"file", SearchScope::SelectedFolder, SearchMode::Substring, folder };
+    const bool folder_finished = SubmitScopeQuery(folder_search, folder_query);
+    const auto original_folder = folder_state->Snapshot();
+    replaced_scope->store(true);
+    const bool folder_retried = SubmitScopeQuery(folder_search, folder_query, true);
+    const auto invalid_folder = folder_state->Snapshot();
+    passed &= Check(folder_finished && original_folder.stage == SearchStage::Complete && folder_retried &&
+        invalid_folder.stage == SearchStage::Unavailable && invalid_folder.error == ERROR_FILE_INVALID &&
+        invalid_folder.volumes.size() == 1 && invalid_folder.volumes.front().results.empty() && *folder_calls == 1,
+        "search_delivery_retained_folder_reports_revalidation_error_without_replaying_the_volume");
+
+    struct BlockingSearch
+    {
+        std::promise<void> both_started, release;
+        std::shared_future<void> gate = release.get_future().share();
+        std::atomic_uint requests{}, entered{}, publications{};
+    };
+    const auto blocking = std::make_shared<BlockingSearch>();
+    auto blocked = [blocking](ipc::Request) {
+        ++blocking->requests;
+        if (++blocking->entered == 2) { blocking->both_started.set_value(); }
+        (void)blocking->gate.wait_for(5s);
+        return ScopeReply();
+    };
+    const auto cancelled_state = std::make_shared<SearchState>();
+    SearchCoordinator cancelled(cancelled_state, blocked, [=] { return std::vector{ c, d, e }; }, resolve, {}, blocked);
+    SearchRequestQueue queue;
+    queue.Enqueue({ 1, query }); queue.Enqueue({ 2, { L"next" } });
+    const auto ticket = queue.TakeNext();
+    auto both_started = blocking->both_started.get_future();
+    const auto old = cancelled.Search(query, [blocking](auto) { ++blocking->publications; }, false,
+        [blocking](const auto&) { ++blocking->publications; });
+    const bool two_in_flight = both_started.wait_for(3s) == std::future_status::ready && blocking->requests == 2;
+    cancelled.Cancel();
+    const bool action_retained = ticket && queue.IsActive(ticket->serial) && !queue.TakeNext() && !cancelled.Search({ L"next" }, {});
+    blocking->release.set_value();
+    const bool cancelled_done = Finished(cancelled.CurrentAction());
+    passed &= Check(old && two_in_flight && action_retained &&
+        !cancelled_state->IsCurrent(old), "search_delivery_two_connections_keep_one_owned_window_action_until_exit");
+    passed &= Check(cancelled_done && blocking->requests == 2 && blocking->publications == 0 &&
+        cancelled_state->Snapshot().stage == SearchStage::Idle,
+        "search_delivery_cancel_discards_both_replies_and_never_starts_the_third_volume");
+    const bool released = ticket && queue.Finish(ticket->serial) && !queue.IsActive(ticket->serial);
+    const auto next = queue.TakeNext();
+    passed &= Check(released && next && next->request.tab_id == 2 && !queue.IsActive(ticket->serial) && queue.IsActive(next->serial),
+        "search_delivery_queue_rejects_late_progress_after_completion");
+    return passed;
 }
 
 bool RunSearchIntegrationTests()

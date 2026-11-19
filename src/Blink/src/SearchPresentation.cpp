@@ -43,7 +43,7 @@ namespace blink::app
         std::vector<SearchResult> rows;
         std::optional<std::size_t> restore_selection;
         std::size_t next{};
-        std::uint64_t generation{}, tab_id{}, data_generation{};
+        std::uint64_t generation{}, tab_id{}, data_generation{}, data_revision{};
         SearchStage data_stage{ SearchStage::Closed };
         ItemVisibilityPolicy policy;
         bool queued{}, syncing{}, closed{}, active{}, action_pending{}, selection_changed{}, query_incomplete{}, exact_incomplete{}, context_menu_open{};
@@ -80,7 +80,7 @@ namespace blink::app
             return rows[index];
         }
         bool CanAct() const noexcept
-        { return !closed && active && !syncing && !queued && !action_pending; }
+        { return !closed && active && !syncing && !queued && !action_pending && HasSearchRows(data_stage); }
         std::optional<SearchContextSelection> SelectionContext() const
         {
             if (!CanAct()) { return {}; }
@@ -188,7 +188,7 @@ namespace blink::app
         void Append()
         {
             if (closed || !active) { return; }
-            const auto end = (std::min)(next + 128, rows.size());
+            const auto end = (std::min)(next + (next == 0 ? 32 : 128), rows.size());
             syncing = true;
             for (; next < end; ++next)
             {
@@ -486,17 +486,26 @@ namespace blink::app
         ui->effective_scope.Text(hstring(localization.Format(options.scope_draft ? L"Search.ScopeDraftSummary" : L"Search.ScopeSummary",
             options.effective_scope.empty() ? localization.GetString(L"Search.ScopeNotSet") : options.effective_scope)));
         ui->action_pending = options.action_pending;
-        const bool changed = ui->tab_id != options.tab_id || ui->data_generation != snapshot.generation ||
-            ui->data_stage != snapshot.stage || ui->policy != options.visibility || ui->queued != options.queued;
+        const bool same_query = ui->tab_id == options.tab_id && ui->data_generation == snapshot.generation &&
+            ui->policy == options.visibility && ui->queued == options.queued;
+        const bool changed = !same_query || ui->data_stage != snapshot.stage || ui->data_revision != snapshot.revision;
         if (changed)
         {
-            ui->DismissContextMenu();
-            ++ui->generation; ui->tab_id = options.tab_id; ui->data_generation = snapshot.generation;
-            ui->data_stage = snapshot.stage; ui->policy = options.visibility; ui->queued = options.queued;
             auto data = BuildSearchView(snapshot, options.visibility, options.selection);
-            ui->syncing = true; ui->items.Clear(); ui->syncing = false;
-            ui->rows = std::move(data.rows); ui->restore_selection = data.selected_index;
-            ui->selection_changed = false; ui->next = 0;
+            const bool append_only = same_query && ui->data_stage == SearchStage::Searching &&
+                HasSearchRows(snapshot.stage) && CanAppendSearchRows(ui->rows, data.rows);
+            const bool append_scheduled = append_only && ui->next < ui->rows.size();
+            if (!append_only)
+            {
+                ui->DismissContextMenu();
+                ++ui->generation;
+                ui->syncing = true; ui->items.Clear(); ui->syncing = false;
+                ui->restore_selection = data.selected_index;
+                ui->selection_changed = false; ui->next = 0;
+            }
+            ui->tab_id = options.tab_id; ui->data_generation = snapshot.generation; ui->data_revision = snapshot.revision;
+            ui->data_stage = snapshot.stage; ui->policy = options.visibility; ui->queued = options.queued;
+            ui->rows = std::move(data.rows);
             ui->query_incomplete = data.query_incomplete;
             ui->exact_incomplete = data.query_incomplete && snapshot.query.mode == SearchMode::Exact;
             ui->limit.Visibility(data.limit_reached || data.query_incomplete ? Visibility::Visible : Visibility::Collapsed);
@@ -504,9 +513,9 @@ namespace blink::app
                 (ui->exact_incomplete ? L"Search.ExactLimit" : L"Search.IncompleteLimit") : L"Search.Limit";
             ui->limit.Text(hstring(localization.Format(limit_key,
                 std::to_wstring(ui->exact_incomplete ? kSearchCandidateLimit : snapshot.query.limit))));
-            if (options.selection && !data.selected_index && ui->callbacks.selection_changed)
+            if (!append_only && options.selection && !data.selected_index && ui->callbacks.selection_changed)
             { ui->callbacks.selection_changed({}); }
-            ui->Append();
+            if (!append_scheduled && ui->next < ui->rows.size()) { ui->Append(); }
         }
         const auto key = options.queued ? L"Search.Queued" : snapshot.stage == SearchStage::Searching ? L"Search.Searching" :
             ui->query_incomplete ? (ui->exact_incomplete ? L"Search.ExactPartial" : L"Search.IncompletePartial") :

@@ -2,6 +2,9 @@
 #include "Blink/App/Location.h"
 #include <winrt/Windows.System.Threading.h>
 #include <algorithm>
+#include <atomic>
+#include <future>
+#include <system_error>
 #include <utility>
 
 namespace blink::app
@@ -18,9 +21,24 @@ namespace blink::app
             }
             return roots;
         }
+        void FilterVolume(const SearchQuery& query, const SearchFolderScope* scope, SearchVolumeResult& volume,
+            const SearchCoordinator::ScopeFilter& filter_scope)
+        {
+            if (!scope) { return; }
+            filter_scope(*scope, volume);
+            if (!query.include_subfolders && volume.searched)
+            {
+                std::erase_if(volume.results, [scope](const SearchResult& result) {
+                    return result.hit.parent_identity != scope->identity;
+                });
+            }
+        }
+
         void Collect(SearchSnapshot& snapshot, const SearchCoordinator::ExchangeFunction& exchange,
+            const SearchCoordinator::ExchangeFunction& companion, const bool use_default_transport,
             const SearchCoordinator::DiscoverFunction& discover, const std::shared_ptr<SearchState>& state,
-            const SearchCoordinator::ScopeResolver& resolve_scope, const SearchCoordinator::ScopeFilter& filter_scope)
+            const SearchCoordinator::ScopeResolver& resolve_scope,
+            const SearchCoordinator::ScopeFilter& filter_scope, const SearchCoordinator::ProgressCallback& progress)
         {
             snapshot.error = ValidateSearchQuery(snapshot.query);
             if (snapshot.error != ERROR_SUCCESS) { snapshot.stage = SearchStage::Unavailable; return; }
@@ -38,6 +56,8 @@ namespace blink::app
                 }
                 snapshot.scope_identity = scope.identity;
             }
+            const auto* checked_scope = folder_scope ? &scope : nullptr;
+            std::vector<std::wstring> pending;
             if (snapshot.volumes.empty())
             {
                 std::vector<std::wstring> roots;
@@ -51,36 +71,78 @@ namespace blink::app
                 for (const auto& candidate : roots)
                 {
                     const auto root = SearchDriveRoot(candidate);
-                    if (root.empty() || candidate.size() != 3 ||
-                        std::any_of(snapshot.volumes.begin(), snapshot.volumes.end(),
-                            [&root](const auto& volume) { return volume.root == root; })) { continue; }
-                    SearchVolumeResult volume; volume.root = root;
-                    snapshot.volumes.push_back(std::move(volume));
+                    if (!root.empty() && candidate.size() == 3 &&
+                        std::find(pending.begin(), pending.end(), root) == pending.end()) { pending.push_back(root); }
                 }
             }
-            if (snapshot.volumes.empty())
-            { snapshot.error = ERROR_NOT_READY; snapshot.stage = SearchStage::Unavailable; return; }
-            for (auto& volume : snapshot.volumes)
+            else
             {
-                if (!state->IsCurrent(snapshot.generation)) { return; }
-                if (!volume.searched)
+                for (const auto& volume : snapshot.volumes)
+                { if (!volume.searched) { pending.push_back(volume.root); } }
+                std::erase_if(snapshot.volumes, [](const auto& volume) { return !volume.searched; });
+                for (auto& volume : snapshot.volumes) { FilterVolume(snapshot.query, checked_scope, volume, filter_scope); }
+            }
+            if (pending.empty() && snapshot.volumes.empty())
+            { snapshot.error = ERROR_NOT_READY; snapshot.stage = SearchStage::Unavailable; return; }
+
+            snapshot.volumes.reserve(snapshot.volumes.size() + pending.size());
+            std::atomic_size_t next{};
+            std::mutex completion_mutex;
+            const auto collect_pending = [&](const SearchCoordinator::ExchangeFunction& send)
+            {
+                while (state->IsCurrent(snapshot.generation))
                 {
-                    volume = MapSearchReply(snapshot.query, volume.root, exchange(MakeSearchRequest(snapshot.query, volume.root)));
-                    if (!state->IsCurrent(snapshot.generation)) { return; }
-                    if (volume.searched && !volume.results.empty())
-                    { BindSearchVolumeIdentity(volume, resolve_scope(volume.root)); }
-                }
-                if (folder_scope)
-                {
-                    filter_scope(scope, volume);
-                    if (!snapshot.query.include_subfolders && volume.searched)
+                    const auto index = next.fetch_add(1, std::memory_order_relaxed);
+                    if (index >= pending.size()) { return; }
+                    const auto& root = pending[index];
+                    SearchVolumeResult volume;
+                    try
                     {
-                        std::erase_if(volume.results, [&scope](const SearchResult& result) {
-                            return result.hit.parent_identity != scope.identity;
-                        });
+                        volume = MapSearchReply(snapshot.query, root, send(MakeSearchRequest(snapshot.query, root)));
+                        if (!state->IsCurrent(snapshot.generation)) { return; }
+                        if (volume.searched && !volume.results.empty())
+                        { BindSearchVolumeIdentity(volume, resolve_scope(volume.root)); }
+                        FilterVolume(snapshot.query, checked_scope, volume, filter_scope);
+                    }
+                    catch (const std::bad_alloc&)
+                    { volume = {}; volume.root = root; volume.stage = VolumeIndexStage::Unavailable; volume.error = ERROR_NOT_ENOUGH_MEMORY; }
+                    catch (...)
+                    { volume = {}; volume.root = root; volume.stage = VolumeIndexStage::Unavailable; volume.error = ERROR_GEN_FAILURE; }
+
+                    std::scoped_lock lock(completion_mutex);
+                    if (!state->IsCurrent(snapshot.generation)) { return; }
+                    snapshot.volumes.push_back(std::move(volume));
+                    ++snapshot.revision;
+                    if (progress && snapshot.revision < pending.size())
+                    {
+                        try { progress(snapshot); } catch (...) {}
                     }
                 }
+            };
+
+            // Keep the one window-owned action. At most two independent
+            // connections take pending volumes, and both workers are joined
+            // before completion or cancellation releases that action.
+            std::future<void> secondary;
+            if (pending.size() > 1 && (use_default_transport || companion))
+            {
+                try
+                {
+                    auto second_exchange = use_default_transport ? MakeSearchExchange(state) : companion;
+                    secondary = std::async(std::launch::async, [&, second_exchange = std::move(second_exchange)] {
+                        try { winrt::init_apartment(winrt::apartment_type::multi_threaded); }
+                        catch (const winrt::hresult_error&) { return; }
+                        struct Uninitialize { ~Uninitialize() { winrt::uninit_apartment(); } } apartment;
+                        collect_pending(second_exchange);
+                    });
+                }
+                catch (const std::system_error&) {}
+                catch (const std::bad_alloc&) {}
             }
+            collect_pending(exchange);
+            if (secondary.valid()) { secondary.get(); }
+            if (!state->IsCurrent(snapshot.generation)) { return; }
+
             const auto completed = std::count_if(snapshot.volumes.begin(), snapshot.volumes.end(),
                 [](const auto& volume) { return volume.searched; });
             const auto incomplete = std::any_of(snapshot.volumes.begin(), snapshot.volumes.end(),
@@ -93,7 +155,6 @@ namespace blink::app
                 if (!volume.searched)
                 { snapshot.error = volume.error == ERROR_SUCCESS ? ERROR_INVALID_DATA : volume.error; break; }
             }
-            return;
         }
     }
 
@@ -152,8 +213,10 @@ namespace blink::app
     }
 
     SearchCoordinator::SearchCoordinator(std::shared_ptr<SearchState> state, ExchangeFunction exchange, DiscoverFunction discover,
-        ScopeResolver resolve_scope, ScopeFilter filter_scope)
-        : state_(std::move(state)), exchange_(exchange ? std::move(exchange) : MakeSearchExchange(state_)),
+        ScopeResolver resolve_scope, ScopeFilter filter_scope, ExchangeFunction companion_exchange)
+        : state_(std::move(state)), use_default_transport_(!exchange),
+          exchange_(exchange ? std::move(exchange) : MakeSearchExchange(state_)),
+          companion_exchange_(std::move(companion_exchange)),
           discover_(discover ? std::move(discover) : DiscoverRoots),
           resolve_scope_(resolve_scope ? std::move(resolve_scope) :
               ScopeResolver{ [](const std::wstring& path) { return ResolveSearchFolderScope(path); } }),
@@ -161,7 +224,7 @@ namespace blink::app
               ScopeFilter{ [](const SearchFolderScope& scope, SearchVolumeResult& volume) { FilterSearchFolderResults(scope, volume); } }) {}
     SearchCoordinator::~SearchCoordinator() noexcept { (void)Shutdown(); }
 
-    std::uint64_t SearchCoordinator::Search(SearchQuery query, PublishCallback publish, const bool retry)
+    std::uint64_t SearchCoordinator::Search(SearchQuery query, PublishCallback publish, const bool retry, ProgressCallback progress)
     {
         std::unique_lock lock(mutex_);
         // Cancel invalidates a generation but does not detach a blocked RPC.
@@ -173,16 +236,23 @@ namespace blink::app
         try
         {
             const auto exchange = exchange_;
+            const auto companion = companion_exchange_;
+            const auto use_default_transport = use_default_transport_;
             const auto discover = discover_;
             const auto resolve_scope = resolve_scope_;
             const auto filter_scope = filter_scope_;
             work_ = winrt::Windows::System::Threading::ThreadPool::RunAsync(
-                [state, exchange, discover, resolve_scope, filter_scope, generation, query, publish](auto&&) mutable {
+                [state, exchange, companion, use_default_transport, discover, resolve_scope, filter_scope,
+                    generation, query, publish, progress](auto&&) mutable {
                     if (!state->IsCurrent(generation)) { return; }
                     SearchSnapshot snapshot;
                     snapshot.generation = generation;
                     snapshot.query = std::move(query);
-                    try { snapshot = state->Snapshot(); Collect(snapshot, exchange, discover, state, resolve_scope, filter_scope); }
+                    try
+                    {
+                        snapshot = state->Snapshot();
+                        Collect(snapshot, exchange, companion, use_default_transport, discover, state, resolve_scope, filter_scope, progress);
+                    }
                     catch (const std::bad_alloc&)
                     { snapshot.stage = SearchStage::Unavailable; snapshot.error = ERROR_NOT_ENOUGH_MEMORY; }
                     catch (...)

@@ -45,6 +45,8 @@ namespace blink::app
         void RemoveTab(std::uint64_t id) noexcept
         { std::erase_if(pending_, [id](const auto& request) { return request.tab_id == id; }); }
         void Close() noexcept { closed_ = true; pending_.clear(); }
+        [[nodiscard]] bool IsActive(const std::uint64_t serial) const noexcept
+        { return !closed_ && active_ && active_->serial == serial; }
         [[nodiscard]] bool Busy() const noexcept { return active_.has_value(); }
         [[nodiscard]] bool HasPending() const noexcept { return !pending_.empty(); }
     private:

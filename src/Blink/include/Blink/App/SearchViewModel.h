@@ -14,4 +14,6 @@ namespace blink::app
     };
     [[nodiscard]] SearchViewData BuildSearchView(const SearchSnapshot& snapshot, ItemVisibilityPolicy policy,
         const std::optional<SearchResult>& selection);
+    [[nodiscard]] bool CanAppendSearchRows(const std::vector<SearchResult>& current,
+        const std::vector<SearchResult>& incoming) noexcept;
 }

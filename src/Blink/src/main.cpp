@@ -3808,8 +3808,7 @@ struct App : AppT<App>
             // Match the existing search menu's independent busy contract.
             state.folder.mutation_busy = FileDropBusy();
             state.search_ready = !tab->search_queued && !tab->search_action_pending && tab->search_snapshot &&
-                (tab->search_snapshot->stage == blink::app::SearchStage::Complete ||
-                    tab->search_snapshot->stage == blink::app::SearchStage::Partial);
+                blink::app::HasSearchRows(tab->search_snapshot->stage);
             if (state.search_ready && tab->search_selection)
             {
                 state.has_search_selection = blink::app::IsSearchContextCurrent(
@@ -6188,6 +6187,19 @@ struct App : AppT<App>
         TryStartPendingSearch();
     }
 
+    void SearchRequestProgress(const std::uint64_t serial, const blink::app::TabId id,
+        std::shared_ptr<const blink::app::SearchSnapshot> snapshot)
+    {
+        if (window_style_closed_ || !search_requests_.IsActive(serial)) { return; }
+        auto* tab = FindTab(id);
+        if (!tab || !tab->search_visible || tab->search_queued || !tab->search_snapshot ||
+            tab->search_snapshot->stage != blink::app::SearchStage::Searching ||
+            tab->search_snapshot->generation != snapshot->generation ||
+            tab->search_snapshot->revision >= snapshot->revision || !tab->search_state->IsCurrent(snapshot->generation)) { return; }
+        tab->search_snapshot = std::move(snapshot);
+        if (id == tab_window_state_.ActiveTabId()) { PresentSearchSurface(); UpdateSelectionStatus(); }
+    }
+
     void SearchRequestFinished(const std::uint64_t serial, const blink::app::TabId id,
         std::shared_ptr<const blink::app::SearchSnapshot> snapshot)
     {
@@ -6213,14 +6225,20 @@ struct App : AppT<App>
         if (!tab || !tab->search_visible)
         { (void)search_requests_.Finish(ticket->serial); TryStartPendingSearch(); return; }
         tab->search_queued = false;
-        const auto generation = tab->search_controller->Search(ticket->request.query, {}, ticket->request.retry);
+        const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+        const auto state = tab->search_state; const auto id = tab->id; const auto serial = ticket->serial;
+        const auto generation = tab->search_controller->Search(ticket->request.query, {}, ticket->request.retry,
+            [weak, dispatcher, id, serial](const blink::app::SearchSnapshot& progress) {
+                const auto snapshot = std::make_shared<blink::app::SearchSnapshot>(progress);
+                (void)dispatcher.TryEnqueue([weak, id, serial, snapshot] {
+                    if (auto app = weak.get()) { app->SearchRequestProgress(serial, id, snapshot); }
+                });
+            });
         tab->search_snapshot = std::make_shared<blink::app::SearchSnapshot>(tab->search_state->Snapshot());
         search_work_ = tab->search_controller->CurrentAction();
         if (tab->id == tab_window_state_.ActiveTabId()) { PresentSearchSurface(); }
         if (generation == 0 || !search_work_)
         { SearchRequestFinished(ticket->serial, tab->id, tab->search_snapshot); return; }
-        const auto weak = get_weak(); const auto dispatcher = dispatcher_;
-        const auto state = tab->search_state; const auto id = tab->id; const auto serial = ticket->serial;
         search_work_.Completed([weak, dispatcher, state, id, serial](auto&&, auto) {
             std::shared_ptr<const blink::app::SearchSnapshot> snapshot;
             try { snapshot = std::make_shared<blink::app::SearchSnapshot>(state->Snapshot()); } catch (...) {}

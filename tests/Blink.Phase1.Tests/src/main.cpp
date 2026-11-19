@@ -3651,10 +3651,12 @@ namespace
 
 int wmain(int argc, wchar_t* argv[])
 {
-    if (argc > 1 && std::wstring(argv[1]) == L"--live-index-probe")
+    if ((argc > 1 && std::wstring(argv[1]) == L"--live-index-probe") ||
+        (argc == 3 && std::wstring(argv[1]) == L"--measure-search-delivery"))
     {
         winrt::init_apartment(winrt::apartment_type::multi_threaded);
-        const int result = RunIndexServiceLiveProbe(argc, argv);
+        const int result = std::wstring(argv[1]) == L"--live-index-probe" ?
+            RunIndexServiceLiveProbe(argc, argv) : MeasureSearchDelivery(argv[2]);
         winrt::uninit_apartment();
         return result;
     }
@@ -3696,17 +3698,18 @@ int wmain(int argc, wchar_t* argv[])
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
-            if (suite == L"search-response" || suite == L"search-scope" || suite == L"search-visibility")
+            if (suite == L"search-response" || suite == L"search-scope" || suite == L"search-visibility" || suite == L"search-delivery")
             {
                 winrt::init_apartment(winrt::apartment_type::multi_threaded);
                 const bool passed = suite == L"search-response" ? RunSearchResponseTests() :
-                    suite == L"search-scope" ? RunSearchScopeCacheTests() : RunSearchVisibilityTests();
+                    suite == L"search-scope" ? RunSearchScopeCacheTests() :
+                    suite == L"search-visibility" ? RunSearchVisibilityTests() : RunSearchDeliveryTests();
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
         }
-        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender]"
-            " or --live-index-probe <options>\n";
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|search-delivery|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender]"
+            " or --live-index-probe <options> or --measure-search-delivery <D:\\fixture.txt>\n";
         return 2;
     }
     bool passed = true;
@@ -3736,6 +3739,7 @@ int wmain(int argc, wchar_t* argv[])
     passed &= RunSearchResponseTests();
     passed &= RunSearchScopeCacheTests();
     passed &= RunSearchVisibilityTests();
+    passed &= RunSearchDeliveryTests();
     passed &= RunSearchContextMenuTests();
     passed &= RunFileOperationTests();
     passed &= RunDirectoryOperationTargetTests();

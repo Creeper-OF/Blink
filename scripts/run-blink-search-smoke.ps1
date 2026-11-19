@@ -3,7 +3,7 @@ param(
  [ValidateSet('Debug','Release')][string]$Configuration='Release',
  [string]$TestBinaryPath='',
  [string]$OutputDirectory='',
- [ValidateSet('All','Response','Scope','Visibility','Index','Wire','Serving')][string]$Feature='All',
+ [ValidateSet('All','Response','Scope','Visibility','Delivery','Index','Wire','Serving')][string]$Feature='All',
  [string]$IndexTestBinaryPath=''
 )
 # Headless functional suites only. No build, GUI, service or Clipboard actions.
@@ -25,9 +25,9 @@ $scriptHash=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.To
 $principal=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 $ordinaryUser=-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $runId=[Guid]::NewGuid().ToString('N');$runStart=[DateTime]::UtcNow.ToString('o')
-$expectedPassCounts=@{'search-response'=15;'search-scope'=25;'search-visibility'=56;'search-correctness'=32;'search-visibility-wire'=16;'search-serving'=10}
+$expectedPassCounts=@{'search-response'=15;'search-scope'=25;'search-visibility'=56;'search-delivery'=10;'search-correctness'=32;'search-visibility-wire'=16;'search-serving'=10}
 $indexSuites=@('search-correctness','search-visibility-wire','search-serving')
-$suites=@(switch($Feature){'All'{'search-response';'search-scope';'search-visibility';'search-correctness';'search-visibility-wire';'search-serving'}'Response'{'search-response'}'Scope'{'search-scope'}'Visibility'{'search-visibility'}'Index'{'search-correctness'}'Wire'{'search-visibility-wire'}'Serving'{'search-serving'}})
+$suites=@(switch($Feature){'All'{'search-response';'search-scope';'search-visibility';'search-delivery';'search-correctness';'search-visibility-wire';'search-serving'}'Response'{'search-response'}'Scope'{'search-scope'}'Visibility'{'search-visibility'}'Delivery'{'search-delivery'}'Index'{'search-correctness'}'Wire'{'search-visibility-wire'}'Serving'{'search-serving'}})
 function Write-Json([string]$Path,$Value){[IO.File]::WriteAllText($Path,($Value|ConvertTo-Json -Depth 7),$encoding)}
 function Invoke-Suite([string]$Suite){
  $isIndex=$Suite -in $indexSuites
