@@ -271,7 +271,7 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C06 | 导航常用/固定项右键 > 固定/取消固定 | 固定/取消固定 | Pin / Unpin | 未接入 | 目前Home/桌面/下载/文档是KnownFolder清单，不是可编辑固定集合 | —（此上下文未定义） | Blink | DEFERRED | [NAV] [LOCATION] [F-SYSTEM] | NOT RUN: M-C06-03 |
 | C06 | 导航常用/固定项右键 > 复制路径 | 复制路径 | Copy path | Fluent E71B | 实际目录目标复用文本Clipboard；虚拟ThisPC无路径动作 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 菜单适用性已接，真实写入待验 |
 | C06 | 导航常用/固定项右键 > 属性 | 属性 | Properties | Fluent E946 | 后台捕获实际目录身份，调用既有进程外properties | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 捕获/菜单已接，原生属性页待验 |
-| C06 | 导航常用/固定项右键 > 更多系统选项 | 更多系统选项 | More system options | 未接入 | 选中项host没有连接到常用位置ListView | —（此上下文未定义） | Shell | DEFERRED | [NAV] [LOCATION] [F-SYSTEM] | NOT RUN: M-C06-06 |
+| C06 | 导航常用项右键 > 更多系统选项 | 压缩与更多系统选项… | Compression and more system options… | Fluent E712 | 常用项指向有包含目录的真实文件夹，窗口可处理目录操作 | TargetContextSystemOptions | Blink → Shell | IMPLEMENTED_VERIFIED | [TARGET] [HOST] | M-C06-06，实机主文件夹打开并取消原生菜单 |
 
 ## C07 导航普通目录
 
@@ -286,9 +286,9 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C07 | 导航普通目录右键 > 新建文件夹 | 新建文件夹 | New folder | Fluent E8F4 | 捕获所点目录真实ID，原名称框与queue，CtrlShiftN限导航焦点，事件更新已加载树 | TargetContextNewFolder | Blink | IMPLEMENTED_VERIFIED | [NAV-MUTATION] | 同79f915…独立NewFolder7 PASS/0 FAIL、exit0；自有目录取消/创建/重名Retry/树自动刷新/旧peer已验；Quick及盘根真实写入待验 |
 | C07 | 导航普通目录右键 > 重命名 | 重命名 | Rename | Fluent E8AC | 捕获目录与父ID，原whole-name/dialog/queue及其它Tab relocation，F2限导航，Retry保持实际目标 | TargetContextRename | Blink | IMPLEMENTED_VERIFIED | [NAV-MUTATION] | 同79f915…独立Rename8 PASS/0 FAIL、exit0；自有目录F2取消/身份字节/标签跟随/重名Retry/未提交草稿关窗已验 |
 | C07 | 导航普通目录右键 > 删除 | 删除 | Delete | Fluent E74D | 普通Delete走回收站；ShiftDelete走默认Cancel确认，原queue/Retry及事件树刷新 | TargetContextDelete | Blink | PARTIAL | [NAV-MUTATION] | 同79f915…独立Delete5 PASS/0 FAIL/0 SKIP、exit0，#01/#08/#09/#13/#14实际覆盖适用性、默认取消、确认后精确永久删除/树自动刷新及收尾；普通回收站UI待验 |
-| C07 | 导航普通目录右键 > 属性 | 属性 | Properties | Fluent E946 | worker捕获点中目录的真实entry/parent，再走进程外properties-only | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 10项原生捕获及菜单enabled已验；真实属性页NOT RUN |
+| C07 | 导航普通目录右键 > 属性 | 属性 | Properties | Fluent E946 | 后台读取点中目录和父目录的真实身份，调用系统属性页 | TargetContextProperties | 系统跳转 | IMPLEMENTED_VERIFIED | [TARGET] | 本机自有子目录的真实属性页和正常关闭通过 |
 | C07 | 导航普通目录右键 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B | 捕获点中目录Location，复用原后台文本剪贴板发布 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | enabled已验；本轮实际剪贴板写入NOT RUN |
-| C07 | 导航普通目录右键 > 更多系统选项 | 更多系统选项 | More system options | 未接入 | 无树节点host请求构建 | —（此上下文未定义） | Shell | DEFERRED | [NAV] [F-CMD] [F-SYSTEM] | NOT RUN: M-C07-11 |
+| C07 | 导航普通目录右键 > 更多系统选项 | 压缩与更多系统选项… | Compression and more system options… | Fluent E712 | 使用点中目录和其包含目录的真实身份。粘贴目标是点中的文件夹 | TargetContextSystemOptions | Blink → Shell | IMPLEMENTED_VERIFIED | [TARGET] [HOST] | M-C07-11，实机取消、目录打开、改名取消及 Bandizip ZIP 通过 |
 
 ## C08 此电脑驱动器条目
 

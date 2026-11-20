@@ -3381,10 +3381,10 @@ struct App : AppT<App>
         if (target_menu_) { try { target_menu_.Hide(); } catch (...) {} }
     }
 
-    bool IsTargetMenuCurrent(const TargetMenuContext& context) const
+    bool IsTargetContextCurrent(const TargetMenuContext& context) const
     {
         if (window_style_closed_ || IsOperationDialogOpen() || !ActiveTab() ||
-            context.epoch != target_menu_epoch_ || context.tab_id != tab_window_state_.ActiveTabId() ||
+            context.tab_id != tab_window_state_.ActiveTabId() ||
             context.view_generation != folder_view_generation_) { return false; }
         if (context.node_id)
         {
@@ -3402,11 +3402,17 @@ struct App : AppT<App>
             ui->this_pc_rows[*context.row_index].target == context.target;
     }
 
-    void CancelTargetPropertiesWork() noexcept
+    bool IsTargetMenuCurrent(const TargetMenuContext& context) const
     {
-        ++target_properties_request_;
-        if (target_properties_action_) { try { target_properties_action_.Cancel(); } catch (...) {} }
-        target_properties_action_ = nullptr;
+        return context.epoch == target_menu_epoch_ && IsTargetContextCurrent(context);
+    }
+
+    void CancelTargetShellWork() noexcept
+    {
+        ++target_shell_request_;
+        target_shell_context_.reset();
+        if (target_shell_action_) { try { target_shell_action_.Cancel(); } catch (...) {} }
+        target_shell_action_ = nullptr;
     }
 
     enum class DirectoryTargetAction { NewFolder, Rename, Delete };
@@ -3526,51 +3532,112 @@ struct App : AppT<App>
         PasteClipboardFile(blink::app::FileDropOrigin(blink::app::CaptureFileOperationOrigin(*ActiveTab()), target));
     }
 
-    void ShowTargetProperties(const blink::app::Location& target)
+    void ExecuteTargetShellCommand(const TargetMenuContext& context, const blink::app::ShellMenuCommand command)
     {
-        if (!target.IsFolder() || window_style_closed_ || IsOperationDialogOpen()) { return; }
-        CancelTargetPropertiesWork();
-        const auto request_id = target_properties_request_;
-        const auto weak = get_weak(); const auto dispatcher = dispatcher_;
-        HWND owner{}; check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(&owner));
-        const auto locale = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"zh-CN" : L"en-US";
+        using blink::app::ShellMenuCommand;
+        switch (command)
+        {
+        case ShellMenuCommand::Open: NavigateToLocation(context.target); break;
+        case ShellMenuCommand::Cut:
+        case ShellMenuCommand::Copy:
+            CopyTargetDirectory(context.target, command == ShellMenuCommand::Cut ?
+                blink::app::ClipboardTransferIntent::Move : blink::app::ClipboardTransferIntent::Copy);
+            break;
+        case ShellMenuCommand::PasteParent: PasteTargetDirectory(context.target); break;
+        case ShellMenuCommand::Rename: BeginTargetDirectoryOperation(context, DirectoryTargetAction::Rename); break;
+        case ShellMenuCommand::Delete:
+        case ShellMenuCommand::PermanentDelete:
+            BeginTargetDirectoryOperation(context, DirectoryTargetAction::Delete, command == ShellMenuCommand::PermanentDelete ?
+                blink::app::DeleteMode::Permanent : blink::app::DeleteMode::Recycle);
+            break;
+        default: break;
+        }
+    }
+
+    void ShowTargetShellMenu(const TargetMenuContext& context, const FrameworkElement& anchor = nullptr,
+        const Windows::Foundation::Point position = {})
+    {
+        const bool properties = !anchor;
+        if (!context.target.IsFolder() || !IsTargetMenuCurrent(context) ||
+            (!properties && !CanTransferTargetDirectory())) { return; }
+        DismissSearchContextMenu();
         try
         {
-            target_properties_action_ = Windows::System::Threading::ThreadPool::RunAsync(
-                [weak, dispatcher, owner, locale, request_id, path = target.FolderPath()](auto&& action) {
+            HWND owner{};
+            check_hresult(window_.as<::IWindowNative>()->get_WindowHandle(&owner));
+            POINT screen{};
+            if (anchor)
+            {
+                const auto client = anchor.TransformToVisual(nullptr).TransformPoint(position);
+                const auto scale = anchor.XamlRoot().RasterizationScale();
+                screen = { static_cast<LONG>(std::lround(client.X * scale)),
+                    static_cast<LONG>(std::lround(client.Y * scale)) };
+                if (!ClientToScreen(owner, &screen)) { winrt::throw_last_error(); }
+            }
+            const auto locale = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? L"zh-CN" : L"en-US";
+            const bool extended = !properties && (GetKeyState(VK_SHIFT) & 0x8000);
+            const auto request_id = target_shell_request_;
+            target_shell_context_ = context;
+            const auto weak = get_weak(); const auto dispatcher = dispatcher_;
+            target_shell_action_ = Windows::System::Threading::ThreadPool::RunAsync(
+                [weak, dispatcher, owner, locale, screen, properties, extended, request_id,
+                    path = context.target.FolderPath()](auto&& action) {
                     blink::app::ShellMenuRequest request;
                     DWORD error{};
                     try { error = blink::app::CaptureDirectoryShellMenuRequest(path, request); }
                     catch (const std::bad_alloc&) { error = ERROR_NOT_ENOUGH_MEMORY; }
                     catch (...) { error = ERROR_GEN_FAILURE; }
                     if (action.Status() == Windows::Foundation::AsyncStatus::Canceled) { return; }
-                    request.owner = owner; request.locale = locale; request.verb = L"properties";
-                    (void)dispatcher.TryEnqueue([weak, dispatcher, request_id, error, request = std::move(request)]() mutable {
+                    request.owner = owner;
+                    request.locale = locale;
+                    request.position = screen;
+                    request.extended = extended;
+                    request.directory_target = !properties;
+                    if (properties) { request.verb = L"properties"; }
+                    (void)dispatcher.TryEnqueue([weak, dispatcher, request_id, properties, error, request = std::move(request)]() mutable {
                         const auto app = weak.get();
-                        if (!app || app->window_style_closed_ || request_id != app->target_properties_request_) { return; }
-                        const auto failure = [weak](const HRESULT hr) {
-                            if (const auto live = weak.get(); live && !live->window_style_closed_)
-                            {
-                                live->ReportShellMenuError(hr, true);
-                            }
-                        };
-                        if (error) { failure(HRESULT_FROM_WIN32(error)); return; }
+                        if (!app || request_id != app->target_shell_request_ || !app->target_shell_context_) { return; }
+                        app->target_shell_action_ = nullptr;
+                        if (!app->IsTargetContextCurrent(*app->target_shell_context_))
+                        { app->target_shell_context_.reset(); return; }
+                        if (error)
+                        {
+                            app->target_shell_context_.reset();
+                            app->ReportShellMenuError(HRESULT_FROM_WIN32(error), properties);
+                            return;
+                        }
                         try
                         {
                             (void)app->shell_context_menu_.Show(std::move(request),
-                                [weak, dispatcher, failure](std::uint64_t generation, blink::app::ShellMenuResult result) {
-                                    (void)dispatcher.TryEnqueue([weak, generation, result, failure] {
-                                        if (const auto live = weak.get(); live && !live->window_style_closed_ &&
-                                            live->shell_context_menu_.IsCurrent(generation) &&
-                                            result.kind == blink::app::ShellMenuResultKind::Error) { failure(result.error); }
+                                [weak, dispatcher, properties](std::uint64_t generation, blink::app::ShellMenuResult result) {
+                                    (void)dispatcher.TryEnqueue([weak, properties, generation, result] {
+                                        const auto live = weak.get();
+                                        if (!live || !live->shell_context_menu_.IsCurrent(generation)) { return; }
+                                        auto target = std::exchange(live->target_shell_context_, std::nullopt);
+                                        if (!target || !live->IsTargetContextCurrent(*target)) { return; }
+                                        using blink::app::ShellMenuResultKind;
+                                        if (result.kind == ShellMenuResultKind::BlinkCommand)
+                                        { live->ExecuteTargetShellCommand(*target, result.command); }
+                                        else if (result.kind == ShellMenuResultKind::Error)
+                                        { live->ReportShellMenuError(result.error, properties); }
+                                        else if (!properties && result.kind == ShellMenuResultKind::NativeCommand)
+                                        { live->status_.Text(hstring(live->localization_.GetString(L"Search.NativeDispatched"))); }
                                     });
                                 });
                         }
-                        catch (...) { failure(winrt::to_hresult()); }
+                        catch (...)
+                        {
+                            app->target_shell_context_.reset();
+                            app->ReportShellMenuError(winrt::to_hresult(), properties);
+                        }
                     });
                 });
         }
-        catch (...) { ReportShellMenuError(winrt::to_hresult(), true); }
+        catch (...)
+        {
+            target_shell_context_.reset();
+            ReportShellMenuError(winrt::to_hresult(), properties);
+        }
     }
 
     void ShowTargetContextMenu(TargetMenuContext context, const FrameworkElement& anchor,
@@ -3657,7 +3724,14 @@ struct App : AppT<App>
             add(L"Search.MenuCopyPath", L"TargetContextCopyPath", L"\xE71B",
                 [target = context.target](App& app) { app.PublishPathText(target.FolderPath()); }, !FileDropBusy());
             add(L"Command.Properties", L"TargetContextProperties", L"\xE946",
-                [target = context.target](App& app) { app.ShowTargetProperties(target); });
+                [context](App& app) { app.ShowTargetShellMenu(context); });
+            if (!context.row_index && parent && parent->IsFolder())
+            {
+                add(L"Search.MenuSystemOptions", L"TargetContextSystemOptions", L"\xE712",
+                    [context, weak_anchor = winrt::make_weak(anchor), position](App& app) {
+                        if (const auto live = weak_anchor.get()) { app.ShowTargetShellMenu(context, live, position); }
+                    }, CanTransferTargetDirectory());
+            }
         }
         const auto epoch = context.epoch;
         target_menu_.Closed([weak, epoch](auto&&, auto&&) {
@@ -4193,7 +4267,6 @@ struct App : AppT<App>
                     static_cast<LONG>(std::lround(client.Y * scale)) };
                 if (!ClientToScreen(request.owner, &request.position)) { winrt::throw_last_error(); }
             }
-            CancelTargetPropertiesWork();
             DismissSearchContextMenu();
             if (folder_menu_) { folder_menu_.Hide(); }
             folder_system_menu_context_ = context;
@@ -6292,6 +6365,7 @@ struct App : AppT<App>
 
     void DismissSearchContextMenu() noexcept
     {
+        CancelTargetShellWork();
         folder_system_menu_context_.reset();
         ++search_menu_generation_;
         search_menu_selection_.reset();
@@ -6357,7 +6431,6 @@ struct App : AppT<App>
     void ShowSearchSystemContextMenu(blink::app::SearchContextSelection selection,
         Windows::Foundation::Point point = {}, const bool properties = false)
     {
-        CancelTargetPropertiesWork();
         auto* tab = ActiveTab();
         if (!blink::app::IsSearchContextCurrent(selection, tab, window_style_closed_) || tab->search_action_pending) { return; }
         DismissSearchContextMenu();
@@ -7455,6 +7528,7 @@ struct App : AppT<App>
         }
         if (tab_id == tab_window_state_.ActiveTabId())
         {
+            if (target_shell_context_) { DismissSearchContextMenu(); }
             // A newer committed-navigation request invalidates any in-flight
             // ancestor reveal, but does not discard shared expansion state.
             CancelTreeRevealWork();
@@ -8000,6 +8074,7 @@ struct App : AppT<App>
         // Any tab/source presentation invalidates a delayed focus restore,
         // including A -> B -> A switches that reuse the same view control.
         ++folder_view_generation_;
+        if (target_shell_context_) { DismissSearchContextMenu(); }
         CancelFolderSystemMenu();
         const auto* tab = ActiveTab();
         auto* tab_ui = ActiveTabUi();
@@ -8490,7 +8565,6 @@ struct App : AppT<App>
     {
         window_style_closed_ = true;
         DismissTargetContextMenu();
-        CancelTargetPropertiesWork();
         CancelAddressChildrenWork();
         CancelAddressSuggestionWork();
         address_bar_.Close();
@@ -9636,8 +9710,9 @@ struct App : AppT<App>
     std::unordered_map<blink::app::TabId, std::unique_ptr<TabUiState>> tab_ui_states_;
     MenuFlyout target_menu_{ nullptr };
     std::uint64_t target_menu_epoch_{};
-    std::uint64_t target_properties_request_{};
-    Windows::Foundation::IAsyncAction target_properties_action_{ nullptr };
+    std::uint64_t target_shell_request_{};
+    Windows::Foundation::IAsyncAction target_shell_action_{ nullptr };
+    std::optional<TargetMenuContext> target_shell_context_;
     std::optional<DirectoryTreeRefreshRequest> directory_tree_changes_;
     std::vector<blink::app::Location> navigation_tree_refresh_queue_;
     blink::app::NavigationTreeNodeId navigation_tree_refresh_active_{};

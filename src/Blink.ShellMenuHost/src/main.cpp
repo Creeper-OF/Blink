@@ -110,7 +110,7 @@ namespace
         HWND owner{};
         HANDLE cancel{};
         bool chinese{ PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE };
-        bool extended{}, probe{}, properties{};
+        bool extended{}, probe{}, properties{}, directory_target{};
     };
     bool UnsignedArgument(const std::wstring& text, std::uintptr_t& value) noexcept
     {
@@ -137,6 +137,7 @@ namespace
             const std::wstring_view key(arguments[index]);
             if (key == L"--probe") { options.probe = true; continue; }
             if (key == L"--extended") { options.extended = true; continue; }
+            if (key == L"--directory-target") { options.directory_target = true; continue; }
             if (++index >= count) { return E_INVALIDARG; }
             const std::wstring value(arguments[index]);
             if (key == L"--path") { options.path = value; }
@@ -404,10 +405,18 @@ namespace
             if (!GetMenuItemInfoW(menu, static_cast<UINT>(index), TRUE, &item)) { continue; }
             if (Equal(CanonicalVerb(context, item.wID), L"paste"))
             {
-                MENUITEMINFOW replacement{}; replacement.cbSize = sizeof(replacement); replacement.fMask = MIIM_STRING | MIIM_STATE;
-                replacement.dwTypeData = const_cast<LPWSTR>(options.chinese ? L"粘贴到所在目录" : L"Paste into containing folder");
-                replacement.fState = IsClipboardFormatAvailable(CF_HDROP) ? MFS_ENABLED : MFS_DISABLED;
-                SetMenuItemInfoW(menu, static_cast<UINT>(index), TRUE, &replacement);
+                const bool can_paste = IsClipboardFormatAvailable(CF_HDROP) != FALSE;
+                if (options.directory_target)
+                {
+                    if (!can_paste) { EnableMenuItem(menu, static_cast<UINT>(index), MF_BYPOSITION | MF_GRAYED); }
+                }
+                else
+                {
+                    MENUITEMINFOW replacement{}; replacement.cbSize = sizeof(replacement); replacement.fMask = MIIM_STRING | MIIM_STATE;
+                    replacement.dwTypeData = const_cast<LPWSTR>(options.chinese ? L"粘贴到所在目录" : L"Paste into containing folder");
+                    replacement.fState = can_paste ? MFS_ENABLED : MFS_DISABLED;
+                    SetMenuItemInfoW(menu, static_cast<UINT>(index), TRUE, &replacement);
+                }
             }
             if (item.hSubMenu) { PrepareItems(item.hSubMenu, context, options, depth + 1); }
         }
@@ -534,7 +543,7 @@ namespace
         UINT selected{};
         if (!options.properties)
         {
-            if (FAILED(error = AddBlinkItems(popup.value, options))) { return fail(error); }
+            if (!options.directory_target && FAILED(error = AddBlinkItems(popup.value, options))) { return fail(error); }
             if (options.owner && IsWindow(options.owner)) { SetForegroundWindow(options.owner); }
             SetForegroundWindow(context.window);
             SetLastError(ERROR_SUCCESS);

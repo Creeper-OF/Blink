@@ -202,7 +202,7 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 | EXP-MENU-04 | 真空白背景菜单：Paste/NewFolder/Refresh/View/Sort，不读旧 item ticket，不显示不适用文件动作 | H-FOLDER-UI #09/#11–14 | NOT RUN |
 | EXP-MENU-05 | 搜索文件/目录：路径/身份重验、Open/Locate/Copy/Cut、父目录 Paste、Properties/F2/Delete，旧 query/Tab peer 失效 | T-SEARCH/T-SHELL；H-SEARCH-UI；当前单选 | NOT RUN |
 | EXP-MENU-06 | 左树已固定/快速访问：固定/取消固定及对应菜单 | 当前 known-folder 快速入口不等于可编辑 pin 模型；尚无完整菜单 | NOT RUN（DEFERRED） |
-| EXP-MENU-07 | 左树普通可展开目录：选择/展开、Lazy Load、焦点/菜单作用目标、单一滚动 | G06a已有独立目标菜单；G06c-NEW7项/RENAME8项/DELETE5项完整通过，精确目录目标、取消回焦、重名Retry、ShiftDelete确认及树自动更新已验 | 部分PASS（自有导航目录所列新建/改名/永久删除）；普通回收站、剪贴板/属性及完整矩阵待验 |
+| EXP-MENU-07 | 左树普通可展开目录：选择、展开、作用目标与系统菜单 | G06c 已有独立新建、改名和永久删除分项。后续实机核对了原生菜单目标、取消后的原列表选中项、从原生命令回到 Blink 改名，以及 Bandizip ZIP 内容 | 所列分项通过。普通回收站、实际剪贴板及完整矩阵待验 |
 | EXP-MENU-08 | ThisPC 本地盘/可移动盘/光驱/网络映射盘：打开、属性、适用设备命令 | 当前 fixed/removable 有限入口；无完整设备菜单，设备操作不得由目录案例泛化 | NOT RUN（PARTIAL） |
 | EXP-MENU-09 | ThisPC 背景/其他虚拟页：不出现普通路径写入动作，按真实能力显示 | B-VIEW #12 仅验证 ThisPC 顶部三视图/Show，地址仍为虚拟 ThisPC；C-UI #13另实测顶部变更/Sort禁用，虚拟Location保持；完整背景菜单仍待验 | 部分PASS：G01 ThisPC View/Show及C-UI顶部能力禁用；完整背景菜单/其他虚拟页NOT RUN |
 | EXP-MENU-10 | 回收站根/内容菜单与恢复/清空 | 浏览页未实现；现存 recycle/restore fixture 只证明后端删除 | NOT RUN（DEFERRED） |

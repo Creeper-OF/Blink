@@ -52,6 +52,7 @@ namespace blink::app
             L" --locale " + Quote(request.locale);
         if (request.extended) { result += L" --extended"; }
         if (!request.verb.empty()) { result += L" --verb " + Quote(request.verb); }
+        if (request.directory_target) { result += L" --directory-target"; }
         for (const auto& entry : request.additional_entries)
         {
             result += L" --additional-path " + Quote(entry.full_path) +

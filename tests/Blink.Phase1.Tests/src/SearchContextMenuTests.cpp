@@ -122,6 +122,16 @@ namespace
         passed &= Check(std::find(arguments.begin(), arguments.end(), L"--additional-path") == arguments.end() &&
             std::find(arguments.begin(), arguments.end(), L"--additional-identity") == arguments.end(),
             "shell_menu_single_selection_command_line_keeps_original_cli");
+        const bool item_default = std::find(arguments.begin(), arguments.end(), L"--directory-target") == arguments.end();
+        request.verb.clear();
+        request.directory_target = true;
+        arguments = Arguments(BuildShellMenuCommandLine(host, request, cancel));
+        passed &= Check(item_default && std::count(arguments.begin(), arguments.end(), L"--directory-target") == 1 &&
+            Argument(arguments, L"--path") == request.entry.full_path &&
+            Argument(arguments, L"--identity") == request.entry.identity.ToString() &&
+            Argument(arguments, L"--parent-identity") == request.parent_identity.ToString() &&
+            std::find(arguments.begin(), arguments.end(), L"--verb") == arguments.end(),
+            "shell_menu_flags_sidebar_directory_without_changing_existing_item_or_properties_mode");
         ShellMenuResult result;
         passed &= Check(ParseShellMenuReply("BLINK_SHELL_MENU_V1 cancel 0 00000000", result) &&
             result.kind == ShellMenuResultKind::Cancelled && result.command == ShellMenuCommand::None && result.error == S_OK,

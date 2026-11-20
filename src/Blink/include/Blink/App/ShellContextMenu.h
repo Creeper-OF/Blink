@@ -31,6 +31,8 @@ namespace blink::app
         // Extra selected siblings. The first entry and old field order stay
         // compatible with the search-result caller.
         std::vector<blink::core::FileEntry> additional_entries;
+        // A sidebar folder is the paste destination itself.
+        bool directory_target{};
     };
     struct ShellMenuResult
     {
