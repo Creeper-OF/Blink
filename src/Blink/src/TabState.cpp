@@ -656,6 +656,16 @@ namespace blink::app
         return view_mode_;
     }
 
+    void TabState::SetDetailsColumns(const DetailsColumns columns) noexcept
+    {
+        details_columns_ = columns;
+    }
+
+    DetailsColumns TabState::GetDetailsColumns() const noexcept
+    {
+        return details_columns_;
+    }
+
     std::optional<NavigationRequest> TabState::Begin(
         std::optional<NavigationRequest> request)
     {

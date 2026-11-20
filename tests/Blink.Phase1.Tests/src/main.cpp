@@ -1079,6 +1079,7 @@ namespace
 
     [[nodiscard]] bool RunFolderViewStateTests()
     {
+        using blink::app::DetailsColumns;
         using blink::app::FolderViewMode;
         using blink::app::Location;
         using blink::app::TabState;
@@ -1090,6 +1091,8 @@ namespace
                 tab.Snapshot().view_mode == FolderViewMode::Details &&
                 tab.PresentationSnapshot().view_mode == FolderViewMode::Details,
             "view_defaults_to_details_in_state_and_snapshots");
+        passed &= Check(tab.GetDetailsColumns() == DetailsColumns{ true, true, true },
+            "details_columns_default_to_all_optional_columns_visible");
 
         const std::wstring path_a = L"C:\\phase1-view\\A";
         const std::wstring path_b = L"C:\\phase1-view\\中文目录_B";
@@ -1137,6 +1140,14 @@ namespace
                 left.pending_token == right.pending_token &&
                 left.pending_location == right.pending_location;
         };
+        tab.SetDetailsColumns({ false, true, false });
+        const auto after_columns = tab.Snapshot();
+        passed &= Check(tab.GetDetailsColumns() == DetailsColumns{ false, true, false } &&
+                after_columns.selection == before.selection && after_columns.sort == before.sort &&
+                after_columns.view_mode == before.view_mode &&
+                same_navigation(after_columns.navigation, before.navigation),
+            "details_column_preferences_keep_the_current_page_sort_selection_and_history");
+
         const auto same_entry = [](const auto& left, const auto& right) {
             return left.name == right.name && left.full_path == right.full_path &&
                 left.extension == right.extension && left.identity == right.identity &&
@@ -1202,12 +1213,18 @@ namespace
                 tab.GetViewMode() == FolderViewMode::Grid &&
                 tab.PresentationSnapshot().committed_location.IsThisPC(),
             "view_mode_survives_rejected_navigation");
+        passed &= Check(tab.GetDetailsColumns() == DetailsColumns{ false, true, false },
+            "details_columns_survive_view_changes_and_navigation");
+        tab.SetDetailsColumns({});
+        passed &= Check(tab.GetDetailsColumns() == DetailsColumns{ true, true, true },
+            "details_columns_can_be_restored_to_defaults");
 
         TabWindowState window;
         const auto tab_a = window.ActiveTabId();
         const auto tab_b = window.CreateTab();
         window.Find(tab_a)->state->SetViewMode(FolderViewMode::Grid);
         window.Find(tab_b)->state->SetViewMode(FolderViewMode::List);
+        window.Find(tab_a)->state->SetDetailsColumns({ false, false, false });
         passed &= Check(window.ActivateTab(tab_b) &&
                 window.Find(tab_b)->state->PresentationSnapshot().view_mode == FolderViewMode::List &&
                 window.ActivateTab(tab_a) &&
@@ -1218,6 +1235,10 @@ namespace
         passed &= Check(window.Find(tab_c)->state->GetViewMode() == FolderViewMode::Details &&
                 window.Find(tab_a)->state->GetViewMode() == FolderViewMode::Grid,
             "new_tab_details_default_does_not_inherit_other_tab_view");
+        passed &= Check(window.Find(tab_a)->state->GetDetailsColumns() == DetailsColumns{ false, false, false } &&
+                window.Find(tab_b)->state->GetDetailsColumns() == DetailsColumns{} &&
+                window.Find(tab_c)->state->GetDetailsColumns() == DetailsColumns{},
+            "details_columns_are_independent_between_tabs");
         return passed;
     }
 
@@ -3753,16 +3774,18 @@ int wmain(int argc, wchar_t* argv[])
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
-            if (suite == L"tab-window")
+            if (suite == L"tab-window" || suite == L"folder-view")
             {
                 winrt::init_apartment(winrt::apartment_type::multi_threaded);
-                const bool passed = RunTabWindowStateTests();
-                std::cout << "tab_window_tests=" << (passed ? "PASS" : "FAIL") << "\n";
+                const bool folder_view = suite == L"folder-view";
+                const bool passed = folder_view ? RunFolderViewStateTests() : RunTabWindowStateTests();
+                std::cout << (folder_view ? "folder_view_tests=" : "tab_window_tests=")
+                    << (passed ? "PASS" : "FAIL") << "\n";
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
         }
-        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|search-delivery|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender|shell-context-menu|item-properties|tab-window]"
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|search-delivery|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender|shell-context-menu|item-properties|tab-window|folder-view]"
             " or --live-index-probe <options> or --measure-search-delivery <D:\\fixture.txt>\n";
         return 2;
     }

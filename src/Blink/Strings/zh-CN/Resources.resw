@@ -34,6 +34,7 @@
   <data name="Column.Type" xml:space="preserve"><value>类型</value><comment>文件夹列表类型列。</comment></data>
   <data name="Column.Size" xml:space="preserve"><value>大小</value><comment>文件夹列表大小列。</comment></data>
   <data name="Column.Modified" xml:space="preserve"><value>修改时间</value><comment>文件夹列表修改时间列。</comment></data>
+  <data name="Column.RestoreDefaults" xml:space="preserve"><value>恢复默认列</value></data>
   <data name="Status.Selected" xml:space="preserve"><value>已选择 {0} 项</value><comment>已选择的项目数。</comment></data>
   <data name="Status.IndexNotConnected" xml:space="preserve"><value>索引：未连接</value><comment>IndexService 尚未连接。</comment></data>
   <data name="Status.Loading" xml:space="preserve"><value>正在加载  {0}</value><comment>正在枚举本地文件夹。</comment></data>

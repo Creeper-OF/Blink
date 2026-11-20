@@ -83,6 +83,15 @@ namespace blink::app
         Grid,
     };
 
+    struct DetailsColumns
+    {
+        bool show_type{ true };
+        bool show_size{ true };
+        bool show_modified{ true };
+
+        friend bool operator==(const DetailsColumns&, const DetailsColumns&) = default;
+    };
+
     struct TabSnapshot
     {
         NavigationSnapshot navigation;
@@ -199,6 +208,8 @@ namespace blink::app
         // replace the committed page or change identity-based selection.
         void SetViewMode(FolderViewMode mode) noexcept;
         [[nodiscard]] FolderViewMode GetViewMode() const noexcept;
+        void SetDetailsColumns(DetailsColumns columns) noexcept;
+        [[nodiscard]] DetailsColumns GetDetailsColumns() const noexcept;
 
         // Refilters the committed snapshot without I/O/history changes.
         // Selection and logical focus cannot refer to excluded rows.
@@ -227,6 +238,7 @@ namespace blink::app
         std::optional<RowIdentity> focused_item_;
         SortDescriptor sort_;
         FolderViewMode view_mode_{ FolderViewMode::Details };
+        DetailsColumns details_columns_;
         ItemVisibilityPolicy visibility_policy_;
         std::size_t visible_item_count_{};
     };

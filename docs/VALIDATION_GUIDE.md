@@ -44,6 +44,17 @@ Apps 和 Shift+F10 使用当前列表焦点行。有其他盘符选中时，菜�
 
 普通目录标签显示文件夹名，盘根显示盘符。原生回归覆盖关闭范围、失效目标、相邻标签选择及关闭后的取消。窗口脚本用自有 PID/HWND 的菜单键和 Shift+F10 验证后台标签、复制后的视图与排序以及最后一页关闭。候选版可用 `-Binary` 指定。实物鼠标单独验证。复制标签的参考见[微软 Windows 11 24H2 Dev 记录](https://blogs.windows.com/windows-insider/2024/07/26/announcing-windows-11-insider-preview-build-26120-1330-dev-channel/)。
 
+## 详情视图选列
+
+```powershell
+& .\x64\Release\Blink.Phase1.Tests.exe --suite folder-view
+.\scripts\run-blink-object-menu-smoke.ps1 -ColumnsOnly
+```
+
+普通目录的详情列头菜单可以显示或隐藏类型、大小和修改时间，也可恢复默认四列。名称列固定可见。用右键或聚焦列头后按菜单键或 Shift+F10 打开。列选择按标签保存在当前会话中。普通新标签从默认列开始，复制标签继承源标签的列设置。
+
+窗口脚本使用自有目录和定向键盘输入，核对可见表头和实际文件单元格、释放的列宽、原有排序和选中项、导航、视图切换和标签隔离。候选版可用 `-Binary` 指定。鼠标实物操作单独验证。
+
 ## Windows 属性与 Blink 详情
 
 ```powershell

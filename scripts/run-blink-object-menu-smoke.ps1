@@ -2,18 +2,23 @@
 param(
  [ValidateSet('Debug','Release')][string]$Configuration='Release',
  [string]$Binary='',
+ [string]$OutputDirectory='',
  [ValidateRange(5,90)][int]$StepTimeoutSeconds=30,
  [Parameter(ParameterSetName='Objects')][switch]$KeyboardOnly,
- [Parameter(ParameterSetName='Tabs')][switch]$TabMenuOnly
+ [Parameter(ParameterSetName='Tabs')][switch]$TabMenuOnly,
+ [Parameter(ParameterSetName='Columns')][switch]$ColumnsOnly
 )
 # G06a: new owned PID/HWND, real UIA and scoped keyboard input, GUID-only fixtures.
 # Does not build, use global input/Clipboard, edit services or force any process exit.
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $project=Split-Path -Parent $PSScriptRoot
-$integration=Join-Path $project $(if($TabMenuOnly){'.build\tab-context-menu\integration'}else{'.build\explorer-object-menu\integration'})
+$topic=if($ColumnsOnly){'details-columns'}elseif($TabMenuOnly){'tab-context-menu'}else{'explorer-object-menu'}
+if(-not $OutputDirectory){$OutputDirectory='.build\'+$topic+'\integration'}
+if(-not [IO.Path]::IsPathRooted($OutputDirectory)){$OutputDirectory=Join-Path $project $OutputDirectory}
+$integration=[IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $integration -Force|Out-Null
-$reportPath=Join-Path $integration $(if($TabMenuOnly){'ui-tab-menu-report.json'}else{'ui-object-menu-report.json'})
+$reportPath=Join-Path $integration $(if($ColumnsOnly){'ui-details-columns-report.json'}elseif($TabMenuOnly){'ui-tab-menu-report.json'}else{'ui-object-menu-report.json'})
 if(-not $Binary){$Binary=Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe')}
 if(-not [IO.Path]::IsPathRooted($Binary)){$Binary=Join-Path $project $Binary}
 $Binary=[IO.Path]::GetFullPath($Binary)
@@ -73,7 +78,7 @@ function Quick-Home{return Named-Container $homeLabels ([Windows.Automation.Cont
 function Capture-State([string]$Why){
  $state=[ordered]@{why=$Why;utc=[DateTime]::UtcNow.ToString('o');address=$null;rows=@();selected=@();peers=@();navigation_tree=@();tabs=@();focus=$null;desktop=$null;errors=@()}
  try{$state.address=Address-Text;$state.rows=@(Row-Names);$state.selected=@(Selected-Names)}catch{$state.errors+=@($_.Exception.Message)}
- foreach($id in @('NavigationPane','NavigationTree','NavigationQuickList','NavigationContextMenu','LocationContextMenu','TargetContextOpen','TargetContextNewTab','TargetContextExpandCollapse','TargetContextCopyPath','TargetContextProperties','FolderEntries','WindowTabs','TabContextMenu')){try{$peer=Owned-Id $id;if($peer){$state.peers+=@(Peer-Evidence $peer)}}catch{$state.errors+=@($id+': '+$_.Exception.Message)}}
+ foreach($id in @('NavigationPane','NavigationTree','NavigationQuickList','NavigationContextMenu','LocationContextMenu','TargetContextOpen','TargetContextNewTab','TargetContextExpandCollapse','TargetContextCopyPath','TargetContextProperties','FolderEntries','WindowTabs','TabContextMenu','DetailsColumnMenu','DetailsHeaderName','DetailsHeaderType','DetailsHeaderSize','DetailsHeaderModified')){try{$peer=Owned-Id $id;if($peer){$state.peers+=@(Peer-Evidence $peer)}}catch{$state.errors+=@($id+': '+$_.Exception.Message)}}
  try{
   $pane=By-Id 'NavigationPane';if($pane){$items=$pane.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::TreeItem));for($i=0;$i -lt [Math]::Min(40,$items.Count);$i++){try{$peer=$items[$i];if($peer.Current.ProcessId -ne $process.Id){continue};$pattern=$null;$expandState='NO PATTERN';if($peer.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$pattern)){$expandState=$pattern.Current.ExpandCollapseState.ToString()};$state.navigation_tree+=@([pscustomobject]@{ordinal=$i;name=$peer.Current.Name;is_offscreen=$peer.Current.IsOffscreen;expand_collapse=$expandState})}catch{$state.errors+=@('TreeItem '+$i+': '+$_.Exception.Message)}}}
  }catch{$state.errors+=@('Navigation tree snapshot: '+$_.Exception.Message)}
@@ -114,7 +119,7 @@ function Assert-FolderMenu([string]$MenuId,[string]$Target){
  foreach($id in @('TargetContextCut','TargetContextCopy','TargetContextRename','TargetContextDelete')){$p=Owned-Id $id;if($root){if($p){throw ('Root exposed inapplicable directory command '+$id)}}elseif(-not(Visible $p) -or -not $p.Current.IsEnabled){throw ('Expected ordinary directory target command '+$id)}}
  $paste=Owned-Id 'TargetContextPaste';if(-not(Visible $paste)){throw 'Independent target Paste missing'}
 }
-function Dismiss-Menu{Key 27;Wait-Ui 'context menu dismissed' {-not(Owned-Id 'NavigationContextMenu') -and -not(Owned-Id 'LocationContextMenu') -and -not(Owned-Id 'FolderContextMenu') -and -not(Owned-Id 'TabContextMenu')}}
+function Dismiss-Menu{Key 27;Wait-Ui 'context menu dismissed' {-not(Owned-Id 'NavigationContextMenu') -and -not(Owned-Id 'LocationContextMenu') -and -not(Owned-Id 'FolderContextMenu') -and -not(Owned-Id 'TabContextMenu') -and -not(Owned-Id 'DetailsColumnMenu')}}
 function Select-Marker{$p=@(Rows|Where-Object{$_.Current.Name -ceq $markerName});if($p.Count -ne 1){throw 'Owned marker row required'};$p[0].GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select();Wait-Ui 'owned marker remains exactly selected' {(Same-Names @(Selected-Names) @($markerName))}}
 function Fixture-Unchanged{foreach($path in $allowedFiles.Keys){if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw ('Owned payload missing '+$path)};$bytes=[Text.UTF8Encoding]::new($false).GetBytes([string]$allowedFiles[$path]);if([Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -cne [Convert]::ToBase64String($bytes) -or [BlinkObjectMenuUiNative]::Identity($path) -cne $fileIdentities[$path]){throw ('Owned payload bytes or identity changed '+$path)}}}
 function Ownership-Failures{
@@ -231,6 +236,121 @@ function Check-TabMenus {
   if(-not $process.WaitForExit(10000) -or $process.ExitCode -ne 0){throw 'Final tab did not close the owned window normally'}
  }
 }
+
+function Test-DetailsLayout([string]$Marker, [string[]]$VisibleColumns) {
+ $row=Rows|Where-Object{$_.Current.Name -ceq $Marker}|Select-Object -First 1
+ if(-not $row){return $false}
+ foreach($field in @('Name','Type','Size','Modified')){
+  $expected=$field -cin $VisibleColumns
+  if([bool](By-Id ('DetailsHeader'+$field)) -ne $expected -or
+      [bool](Find-In $row ('DetailsCell'+$field)) -ne $expected){return $false}
+ }
+ return $true
+}
+
+function Open-DetailsColumnMenu([string]$Field='Name', [bool]$ShiftF10=$false) {
+ $header=By-Id ('DetailsHeader'+$Field)
+ Focus-Peer $header ('column header '+$Field)
+ if($ShiftF10){Key 0x79 2}else{Key 0x5D}
+ Wait-Ui 'details-column context menu and checkbox peer' {$null -ne (Owned-Id 'DetailsColumnMenu') -and $null -ne (Owned-Id 'ColumnMenuName')}
+ $report.menu_evidence+=@([pscustomobject]@{step=$script:currentStep;source=(Peer-Evidence $header);
+  menu=(Peer-Evidence (Owned-Id 'DetailsColumnMenu'));items=@('Name','Type','Size','Modified','RestoreDefaults'|ForEach-Object{Peer-Evidence (Owned-Id ('ColumnMenu'+$_))})})
+ Save-Report
+}
+
+function Choose-DetailsColumn([string]$Field) {
+ Focus-Peer (Owned-Id ('ColumnMenu'+$Field)) ('column menu option '+$Field)
+ Key 13
+ Wait-Ui 'column menu dismissed after changing a setting' {-not(Owned-Id 'DetailsColumnMenu')}
+}
+
+function Check-DetailsColumns {
+ $all=@('Name','Type','Size','Modified')
+ $sourceName=[IO.Path]::GetFileName($source)
+ Check 'C01 default details shows four columns and the menu keeps Name fixed' {
+  Navigate $source
+  Wait-Ui 'four real headers and cells' {Test-DetailsLayout $markerName $all}
+  Open-DetailsColumnMenu
+  foreach($field in $all){
+   $item=Owned-Id ('ColumnMenu'+$field)
+   if(-not $item -or $item.Current.IsEnabled -ne ($field -ne 'Name') -or
+     $item.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Current.ToggleState.ToString() -ne 'On'){
+    throw ('Unexpected default column toggle '+$field)
+   }
+  }
+  if((Owned-Id 'ColumnMenuRestoreDefaults').Current.IsEnabled){throw 'Restore Defaults should be disabled with all columns visible'}
+  Dismiss-Menu
+ }
+ Check 'C02 hiding the sorted Type column reflows the list and retains sort and selection' {
+  Act (By-Id 'DetailsHeaderType')
+  Wait-Ui 'actual Type sort is committed' {(By-Id 'CommandSort').Current.HelpText -in @(Resource-Labels 'Column.Type')}
+  Select-Marker
+  $nameWidth=(By-Id 'DetailsHeaderName').Current.BoundingRectangle.Width
+  Open-DetailsColumnMenu 'Type' $true
+  Choose-DetailsColumn 'Type'
+  Wait-Ui 'Type header and cells are gone and Name can use the space' {
+   (Test-DetailsLayout $markerName @('Name','Size','Modified')) -and
+   (By-Id 'DetailsHeaderName').Current.BoundingRectangle.Width -gt $nameWidth+60
+  }
+  if(-not(Same-Names @(Selected-Names) @($markerName)) -or
+   (Address-Text) -ine $source -or (By-Id 'CommandSort').Current.HelpText -notin @(Resource-Labels 'Column.Type')){
+   throw 'Hiding a display column changed the selection, folder or sort'
+  }
+  Wait-Ui 'keyboard focus returns to a visible details header' {
+   $focused=[Windows.Automation.AutomationElement]::FocusedElement
+   (Visible $focused) -and $focused.Current.ProcessId -eq $process.Id -and
+     $focused.Current.AutomationId -cin @('DetailsHeaderName','DetailsHeaderSize','DetailsHeaderModified')
+  }
+ }
+ Check 'C03 Size and Modified can also be hidden, and settings survive directory navigation' {
+  Open-DetailsColumnMenu
+  $type=(Owned-Id 'ColumnMenuType').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+  if($type.Current.ToggleState.ToString() -ne 'Off'){throw 'Hidden Type column is still shown as checked'}
+  Choose-DetailsColumn 'Size'
+  Wait-Ui 'Size column has been hidden independently' {Test-DetailsLayout $markerName @('Name','Modified')}
+  Open-DetailsColumnMenu
+  Choose-DetailsColumn 'Modified'
+  Wait-Ui 'name-only layout shows an actual file' {Test-DetailsLayout $markerName @('Name')}
+  Navigate $child
+  Wait-Ui 'layout follows the tab to its new folder' {Test-DetailsLayout $childMarkerName @('Name')}
+  Navigate $source
+  Wait-Ui 'original listing keeps the same columns' {Test-DetailsLayout $markerName @('Name')}
+  Open-DetailsColumnMenu
+  Choose-DetailsColumn 'Modified'
+  Wait-Ui 'Modified can be shown again independently' {Test-DetailsLayout $markerName @('Name','Modified')}
+  Open-DetailsColumnMenu
+  Choose-DetailsColumn 'Modified'
+  Wait-Ui 'the previous name-only layout can be restored' {Test-DetailsLayout $markerName @('Name')}
+ }
+ Check 'C04 a separate tab starts with default columns and switching back restores its own layout' {
+  Add-TestTab $child
+  Wait-Ui 'new tab has default columns' {Test-DetailsLayout $childMarkerName $all}
+  Select-Tab ([pscustomobject]@{ordinal=0;name=$sourceName}) $source
+  Wait-Ui 'source tab has its own column layout' {Test-DetailsLayout $markerName @('Name')}
+  Act (By-Id 'FolderViewMode')
+  Wait-Ui 'grid choice is available' {(Owned-Id 'TopViewGrid').Current.IsEnabled}
+  Focus-Peer (Owned-Id 'TopViewGrid') 'Grid option'
+  Key 13
+  Wait-Ui 'grid mode has no details headings' {(Entries).Current.ClassName -eq 'GridView' -and -not(By-Id 'DetailsHeaderName')}
+  Act (By-Id 'FolderViewMode')
+  Wait-Ui 'details choice is available' {(Owned-Id 'TopViewDetails').Current.IsEnabled}
+  Focus-Peer (Owned-Id 'TopViewDetails') 'Details option'
+  Key 13
+  Wait-Ui 'returning to Details retains chosen columns' {Test-DetailsLayout $markerName @('Name')}
+ }
+ Check 'C05 a duplicate inherits the columns and can restore defaults independently' {
+  Open-TabMenu 0 Apps
+  Act (Owned-Id 'TabContextDuplicate')
+  Wait-Ui 'duplicate has source name and layout' {@(Tabs).Count -eq 3 -and (Selected-Tab).ordinal -eq 2 -and
+   (Address-Text) -ieq $source -and (Test-DetailsLayout $markerName @('Name'))}
+  Open-DetailsColumnMenu
+  Act (Owned-Id 'ColumnMenuRestoreDefaults')
+  Wait-Ui 'restoring columns restores all four headers and cells' {Test-DetailsLayout $markerName $all}
+  Select-Tab ([pscustomobject]@{ordinal=0;name=$sourceName}) $source
+  Wait-Ui 'restoring duplicate did not change the original tab' {Test-DetailsLayout $markerName @('Name')}
+  Fixture-Unchanged
+ }
+}
 Save-Report
 try{
  New-Item -ItemType Directory -Path $compilerTemp -Force|Out-Null;$env:TEMP=$compilerTemp;$env:TMP=$compilerTemp;$tempChanged=$true
@@ -330,7 +450,9 @@ public static class BlinkObjectMenuUiNative {
  $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;if(-not $process.Start()){throw 'Owned launch failed'};$ownedHandle=$process.Handle;$report.process_id=$process.Id;Save-Report
  Wait-Ui 'new owned WinUI window' {$null -ne (Window)};[BlinkObjectMenuUiNative]::OwnedWindow=$process.MainWindowHandle;$report.window_dpi=[BlinkObjectMenuUiNative]::GetDpiForWindow($process.MainWindowHandle)
  Wait-Ui 'real initial ThisPC locations' {Is-ThisPc};$initialTab=Selected-Tab;$initialAddress=Address-Text
- if($TabMenuOnly){
+ if($ColumnsOnly){
+  Check-DetailsColumns
+ }elseif($TabMenuOnly){
   Check-TabMenus
  }else{
  Check '01 drive menu follows keyboard focus with no selection or a different selection' {

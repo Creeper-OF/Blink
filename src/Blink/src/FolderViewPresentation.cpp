@@ -1,30 +1,48 @@
 #include "Blink/App/FolderViewPresentation.h"
 
 #include <winrt/Microsoft.UI.Xaml.Markup.h>
+#include <string>
 
 namespace blink::app
 {
     namespace
     {
-        constexpr const wchar_t* kDetailsTemplate = LR"XAML(
+        std::wstring DetailsTemplate(const DetailsColumns columns)
+        {
+            std::wstring xaml = LR"XAML(
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
   <Grid Height="32" Opacity="{Binding [CutOpacity]}" AutomationProperties.Name="{Binding [Name]}">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="*" />
-      <ColumnDefinition Width="140" />
-      <ColumnDefinition Width="110" />
-      <ColumnDefinition Width="180" />
+)XAML";
+            for (std::size_t index = 1; index < DetailsColumnDefinitions.size(); ++index)
+            {
+                const auto& column = DetailsColumnDefinitions[index];
+                xaml += L"      <ColumnDefinition Width=\"" +
+                    std::to_wstring(column.IsVisible(columns) ? column.width : 0) + L"\" />\n";
+            }
+            xaml += LR"XAML(
     </Grid.ColumnDefinitions>
     <Grid Grid.Column="0" VerticalAlignment="Center">
       <Grid.ColumnDefinitions><ColumnDefinition Width="28" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
       <FontIcon Glyph="{Binding [Icon]}" FontSize="16" />
-      <TextBlock Grid.Column="1" Text="{Binding [Name]}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      <TextBlock Grid.Column="1" AutomationProperties.AutomationId="DetailsCellName" Text="{Binding [Name]}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
     </Grid>
-    <TextBlock Grid.Column="1" Text="{Binding [Type]}" VerticalAlignment="Center" Margin="8,0,4,0" TextTrimming="CharacterEllipsis" />
-    <TextBlock Grid.Column="2" Text="{Binding [Size]}" VerticalAlignment="Center" Margin="8,0,4,0" />
-    <TextBlock Grid.Column="3" Text="{Binding [Modified]}" VerticalAlignment="Center" Margin="8,0,4,0" />
-  </Grid>
-</DataTemplate>)XAML";
+)XAML";
+            for (std::size_t index = 1; index < DetailsColumnDefinitions.size(); ++index)
+            {
+                const auto& column = DetailsColumnDefinitions[index];
+                if (column.IsVisible(columns))
+                {
+                    xaml += L"    <TextBlock Grid.Column=\"" + std::to_wstring(index) +
+                        L"\" AutomationProperties.AutomationId=\"DetailsCell" + column.property +
+                        L"\" Text=\"{Binding [" + column.property + L"]}\" VerticalAlignment=\"Center\""
+                        L" Margin=\"8,0,4,0\" TextTrimming=\"CharacterEllipsis\" />\n";
+                }
+            }
+            xaml += L"  </Grid>\n</DataTemplate>";
+            return xaml;
+        }
 
         constexpr const wchar_t* kListTemplate = LR"XAML(
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
@@ -79,30 +97,55 @@ namespace blink::app
 
     void FolderViewPresentation::Configure(
         const winrt::Microsoft::UI::Xaml::Controls::ListViewBase& control,
-        const FolderViewMode mode)
+        const FolderViewMode mode, const DetailsColumns columns)
     {
         using namespace winrt::Microsoft::UI::Xaml;
         using namespace winrt::Microsoft::UI::Xaml::Controls;
         using winrt::Microsoft::UI::Xaml::Markup::XamlReader;
-        const std::size_t index = mode == FolderViewMode::Grid ? 2 :
-            mode == FolderViewMode::List ? 1 : 0;
-        if (!templates_[index])
+        const std::size_t index = mode == FolderViewMode::Grid ? 1 : 0;
+        if (!panels_[index])
         {
-            const auto* text = index == 2 ? kGridTemplate :
-                index == 1 ? kListTemplate : kDetailsTemplate;
-            auto item_template = XamlReader::Load(text).as<DataTemplate>();
             auto items_panel = XamlReader::Load(
-                index == 2 ? kWrapPanel : kStackPanel).as<ItemsPanelTemplate>();
+                index == 1 ? kWrapPanel : kStackPanel).as<ItemsPanelTemplate>();
             auto container_style = XamlReader::Load(
-                index == 2 ? kGridContainerStyle : kListContainerStyle).as<Style>();
-            templates_[index] = std::move(item_template);
+                index == 1 ? kGridContainerStyle : kListContainerStyle).as<Style>();
             panels_[index] = std::move(items_panel);
             container_styles_[index] = std::move(container_style);
         }
         control.ItemsPanel(panels_[index]);
-        control.ItemTemplate(templates_[index]);
         control.ItemContainerStyle(container_styles_[index]);
+        if (mode == FolderViewMode::Details)
+        {
+            SetDetailsColumns(control, columns);
+        }
+        else
+        {
+            auto& item_template = compact_templates_[index];
+            if (!item_template)
+            {
+                item_template = XamlReader::Load(index == 1 ? kGridTemplate : kListTemplate).as<DataTemplate>();
+            }
+            control.ItemTemplate(item_template);
+        }
         ScrollViewer::SetHorizontalScrollMode(control, ScrollMode::Disabled);
         ScrollViewer::SetHorizontalScrollBarVisibility(control, ScrollBarVisibility::Disabled);
+    }
+
+    void FolderViewPresentation::SetDetailsColumns(
+        const winrt::Microsoft::UI::Xaml::Controls::ListViewBase& control,
+        const DetailsColumns columns)
+    {
+        using namespace winrt::Microsoft::UI::Xaml;
+        const auto index = (columns.show_type ? 1u : 0u) |
+            (columns.show_size ? 2u : 0u) | (columns.show_modified ? 4u : 0u);
+        auto& item_template = details_templates_[index];
+        if (!item_template)
+        {
+            item_template = Markup::XamlReader::Load(winrt::hstring(DetailsTemplate(columns))).as<DataTemplate>();
+        }
+        if (control.ItemTemplate() != item_template)
+        {
+            control.ItemTemplate(item_template);
+        }
     }
 }

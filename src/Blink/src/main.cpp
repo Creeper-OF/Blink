@@ -1161,19 +1161,7 @@ struct App : AppT<App>
         details_header_ = Grid();
         auto details_header = details_header_;
         details_header.Height(32);
-        ConfigureDetailsColumns(details_header);
-        auto name_header = MakeSortHeader(L"Column.Name", blink::app::SortField::Name);
-        auto type_header = MakeSortHeader(L"Column.Type", blink::app::SortField::Type);
-        auto size_header = MakeSortHeader(L"Column.Size", blink::app::SortField::Size);
-        auto modified_header = MakeSortHeader(L"Column.Modified", blink::app::SortField::Modified);
-        details_header.Children().Append(name_header);
-        details_header.Children().Append(type_header);
-        details_header.Children().Append(size_header);
-        details_header.Children().Append(modified_header);
-        Grid::SetColumn(name_header, 0);
-        Grid::SetColumn(type_header, 1);
-        Grid::SetColumn(size_header, 2);
-        Grid::SetColumn(modified_header, 3);
+        BuildDetailsHeader(details_header);
         Grid::SetRow(details_header, 1);
         content_grid_.Children().Append(details_header);
 
@@ -1259,6 +1247,7 @@ struct App : AppT<App>
     {
         CancelTargetOperationWork();
         DismissTabContextMenu();
+        DismissDetailsColumnMenu();
         DismissCommandBarMenus();
         address_bar_.HideMenus();
         if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
@@ -4727,7 +4716,8 @@ struct App : AppT<App>
         // Prepare the new layout before touching the current control. A
         // template failure must not discard the user's existing presentation.
         auto replacement = CreateFolderViewControl(mode);
-        folder_view_presentation_.Configure(replacement, mode);
+        folder_view_presentation_.Configure(replacement, mode, ActiveState().GetDetailsColumns());
+        DismissDetailsColumnMenu();
         selection_sync_suppressed_ = true;
         const auto previous = entries_;
         previous.SelectedItems().Clear();
@@ -4933,12 +4923,126 @@ struct App : AppT<App>
         grid.ColumnDefinitions().Append(column);
     }
 
-    static void ConfigureDetailsColumns(const Grid& grid)
+    void BuildDetailsHeader(const Grid& header)
     {
-        AddGridColumn(grid, 1, GridUnitType::Star);
-        AddGridColumn(grid, 140, GridUnitType::Pixel);
-        AddGridColumn(grid, 110, GridUnitType::Pixel);
-        AddGridColumn(grid, 180, GridUnitType::Pixel);
+        for (std::uint32_t index = 0; index < blink::app::DetailsColumnDefinitions.size(); ++index)
+        {
+            const auto& column = blink::app::DetailsColumnDefinitions[index];
+            AddGridColumn(header, index == 0 ? 1 : column.width,
+                index == 0 ? GridUnitType::Star : GridUnitType::Pixel);
+            auto button = MakeSortHeader(column.label, column.field);
+            Automation::AutomationProperties::SetAutomationId(button,
+                hstring(std::wstring(L"DetailsHeader") + column.property));
+            Grid::SetColumn(button, index);
+            header.Children().Append(button);
+        }
+
+        header.ContextRequested([this](auto&&, const ContextRequestedEventArgs& args) {
+            Windows::Foundation::Point position{ 8, static_cast<float>(details_header_.ActualHeight()) };
+            Windows::Foundation::Point pointer{};
+            if (args.TryGetPosition(details_header_, pointer)) { position = pointer; }
+            if (ShowDetailsColumnMenu(details_header_, position)) { args.Handled(true); }
+        });
+        header.ContextCanceled([this](auto&&, auto&&) { DismissDetailsColumnMenu(); });
+        const auto show_keyboard_menu = [this] {
+            auto anchor = FocusManager::GetFocusedElement(details_header_.XamlRoot()).try_as<FrameworkElement>();
+            if (!anchor) { anchor = details_header_; }
+            (void)ShowDetailsColumnMenu(anchor, { 8, static_cast<float>(anchor.ActualHeight()) });
+        };
+        AddAccelerator(header, Windows::System::VirtualKey::Application,
+            Windows::System::VirtualKeyModifiers::None, show_keyboard_menu, true);
+        AddAccelerator(header, Windows::System::VirtualKey::F10,
+            Windows::System::VirtualKeyModifiers::Shift, show_keyboard_menu, true);
+    }
+
+    void SyncDetailsColumns(const blink::app::DetailsColumns columns)
+    {
+        if (!entries_ || ui_probe_mode_ != UiProbeMode::None ||
+            rendered_view_mode_ != blink::app::FolderViewMode::Details) { return; }
+        folder_view_presentation_.SetDetailsColumns(entries_, columns);
+        for (std::uint32_t index = 1; index < blink::app::DetailsColumnDefinitions.size(); ++index)
+        {
+            const auto& column = blink::app::DetailsColumnDefinitions[index];
+            const bool visible = column.IsVisible(columns);
+            const auto visibility = visible ? Visibility::Visible : Visibility::Collapsed;
+            const auto header = details_header_.Children().GetAt(index);
+            if (header.Visibility() != visibility)
+            {
+                details_header_.ColumnDefinitions().GetAt(index).Width(
+                    { visible ? static_cast<double>(column.width) : 0, GridUnitType::Pixel });
+                header.Visibility(visibility);
+            }
+        }
+    }
+
+    bool CanConfigureDetailsColumns() const
+    {
+        const auto* tab = ActiveTab();
+        return !window_style_closed_ && !IsOperationDialogOpen() && tab && !tab->search_visible &&
+            entries_ && ui_probe_mode_ == UiProbeMode::None && rendered_view_mode_ == blink::app::FolderViewMode::Details &&
+            tab->state->PresentationSnapshot().committed_location.IsFolder();
+    }
+
+    void DismissDetailsColumnMenu() noexcept
+    {
+        if (auto menu = std::exchange(details_column_menu_, nullptr))
+        {
+            try { menu.Hide(); } catch (...) {}
+        }
+    }
+
+    bool ShowDetailsColumnMenu(const FrameworkElement& anchor, const Windows::Foundation::Point position)
+    {
+        using blink::app::DetailsColumns;
+        if (!CanConfigureDetailsColumns()) { return false; }
+        DismissDetailsColumnMenu();
+        details_column_menu_ = MenuFlyout();
+        blink::app::ApplyContextMenuAppearance(details_column_menu_, anchor, L"DetailsColumnMenu");
+
+        const auto columns = ActiveState().GetDetailsColumns();
+        const auto choose = [weak = get_weak(), tab_id = tab_window_state_.ActiveTabId()](bool DetailsColumns::* shown) {
+            if (const auto app = weak.get(); app && app->tab_window_state_.ActiveTabId() == tab_id &&
+                app->CanConfigureDetailsColumns())
+            {
+                auto updated = DetailsColumns{};
+                if (shown)
+                {
+                    updated = app->ActiveState().GetDetailsColumns();
+                    updated.*shown = !(updated.*shown);
+                }
+                app->DismissDetailsColumnMenu();
+                app->SyncDetailsColumns(updated);
+                app->ActiveState().SetDetailsColumns(updated);
+            }
+        };
+        for (const auto& column : blink::app::DetailsColumnDefinitions)
+        {
+            ToggleMenuFlyoutItem item;
+            item.Text(hstring(localization_.GetString(column.label)));
+            item.IsChecked(column.IsVisible(columns));
+            item.IsEnabled(column.shown != nullptr);
+            blink::app::StyleContextMenuItem(item);
+            Automation::AutomationProperties::SetAutomationId(item,
+                hstring(std::wstring(L"ColumnMenu") + column.property));
+            if (column.shown)
+            {
+                item.Click([choose, shown = column.shown](auto&&, auto&&) { choose(shown); });
+            }
+            details_column_menu_.Items().Append(item);
+        }
+        details_column_menu_.Items().Append(MenuFlyoutSeparator());
+        MenuFlyoutItem reset;
+        reset.Text(hstring(localization_.GetString(L"Column.RestoreDefaults")));
+        reset.IsEnabled(columns != DetailsColumns{});
+        blink::app::StyleContextMenuItem(reset);
+        Automation::AutomationProperties::SetAutomationId(reset, L"ColumnMenuRestoreDefaults");
+        reset.Click([choose](auto&&, auto&&) { choose(nullptr); });
+        details_column_menu_.Items().Append(reset);
+
+        auto options = Microsoft::UI::Xaml::Controls::Primitives::FlyoutShowOptions();
+        options.Position(position);
+        details_column_menu_.ShowAt(anchor, options);
+        return true;
     }
 
     Button MakeSortHeader(
@@ -8116,6 +8220,7 @@ struct App : AppT<App>
         {
             ActiveState().SetViewMode(source->GetViewMode());
             ActiveState().SetSortDescriptor(source->GetSortDescriptor());
+            ActiveState().SetDetailsColumns(source->GetDetailsColumns());
         }
         SyncTabViewItems();
         PresentActiveTab();
@@ -8191,6 +8296,7 @@ struct App : AppT<App>
                     winrt::single_threaded_observable_vector<IInspectable>();
             }
             selection_sync_suppressed_ = true;
+            SyncDetailsColumns(tab->state->GetDetailsColumns());
             entries_.ItemsSource(tab_ui->row_items_source);
             entries_.SelectedItems().Clear();
             if (tab_ui->showing_committed_folder)
@@ -8627,6 +8733,7 @@ struct App : AppT<App>
         try
         {
             DismissTabContextMenu();
+            DismissDetailsColumnMenu();
             DismissTargetContextMenu();
             // Cancel a modal name edit before its focus host is destroyed.
             folder_name_dialog_.Close();
@@ -8886,7 +8993,7 @@ struct App : AppT<App>
     {
         if (ui_probe_mode_ == UiProbeMode::None)
         {
-            folder_view_presentation_.Configure(entries_, ActiveState().GetViewMode());
+            folder_view_presentation_.Configure(entries_, ActiveState().GetViewMode(), ActiveState().GetDetailsColumns());
             return;
         }
         constexpr const wchar_t* kFolderItemsPanel = LR"XAML(
@@ -9707,6 +9814,7 @@ struct App : AppT<App>
     TitleBar title_bar_{ nullptr };
     MenuFlyout folder_menu_{ nullptr };
     MenuFlyout tab_context_menu_{ nullptr };
+    MenuFlyout details_column_menu_{ nullptr };
     std::optional<FolderMenuContext> folder_system_menu_context_;
     bool window_style_closed_{};
     blink::app::FileOperationCoordinator file_operations_;

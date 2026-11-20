@@ -37,6 +37,7 @@
   <data name="Column.Type" xml:space="preserve"><value>Type</value><comment>Folder list type column.</comment></data>
   <data name="Column.Size" xml:space="preserve"><value>Size</value><comment>Folder list size column.</comment></data>
   <data name="Column.Modified" xml:space="preserve"><value>Modified</value><comment>Folder list modified-time column.</comment></data>
+  <data name="Column.RestoreDefaults" xml:space="preserve"><value>Restore default columns</value></data>
   <data name="Status.Selected" xml:space="preserve"><value>{0} selected</value><comment>Selected item count.</comment></data>
   <data name="Status.IndexNotConnected" xml:space="preserve"><value>Index: Not connected</value><comment>IndexService is not connected.</comment></data>
   <data name="Status.Loading" xml:space="preserve"><value>Loading  {0}</value><comment>Local folder enumeration is running.</comment></data>
