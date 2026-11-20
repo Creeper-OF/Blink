@@ -138,7 +138,7 @@ flowchart TD
 | 区域 | 阶段A事实及G01/G02/G03a/G05a更新 | 与目标任务书的差距 |
 | --- | --- | --- |
 | 标题栏 | WinUI TitleBar、Tab同排、系统caption和Mica已接入；空白拖动有历史证据；`IMPLEMENTED_NEEDS_MANUAL`用于完整窗口矩阵 | Snap、多显示器移入移出、双击/resize、激活态、高对比度、全部DPI未完成本次统一验证 |
-| 标签 | 新建、切换、关闭、当前标题与后台取消有模型/回归；`PARTIAL` | 未见模型级重排API或相应同步、标签右键命令、拖出新窗口；Tab默认行为不能直接当完整功能交付。未实现持久滚动位置/完整会话恢复 |
+| 标签 | 支持新建、切换、目录标题和标签菜单。复制继承当前位置、视图和排序。关闭命令使用 `TabWindowState` 的标签顺序和取消流程 | `PARTIAL`。标签拖动重排、拖出新窗口、持久滚动位置和完整会话恢复待开发 |
 | 地址/导航 | G03a编辑/面包屑、祖先/overflow、键盘/历史及编辑中关闭等D-UI子项`IMPLEMENTED_VERIFIED`；同镜像地址20/命令18/查看15通过，关闭A/B/C/D均exit0；完整G03仍`PARTIAL` | 逐级下级菜单和目录自动完成已在G03b/G03c接入；实际鼠标/完整错误分支、UNC、真实IME及全部环境仍须专项，不将路径模型测试当网络兼容 |
 | 搜索 | 当前整盘/全盘默认范围、指定多盘/目录/递归、四名称模式、明确有效范围；已有19项历史GUI；`IMPLEMENTED_VERIFIED`限这些流程 | 顶部placeholder是固定资源，不随当前目录格式化；无预览、内容全文或拼音承诺；同卷Busy/首屏量化仍待做 |
 | 顶部命令组织 | G02标准CommandBar已接入：8个主按钮、New/Sort/View菜单、原生More与7个次级动作、动态overflow；24条实际覆盖入口已限定验证，另4个未点击排序叶`IMPLEMENTED_NEEDS_MANUAL`；双配置原生及18项GUI通过 | Share、快捷方式/ShellNew、分组及未来面板未接入；不放空按钮。640宽原生溢出、上下文及More键盘已有本轮结果；Sort Name/Modified/Type/Ascending和其余环境分支仍待验证 |

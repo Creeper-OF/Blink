@@ -207,7 +207,7 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 | EXP-MENU-09 | ThisPC 背景/其他虚拟页：不出现普通路径写入动作，按真实能力显示 | B-VIEW #12 仅验证 ThisPC 顶部三视图/Show，地址仍为虚拟 ThisPC；C-UI #13另实测顶部变更/Sort禁用，虚拟Location保持；完整背景菜单仍待验 | 部分PASS：G01 ThisPC View/Show及C-UI顶部能力禁用；完整背景菜单/其他虚拟页NOT RUN |
 | EXP-MENU-10 | 回收站根/内容菜单与恢复/清空 | 浏览页未实现；现存 recycle/restore fixture 只证明后端删除 | NOT RUN（DEFERRED） |
 | EXP-MENU-11 | UNC/SMB/远端：权限、断线、菜单/凭据/传输语义 | 本地变更限制见 EXP-OBJ-07；Provider 原型不能作为生产证据 | NOT RUN（PARTIAL/DEFERRED） |
-| EXP-MENU-12 | Tab/地址面包屑/编辑框/搜索框/列头特殊菜单；文本焦点不误操作文件 | Release D-UI已验G03a祖先左键/原生overflow/F4历史；不等于面包屑专属右键或下级目录菜单。Tab/列头完整菜单未实现，原生TextBox菜单另验 | PARTIAL；仅上述Release动作PASS，完整特殊菜单NOT RUN |
+| EXP-MENU-12 | 标签页、地址、编辑框、搜索框与列头的菜单 | 标签页菜单通过键盘实测复制、关闭指定页、关闭其他、关闭右侧及正常关窗。原有 D-UI 核对过祖先跳转、原生折叠和 F4 地址历史 | PARTIAL。上述动作 PASS，标签实物鼠标、地址及列头宿主和原生文本菜单组合待验 |
 | EXP-OP-01 | 同/跨卷文件、目录和混合 Copy/Move；核对字节、ADS、时间/属性、同卷文件 ID、目标独有项与源留存 | T-COPY/T-MERGE；C-UI #04/#05为自有同卷单文件COPY/MOVE和字节/来源核对；不是全部对象/跨卷/元数据矩阵 | 部分PASS：所列COPY/MOVE；ADS/跨卷/目录/完整元数据GUI仍NOT RUN |
 | EXP-OP-02 | 根及嵌套 Replace/Skip/KeepBoth/Cancel、类型冲突、目录 Merge；不能先删目标根 | T-MERGE；H-MERGE-UI #03–06 | NOT RUN |
 | EXP-OP-03 | 中途取消/失败/观察回调异常，保留已完成前缀、真实残留和未启动尾项；只按允许方式继续，不整树重放 | T-COPY/T-MERGE/T-DELETE；冲突关闭/窗口退出实际键盘组合待验 | NOT RUN |

@@ -221,6 +221,25 @@ namespace blink::app
         return ids;
     }
 
+    std::vector<TabId> TabWindowState::TabsToClose(const TabId target, const TabCloseScope scope) const
+    {
+        const auto anchor = std::find_if(tabs_.begin(), tabs_.end(),
+            [target](const auto& tab) { return tab->id == target; });
+        if (anchor == tabs_.end()) { return {}; }
+        if (scope == TabCloseScope::Target) { return { target }; }
+
+        std::vector<TabId> ids;
+        const auto first = scope == TabCloseScope::ToRight ? anchor + 1 : tabs_.begin();
+        // Closing right-to-left also leaves the nearest surviving tab active
+        // when the active tab was in the group closed to the right.
+        for (auto tab = tabs_.end(); tab != first;)
+        {
+            --tab;
+            if (tab != anchor) { ids.push_back((*tab)->id); }
+        }
+        return ids;
+    }
+
     std::size_t TabWindowState::Size() const noexcept
     {
         return tabs_.size();

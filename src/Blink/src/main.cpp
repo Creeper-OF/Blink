@@ -874,6 +874,19 @@ struct App : AppT<App>
         tab_view_.AddTabButtonClick([this](auto&&, auto&&) {
             CreateAndActivateTab();
         });
+        tab_view_.ContextRequested([this](auto&&, const ContextRequestedEventArgs& args) {
+            if (ShowTabContextMenu(args.OriginalSource(), &args)) { args.Handled(true); }
+        });
+        tab_view_.ContextCanceled([this](auto&&, auto&&) {
+            DismissTabContextMenu();
+        });
+        const auto show_tab_menu = [this] {
+            (void)ShowTabContextMenu(FocusManager::GetFocusedElement(tab_view_.XamlRoot()));
+        };
+        AddAccelerator(tab_view_, Windows::System::VirtualKey::Application,
+            Windows::System::VirtualKeyModifiers::None, show_tab_menu, true);
+        AddAccelerator(tab_view_, Windows::System::VirtualKey::F10,
+            Windows::System::VirtualKeyModifiers::Shift, show_tab_menu, true);
         auto new_tab_accelerator = KeyboardAccelerator();
         new_tab_accelerator.Key(Windows::System::VirtualKey::T);
         new_tab_accelerator.Modifiers(Windows::System::VirtualKeyModifiers::Control);
@@ -887,7 +900,7 @@ struct App : AppT<App>
         close_tab_accelerator.Key(Windows::System::VirtualKey::W);
         close_tab_accelerator.Modifiers(Windows::System::VirtualKeyModifiers::Control);
         close_tab_accelerator.Invoked([this](auto&&, auto&& args) {
-            if (!IsOperationDialogOpen()) { CloseTab(tab_window_state_.ActiveTabId()); }
+            if (!IsOperationDialogOpen()) { CloseTabs(tab_window_state_.ActiveTabId()); }
             args.Handled(true);
         });
         window_frame_.KeyboardAccelerators().Append(close_tab_accelerator);
@@ -1245,6 +1258,7 @@ struct App : AppT<App>
     void CloseOperationDialogs() noexcept
     {
         CancelTargetOperationWork();
+        DismissTabContextMenu();
         DismissCommandBarMenus();
         address_bar_.HideMenus();
         if (clipboard_cancellation_) { clipboard_cancellation_->store(true); }
@@ -7924,14 +7938,11 @@ struct App : AppT<App>
             return localization_.GetString(L"Location.ThisPC");
         }
         const auto& path = location.FolderPath();
-        if (path.size() >= 3 && path[1] == L':' &&
-            (path[2] == L'\\' || path[2] == L'/'))
-        {
-            return path.substr(0, 2);
-        }
-        const auto separator = path.find_last_of(L"\\/");
-        return separator == std::wstring::npos ? path :
-            (separator + 1 < path.size() ? path.substr(separator + 1) : path);
+        const auto end = path.find_last_not_of(L"\\/");
+        if (end == std::wstring::npos) { return path; }
+        const auto separator = path.find_last_of(L"\\/", end);
+        const auto start = separator == std::wstring::npos ? 0 : separator + 1;
+        return path.substr(start, end - start + 1);
     }
 
     [[nodiscard]] std::optional<blink::app::TabId> TabIdFromItem(
@@ -7952,6 +7963,81 @@ struct App : AppT<App>
         }
     }
 
+    void DismissTabContextMenu() noexcept
+    {
+        if (auto menu = std::exchange(tab_context_menu_, nullptr))
+        {
+            try { menu.Hide(); } catch (...) {}
+        }
+    }
+
+    bool ShowTabContextMenu(const IInspectable& source, const ContextRequestedEventArgs* args = nullptr)
+    {
+        using blink::app::TabCloseScope;
+        using blink::app::TabId;
+        if (window_style_closed_ || IsOperationDialogOpen()) { return false; }
+
+        TabViewItem anchor{ nullptr };
+        for (auto current = source.try_as<DependencyObject>(); current && current != tab_view_;
+            current = VisualTreeHelper::GetParent(current))
+        {
+            anchor = current.try_as<TabViewItem>();
+            if (anchor) { break; }
+        }
+        const auto target = TabIdFromItem(anchor);
+        if (!target || !tab_window_state_.Find(*target)) { return false; }
+
+        DismissTabContextMenu();
+        tab_context_menu_ = MenuFlyout();
+        blink::app::ApplyContextMenuAppearance(tab_context_menu_, anchor, L"TabContextMenu");
+        const auto weak = get_weak();
+        const auto add = [&](const wchar_t* label, const wchar_t* automation_id, const wchar_t* icon,
+            const bool enabled, std::function<void(App&, TabId)> invoke) {
+            MenuFlyoutItem item;
+            item.Text(hstring(localization_.GetString(label)));
+            item.IsEnabled(enabled);
+            blink::app::StyleContextMenuItem(item, icon);
+            Automation::AutomationProperties::SetAutomationId(item, automation_id);
+            item.Click([weak, id = *target, invoke = std::move(invoke)](auto&&, auto&&) {
+                if (const auto app = weak.get())
+                {
+                    app->DismissTabContextMenu();
+                    // Tab commands rebuild the title-bar items. Let the menu
+                    // finish handling its click before releasing the anchor.
+                    (void)app->dispatcher_.TryEnqueue([weak, id, invoke] {
+                        if (const auto live = weak.get(); live && !live->window_style_closed_ &&
+                            !live->IsOperationDialogOpen() && live->tab_window_state_.Find(id))
+                        {
+                            invoke(*live.get(), id);
+                        }
+                    });
+                }
+            });
+            tab_context_menu_.Items().Append(item);
+        };
+        add(L"Tab.MenuDuplicate", L"TabContextDuplicate", L"\xE8C8", true, [](App& app, const TabId id) {
+            const auto& state = *app.tab_window_state_.Find(id)->state;
+            app.CreateAndActivateTab(state.PresentationSnapshot().committed_location, &state);
+        });
+        tab_context_menu_.Items().Append(MenuFlyoutSeparator());
+        add(L"Tab.MenuClose", L"TabContextClose", L"\xE711", true,
+            [](App& app, const TabId id) { app.CloseTabs(id); });
+        add(L"Tab.MenuCloseOthers", L"TabContextCloseOthers", nullptr,
+            tab_window_state_.Size() > 1,
+            [](App& app, const TabId id) { app.CloseTabs(id, TabCloseScope::Others); });
+        add(L"Tab.MenuCloseRight", L"TabContextCloseRight", nullptr,
+            !tab_window_state_.TabsToClose(*target, TabCloseScope::ToRight).empty(),
+            [](App& app, const TabId id) { app.CloseTabs(id, TabCloseScope::ToRight); });
+
+        Windows::Foundation::Point position{ 8, static_cast<float>(anchor.ActualHeight()) };
+        Windows::Foundation::Point pointer{};
+        if (args && args->TryGetPosition(anchor, pointer)) { position = pointer; }
+        auto options = Microsoft::UI::Xaml::Controls::Primitives::FlyoutShowOptions();
+        options.Position(position);
+        tab_context_menu_.ShowAt(anchor, options);
+        return true;
+    }
+
     void SyncTabViewItems()
     {
         if (!tab_view_)
@@ -7959,6 +8045,7 @@ struct App : AppT<App>
             return;
         }
         tab_view_sync_suppressed_ = true;
+        DismissTabContextMenu();
         tab_item_ids_.clear();
         tab_view_.TabItems().Clear();
         const auto ids = tab_window_state_.TabIds();
@@ -8018,21 +8105,33 @@ struct App : AppT<App>
         PresentActiveTab();
     }
 
-    void CreateAndActivateTab(const blink::app::Location& initial = blink::app::Location::ThisPC())
+    void CreateAndActivateTab(const blink::app::Location& initial = blink::app::Location::ThisPC(),
+        const blink::app::TabState* source = nullptr)
     {
         CloseOperationDialogs();
         const auto id = tab_window_state_.CreateTab();
         EnsureTabUi(id);
         tab_window_state_.ActivateTab(id);
+        if (source)
+        {
+            ActiveState().SetViewMode(source->GetViewMode());
+            ActiveState().SetSortDescriptor(source->GetSortDescriptor());
+        }
         SyncTabViewItems();
         PresentActiveTab();
         if (initial.IsThisPC()) { RefreshNavigation(); }
         else { NavigateToLocation(initial); }
     }
 
-    void CloseTab(const blink::app::TabId id)
+    void CloseTabs(const blink::app::TabId target,
+        const blink::app::TabCloseScope scope = blink::app::TabCloseScope::Target)
     {
-        if (id == tab_window_state_.ActiveTabId()) { CloseOperationDialogs(); }
+        const auto closing = tab_window_state_.TabsToClose(target, scope);
+        if (closing.empty()) { return; }
+        if (std::find(closing.begin(), closing.end(), tab_window_state_.ActiveTabId()) != closing.end())
+        {
+            CloseOperationDialogs();
+        }
         if (tab_window_state_.Size() == 1)
         {
             if (window_)
@@ -8044,16 +8143,18 @@ struct App : AppT<App>
             return;
         }
 
-        CancelPresentationWork(id);
-        CancelThisPcWork(id);
-        StopFolderWatcher(id);
-        search_requests_.RemoveTab(id);
-        const auto status = tab_window_state_.CloseTab(id);
-        if (status != blink::app::CloseTabStatus::Closed)
+        for (const auto id : closing)
         {
-            return;
+            CancelPresentationWork(id);
+            CancelThisPcWork(id);
+            StopFolderWatcher(id);
+            search_requests_.RemoveTab(id);
+            if (tab_window_state_.CloseTab(id) == blink::app::CloseTabStatus::Closed)
+            {
+                tab_ui_states_.erase(id);
+            }
         }
-        tab_ui_states_.erase(id);
+        // Present the surviving tabs after the whole group has closed.
         SyncTabViewItems();
         PresentActiveTab();
     }
@@ -8063,7 +8164,7 @@ struct App : AppT<App>
         const auto id = TabIdFromItem(args.Item());
         if (id.has_value())
         {
-            CloseTab(*id);
+            CloseTabs(*id);
         }
     }
 
@@ -8525,6 +8626,7 @@ struct App : AppT<App>
         tab_view_sync_suppressed_ = true;
         try
         {
+            DismissTabContextMenu();
             DismissTargetContextMenu();
             // Cancel a modal name edit before its focus host is destroyed.
             folder_name_dialog_.Close();
@@ -8564,6 +8666,7 @@ struct App : AppT<App>
     void OnWindowClosed() noexcept
     {
         window_style_closed_ = true;
+        DismissTabContextMenu();
         DismissTargetContextMenu();
         CancelAddressChildrenWork();
         CancelAddressSuggestionWork();
@@ -9603,6 +9706,7 @@ struct App : AppT<App>
     Grid window_frame_{ nullptr };
     TitleBar title_bar_{ nullptr };
     MenuFlyout folder_menu_{ nullptr };
+    MenuFlyout tab_context_menu_{ nullptr };
     std::optional<FolderMenuContext> folder_system_menu_context_;
     bool window_style_closed_{};
     blink::app::FileOperationCoordinator file_operations_;

@@ -1,18 +1,19 @@
-﻿[CmdletBinding()]
+﻿[CmdletBinding(DefaultParameterSetName='Objects')]
 param(
  [ValidateSet('Debug','Release')][string]$Configuration='Release',
  [string]$Binary='',
  [ValidateRange(5,90)][int]$StepTimeoutSeconds=30,
- [switch]$KeyboardOnly
+ [Parameter(ParameterSetName='Objects')][switch]$KeyboardOnly,
+ [Parameter(ParameterSetName='Tabs')][switch]$TabMenuOnly
 )
 # G06a: new owned PID/HWND, real UIA and scoped keyboard input, GUID-only fixtures.
 # Does not build, use global input/Clipboard, edit services or force any process exit.
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $project=Split-Path -Parent $PSScriptRoot
-$integration=Join-Path $project '.build\explorer-object-menu\integration'
+$integration=Join-Path $project $(if($TabMenuOnly){'.build\tab-context-menu\integration'}else{'.build\explorer-object-menu\integration'})
 New-Item -ItemType Directory -Path $integration -Force|Out-Null
-$reportPath=Join-Path $integration 'ui-object-menu-report.json'
+$reportPath=Join-Path $integration $(if($TabMenuOnly){'ui-tab-menu-report.json'}else{'ui-object-menu-report.json'})
 if(-not $Binary){$Binary=Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe')}
 if(-not [IO.Path]::IsPathRooted($Binary)){$Binary=Join-Path $project $Binary}
 $Binary=[IO.Path]::GetFullPath($Binary)
@@ -72,7 +73,7 @@ function Quick-Home{return Named-Container $homeLabels ([Windows.Automation.Cont
 function Capture-State([string]$Why){
  $state=[ordered]@{why=$Why;utc=[DateTime]::UtcNow.ToString('o');address=$null;rows=@();selected=@();peers=@();navigation_tree=@();tabs=@();focus=$null;desktop=$null;errors=@()}
  try{$state.address=Address-Text;$state.rows=@(Row-Names);$state.selected=@(Selected-Names)}catch{$state.errors+=@($_.Exception.Message)}
- foreach($id in @('NavigationPane','NavigationTree','NavigationQuickList','NavigationContextMenu','LocationContextMenu','TargetContextOpen','TargetContextNewTab','TargetContextExpandCollapse','TargetContextCopyPath','TargetContextProperties','FolderEntries','WindowTabs')){try{$peer=Owned-Id $id;if($peer){$state.peers+=@(Peer-Evidence $peer)}}catch{$state.errors+=@($id+': '+$_.Exception.Message)}}
+ foreach($id in @('NavigationPane','NavigationTree','NavigationQuickList','NavigationContextMenu','LocationContextMenu','TargetContextOpen','TargetContextNewTab','TargetContextExpandCollapse','TargetContextCopyPath','TargetContextProperties','FolderEntries','WindowTabs','TabContextMenu')){try{$peer=Owned-Id $id;if($peer){$state.peers+=@(Peer-Evidence $peer)}}catch{$state.errors+=@($id+': '+$_.Exception.Message)}}
  try{
   $pane=By-Id 'NavigationPane';if($pane){$items=$pane.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::TreeItem));for($i=0;$i -lt [Math]::Min(40,$items.Count);$i++){try{$peer=$items[$i];if($peer.Current.ProcessId -ne $process.Id){continue};$pattern=$null;$expandState='NO PATTERN';if($peer.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$pattern)){$expandState=$pattern.Current.ExpandCollapseState.ToString()};$state.navigation_tree+=@([pscustomobject]@{ordinal=$i;name=$peer.Current.Name;is_offscreen=$peer.Current.IsOffscreen;expand_collapse=$expandState})}catch{$state.errors+=@('TreeItem '+$i+': '+$_.Exception.Message)}}}
  }catch{$state.errors+=@('Navigation tree snapshot: '+$_.Exception.Message)}
@@ -113,7 +114,7 @@ function Assert-FolderMenu([string]$MenuId,[string]$Target){
  foreach($id in @('TargetContextCut','TargetContextCopy','TargetContextRename','TargetContextDelete')){$p=Owned-Id $id;if($root){if($p){throw ('Root exposed inapplicable directory command '+$id)}}elseif(-not(Visible $p) -or -not $p.Current.IsEnabled){throw ('Expected ordinary directory target command '+$id)}}
  $paste=Owned-Id 'TargetContextPaste';if(-not(Visible $paste)){throw 'Independent target Paste missing'}
 }
-function Dismiss-Menu{Key 27;Wait-Ui 'context menu dismissed' {-not(Owned-Id 'NavigationContextMenu') -and -not(Owned-Id 'LocationContextMenu') -and -not(Owned-Id 'FolderContextMenu')}}
+function Dismiss-Menu{Key 27;Wait-Ui 'context menu dismissed' {-not(Owned-Id 'NavigationContextMenu') -and -not(Owned-Id 'LocationContextMenu') -and -not(Owned-Id 'FolderContextMenu') -and -not(Owned-Id 'TabContextMenu')}}
 function Select-Marker{$p=@(Rows|Where-Object{$_.Current.Name -ceq $markerName});if($p.Count -ne 1){throw 'Owned marker row required'};$p[0].GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select();Wait-Ui 'owned marker remains exactly selected' {(Same-Names @(Selected-Names) @($markerName))}}
 function Fixture-Unchanged{foreach($path in $allowedFiles.Keys){if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw ('Owned payload missing '+$path)};$bytes=[Text.UTF8Encoding]::new($false).GetBytes([string]$allowedFiles[$path]);if([Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -cne [Convert]::ToBase64String($bytes) -or [BlinkObjectMenuUiNative]::Identity($path) -cne $fileIdentities[$path]){throw ('Owned payload bytes or identity changed '+$path)}}}
 function Ownership-Failures{
@@ -122,6 +123,114 @@ function Ownership-Failures{
  foreach($dir in $allowedDirectories){if(-not(Test-Path -LiteralPath $dir -PathType Container)){$bad.Add('Missing directory: '+$dir)}};try{Fixture-Unchanged}catch{$bad.Add($_.Exception.Message)};return @($bad.ToArray())
 }
 function Resource-Labels([string]$Key){$labels=@();foreach($culture in @('en-US','zh-CN')){[xml]$xml=[IO.File]::ReadAllText((Join-Path $project ('src\Blink\Strings\'+$culture+'\Resources.resw')));foreach($data in $xml.root.data){if($data.name -ceq $Key){$labels+=@([string]$data.value)}}};return @($labels|Select-Object -Unique)}
+
+function Open-TabMenu([int]$Ordinal, [ValidateSet('Apps','ShiftF10')][string]$Via) {
+ $tab=@(Tabs)[$Ordinal]
+ if(-not (Visible $tab) -or $tab.Current.ProcessId -ne $process.Id){throw 'Expected an owned visible tab'}
+ Focus-Peer $tab 'tab context target'
+ if($Via -eq 'Apps'){Key 0x5D}else{Key 0x79 2}
+ Wait-Ui 'owned tab context menu' {$null -ne (Owned-Id 'TabContextMenu') -and $null -ne (Owned-Id 'TabContextClose')}
+ $report.menu_evidence+=@([pscustomobject]@{step=$script:currentStep;method=$Via;source=(Peer-Evidence $tab);
+  selected=(Selected-Tab);items=@('Duplicate','Close','CloseOthers','CloseRight'|ForEach-Object{Peer-Evidence (Owned-Id ('TabContext'+$_))})})
+ Save-Report
+}
+
+function Assert-TabMenu([bool]$Others, [bool]$Right) {
+ foreach($name in @('Duplicate','Close','CloseOthers','CloseRight')){
+  $item=Owned-Id ('TabContext'+$name)
+  $enabled=switch($name){'CloseOthers'{$Others};'CloseRight'{$Right};default{$true}}
+  if(-not $item -or $item.Current.IsEnabled -ne $enabled){throw ('Unexpected tab menu availability '+$name)}
+ }
+}
+
+function Add-TestTab([string]$Path='') {
+ $next=@(Tabs).Count
+ Key 0x54 1
+ Wait-Ui 'new This PC tab is active' {@(Tabs).Count -eq $next+1 -and (Selected-Tab).ordinal -eq $next -and (Is-ThisPc)}
+ if($Path){Navigate $Path}
+}
+
+function Check-TabMenus {
+ $sourceName=[IO.Path]::GetFileName($source)
+ $childName=[IO.Path]::GetFileName($child)
+ Check 'T01 sole tab Apps menu disables empty close groups and Escape keeps the tab' {
+  Open-TabMenu 0 Apps
+  Assert-TabMenu $false $false
+  Dismiss-Menu
+  if(@(Tabs).Count -ne 1 -or -not (Is-ThisPc)){throw 'Tab context interacted with the file list'}
+ }
+ Check 'T02 duplicate a focused background tab into its exact folder and view' {
+  Navigate $source
+  Wait-Ui 'tab displays the actual directory name' {(Selected-Tab).name -ceq $sourceName}
+  Act (By-Id 'FolderViewMode')
+  Wait-Ui 'grid choice is usable' {(Owned-Id 'TopViewGrid').Current.IsEnabled}
+  Focus-Peer (Owned-Id 'TopViewGrid') 'grid choice'
+  Key 13
+  Wait-Ui 'source grid view is active' {(Entries).Current.ClassName -eq 'GridView' -and @(Row-Names) -ccontains $markerName}
+  Act (By-Id 'CommandSort')
+  Wait-Ui 'type sort choice is usable' {(Owned-Id 'TopSortType').Current.IsEnabled}
+  Focus-Peer (Owned-Id 'TopSortType') 'type sort choice'
+  Key 13
+  Wait-Ui 'source is sorted by type' {(By-Id 'CommandSort').Current.HelpText -in @(Resource-Labels 'Column.Type')}
+  Act (By-Id 'CommandSort')
+  Wait-Ui 'descending sort choice is usable' {(Owned-Id 'TopSortDescending').Current.IsEnabled}
+  Focus-Peer (Owned-Id 'TopSortDescending') 'descending sort choice'
+  Key 13
+  Wait-Ui 'source is sorted in descending order' {(By-Id 'CommandSort').Current.ItemStatus -in @(Resource-Labels 'Sort.Descending')}
+  $sortButton=By-Id 'CommandSort'
+  $sortField=$sortButton.Current.HelpText
+  $sortDirection=$sortButton.Current.ItemStatus
+  Select-Marker
+  Add-TestTab $child
+  Open-TabMenu 0 Apps
+  Assert-TabMenu $true $true
+  if((Selected-Tab).ordinal -ne 1 -or (Address-Text) -ine $child){throw 'Opening the menu activated the background tab'}
+  Act (Owned-Id 'TabContextDuplicate')
+  Wait-Ui 'duplicate has source path, view and sort' {@(Tabs).Count -eq 3 -and (Selected-Tab).ordinal -eq 2 -and
+   (Selected-Tab).name -ceq $sourceName -and (Address-Text) -ieq $source -and (Entries).Current.ClassName -eq 'GridView' -and
+   (By-Id 'CommandSort').Current.HelpText -ceq $sortField -and (By-Id 'CommandSort').Current.ItemStatus -ceq $sortDirection -and @(Row-Names) -ccontains $markerName}
+  if(@(Selected-Names).Count){throw 'Duplicate borrowed the source selection'}
+ }
+ Check 'T03 close only the background duplicate and preserve the active source selection' {
+  Select-Tab ([pscustomobject]@{ordinal=0;name=$sourceName}) $source
+  if(-not (Same-Names @(Selected-Names) @($markerName))){throw 'Source tab lost its selection'}
+  Open-TabMenu 2 ShiftF10
+  Assert-TabMenu $true $false
+  if((Selected-Tab).ordinal -ne 0){throw 'Shift+F10 activated the background tab'}
+  Act (Owned-Id 'TabContextClose')
+  Wait-Ui 'only the clicked duplicate closed' {@(Tabs).Count -eq 2 -and (Selected-Tab).ordinal -eq 0 -and
+   (Address-Text) -ieq $source -and (Same-Names @(Selected-Names) @($markerName))}
+ }
+ Check 'T04 close tabs to the right and select the surviving neighbor' {
+  Add-TestTab $empty
+  Add-TestTab
+  Open-TabMenu 1 Apps
+  Assert-TabMenu $true $true
+  if((Selected-Tab).ordinal -ne 3){throw 'Expected the rightmost tab to remain active before the command'}
+  Act (Owned-Id 'TabContextCloseRight')
+  Wait-Ui 'left and clicked tabs survive in order' {@(Tabs).Count -eq 2 -and @(Tabs)[0].Current.Name -ceq $sourceName -and
+   (Selected-Tab).ordinal -eq 1 -and (Selected-Tab).name -ceq $childName -and (Address-Text) -ieq $child}
+ }
+ Check 'T05 close others keeps and activates the clicked background tab' {
+  Open-TabMenu 0 ShiftF10
+  Act (Owned-Id 'TabContextCloseOthers')
+  Wait-Ui 'clicked tab survives with its exact selection and folder' {@(Tabs).Count -eq 1 -and
+   (Selected-Tab).name -ceq $sourceName -and (Address-Text) -ieq $source -and (Same-Names @(Selected-Names) @($markerName))}
+ }
+ Check 'T06 Ctrl+W still closes the active tab and restores the remaining tab' {
+  Add-TestTab $child
+  Key 0x57 1
+  Wait-Ui 'Ctrl+W closes the added tab' {@(Tabs).Count -eq 1 -and (Address-Text) -ieq $source -and
+   (Same-Names @(Selected-Names) @($markerName))}
+ }
+ Check 'T07 Shift+F10 closes the final tab through normal window shutdown' {
+  Open-TabMenu 0 ShiftF10
+  Assert-TabMenu $false $false
+  Fixture-Unchanged
+  Act (Owned-Id 'TabContextClose')
+  if(-not $process.WaitForExit(10000) -or $process.ExitCode -ne 0){throw 'Final tab did not close the owned window normally'}
+ }
+}
 Save-Report
 try{
  New-Item -ItemType Directory -Path $compilerTemp -Force|Out-Null;$env:TEMP=$compilerTemp;$env:TMP=$compilerTemp;$tempChanged=$true
@@ -221,6 +330,9 @@ public static class BlinkObjectMenuUiNative {
  $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;if(-not $process.Start()){throw 'Owned launch failed'};$ownedHandle=$process.Handle;$report.process_id=$process.Id;Save-Report
  Wait-Ui 'new owned WinUI window' {$null -ne (Window)};[BlinkObjectMenuUiNative]::OwnedWindow=$process.MainWindowHandle;$report.window_dpi=[BlinkObjectMenuUiNative]::GetDpiForWindow($process.MainWindowHandle)
  Wait-Ui 'real initial ThisPC locations' {Is-ThisPc};$initialTab=Selected-Tab;$initialAddress=Address-Text
+ if($TabMenuOnly){
+  Check-TabMenus
+ }else{
  Check '01 drive menu follows keyboard focus with no selection or a different selection' {
   $driveRows=@(Rows|Where-Object{$_.Current.Name -match '(?i)[a-z]:'});if(-not $driveRows.Count){Skip 'No actual local drive row exposed by this host'}
   $preferred=[IO.Path]::GetPathRoot($project).Substring(0,2);$matched=@($driveRows|Where-Object{$_.Current.Name -match [regex]::Escape($preferred)});$script:driveRow=$(if($matched.Count){$matched[0]}else{$driveRows[0]})
@@ -307,6 +419,7 @@ public static class BlinkObjectMenuUiNative {
   Dismiss-Menu
  }
  $notes.Add('Menu opening uses actual scoped Apps/Shift+F10. UIA Invoke proves menu actions, not physical right-click hit testing. Properties/CopyPath are checked for presence, target and enablement; no actual clipboard write or native property-sheet interaction was performed.')
+ }
  $report.status='PASS'
 }catch{
  if($_.Exception.Message.StartsWith('OBJECT_MENU_UI_SKIP: ')){$report.status='SKIP';$report.failure=$_.Exception.Message.Substring('OBJECT_MENU_UI_SKIP: '.Length)}else{$report.status='FAIL';$report.failure=$_.Exception.ToString()+"`n"+$_.ScriptStackTrace;try{Capture-State 'unexpected failure'}catch{}}

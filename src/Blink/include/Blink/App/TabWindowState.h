@@ -28,6 +28,13 @@ namespace blink::app
         NotFound,
     };
 
+    enum class TabCloseScope
+    {
+        Target,
+        Others,
+        ToRight,
+    };
+
     // Window-owned tab collection. This is the authoritative app-private tab
     // store; a WinUI TabView only presents its ordered TabIds.
     struct TabRecord
@@ -87,6 +94,7 @@ namespace blink::app
         [[nodiscard]] TabRecord* Find(TabId id) noexcept;
         [[nodiscard]] const TabRecord* Find(TabId id) const noexcept;
         [[nodiscard]] std::vector<TabId> TabIds() const;
+        [[nodiscard]] std::vector<TabId> TabsToClose(TabId target, TabCloseScope scope) const;
         [[nodiscard]] std::size_t Size() const noexcept;
         [[nodiscard]] std::vector<RelocatedTabNavigation> RelocateFolder(const Location& source,
             const Location& destination, const blink::core::FileIdentity& source_identity, bool preserve_suffix = true);

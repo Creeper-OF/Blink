@@ -1341,6 +1341,8 @@ namespace
         using blink::app::Location;
         using blink::app::SortDirection;
         using blink::app::SortField;
+        using blink::app::TabCloseScope;
+        using blink::app::TabId;
         using blink::app::TabWindowState;
 
         bool passed = true;
@@ -1356,6 +1358,40 @@ namespace
                     command_state.Size() == 1 &&
                     command_state.ActiveTabId() == initial_command_tab,
                 "one_close_tab_command_removes_one_tab");
+        }
+        {
+            TabWindowState menu_state;
+            const auto left = menu_state.ActiveTabId();
+            const auto clicked = menu_state.CreateTab();
+            const auto right = menu_state.CreateTab();
+            const auto last = menu_state.CreateTab();
+            const bool activated = menu_state.ActivateTab(right);
+            passed &= Check(activated && menu_state.TabsToClose(clicked, TabCloseScope::Target) ==
+                    std::vector<TabId>{ clicked } && menu_state.ActiveTabId() == right,
+                "tab_menu_single_targets_clicked_background_tab");
+            passed &= Check(menu_state.TabsToClose(clicked, TabCloseScope::Others) ==
+                    std::vector<TabId>{ last, right, left },
+                "tab_menu_close_others_excludes_clicked_tab");
+            const auto closing_right = menu_state.TabsToClose(clicked, TabCloseScope::ToRight);
+            passed &= Check(closing_right == std::vector<TabId>{ last, right } &&
+                    menu_state.TabsToClose(last, TabCloseScope::ToRight).empty(),
+                "tab_menu_closes_right_from_the_end_and_skips_rightmost_target");
+            const auto right_browse = menu_state.Find(right)->browse_state;
+            for (const auto id : closing_right) { (void)menu_state.CloseTab(id); }
+            passed &= Check(menu_state.TabIds() == std::vector<TabId>{ left, clicked } &&
+                    menu_state.ActiveTabId() == clicked && right_browse->Snapshot().shutting_down,
+                "tab_menu_close_right_selects_surviving_neighbor_and_cancels_closed_tab");
+            const auto closing_others = menu_state.TabsToClose(left, TabCloseScope::Others);
+            for (const auto id : closing_others) { (void)menu_state.CloseTab(id); }
+            passed &= Check(menu_state.TabIds() == std::vector<TabId>{ left } && menu_state.ActiveTabId() == left &&
+                    menu_state.TabsToClose(left, TabCloseScope::Others).empty() &&
+                    menu_state.TabsToClose(left, TabCloseScope::ToRight).empty(),
+                "tab_menu_close_others_keeps_clicked_tab_and_disables_empty_groups");
+            passed &= Check(menu_state.TabsToClose(right, TabCloseScope::Target).empty() &&
+                    menu_state.TabsToClose(right, TabCloseScope::Others).empty() &&
+                    menu_state.TabsToClose(right, TabCloseScope::ToRight).empty() &&
+                    menu_state.TabsToClose(left, TabCloseScope::Target) == std::vector<TabId>{ left },
+                "tab_menu_stale_target_cannot_close_the_last_survivor");
         }
 
         TabWindowState window_state;
@@ -1948,7 +1984,7 @@ namespace
         passed &= Check(
             new_accelerator_region.find("CreateAndActivateTab()") != std::string::npos &&
             new_accelerator_region.find("args.Handled(true)") != std::string::npos &&
-            close_accelerator_region.find("CloseTab(") != std::string::npos &&
+            close_accelerator_region.find("CloseTabs(tab_window_state_.ActiveTabId())") != std::string::npos &&
             close_accelerator_region.find("args.Handled(true)") != std::string::npos,
             "tab_shortcuts_stop_after_one_authoritative_command_route");
         return passed;
@@ -3717,8 +3753,16 @@ int wmain(int argc, wchar_t* argv[])
                 winrt::uninit_apartment();
                 return passed ? 0 : 1;
             }
+            if (suite == L"tab-window")
+            {
+                winrt::init_apartment(winrt::apartment_type::multi_threaded);
+                const bool passed = RunTabWindowStateTests();
+                std::cout << "tab_window_tests=" << (passed ? "PASS" : "FAIL") << "\n";
+                winrt::uninit_apartment();
+                return passed ? 0 : 1;
+            }
         }
-        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|search-delivery|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender|shell-context-menu|item-properties]"
+        std::cerr << "Usage: Blink.Phase1.Tests.exe [--suite search-response|search-scope|search-visibility|search-delivery|clipboard-transfer-presentation|clipboard-data-object|clipboard-paste-session|clipboard-paste-controller|clipboard-source-data|clipboard-sender|shell-context-menu|item-properties|tab-window]"
             " or --live-index-probe <options> or --measure-search-delivery <D:\\fixture.txt>\n";
         return 2;
     }

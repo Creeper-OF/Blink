@@ -468,6 +468,10 @@
   <data name="AddressBar.ChildrenFailed" xml:space="preserve"><value>Could not read child folders: {0}</value><comment>Address child folder menu.</comment></data>
   <data name="AddressBar.Suggestions" xml:space="preserve"><value>Folder suggestions</value><comment>Address completion list.</comment></data>
   <data name="Nav.MenuNewTab" xml:space="preserve"><value>Open in new tab</value></data>
+  <data name="Tab.MenuDuplicate" xml:space="preserve"><value>Duplicate tab</value></data>
+  <data name="Tab.MenuClose" xml:space="preserve"><value>Close tab</value></data>
+  <data name="Tab.MenuCloseOthers" xml:space="preserve"><value>Close other tabs</value></data>
+  <data name="Tab.MenuCloseRight" xml:space="preserve"><value>Close tabs to the right</value></data>
   <data name="Nav.MenuExpand" xml:space="preserve"><value>Expand</value></data>
   <data name="Nav.MenuCollapse" xml:space="preserve"><value>Collapse</value></data>
   <data name="Operation.TargetPreparing" xml:space="preserve"><value>Reading target folder…</value></data>

@@ -33,6 +33,17 @@ Apps 和 Shift+F10 使用当前列表焦点行。有其他盘符选中时，菜�
 
 专项脚本覆盖聚焦且未选中的驱动器、与焦点不同的选中项、当前标签及新标签打开确切盘根、普通文件项、多选和空目录。候选测试可用 `-Binary` 指定 Release 路径。窗口检查使用所属进程的 UIA 和定向键盘消息。物理右键、剪贴板和设备操作分别验证。
 
+## 标签页菜单
+
+```powershell
+& .\x64\Release\Blink.Phase1.Tests.exe --suite tab-window
+.\scripts\run-blink-object-menu-smoke.ps1 -TabMenuOnly
+```
+
+右键、菜单键或 Shift+F10 可打开标签菜单。复制将所点标签已打开的位置、视图和排序带入新标签。新标签独立维护历史、选中项和搜索。关闭其他会保留所点标签，关闭右侧只处理其右边的标签。当没有相应的标签可关时，菜单项显示为禁用。关闭最后一页沿用窗口已有的正常关闭流程。
+
+普通目录标签显示文件夹名，盘根显示盘符。原生回归覆盖关闭范围、失效目标、相邻标签选择及关闭后的取消。窗口脚本用自有 PID/HWND 的菜单键和 Shift+F10 验证后台标签、复制后的视图与排序以及最后一页关闭。候选版可用 `-Binary` 指定。实物鼠标单独验证。复制标签的参考见[微软 Windows 11 24H2 Dev 记录](https://blogs.windows.com/windows-insider/2024/07/26/announcing-windows-11-insider-preview-build-26120-1330-dev-channel/)。
+
 ## Windows 属性与 Blink 详情
 
 ```powershell

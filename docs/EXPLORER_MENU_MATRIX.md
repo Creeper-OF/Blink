@@ -77,20 +77,21 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | T-MORE 当前原生更多及后续缺口 | 15 | 8 | 0 | 0 | 6 | 1 | 0 |
 | C01 普通文件单选 | 26 | 16 | 4 | 0 | 0 | 0 | 6 |
 | C02 普通目录单选 | 9 | 4 | 1 | 0 | 3 | 0 | 1 |
-| C03 多文件、多目录、混合选择 | 11 | 6 | 5 | 0 | 0 | 0 | 0 |
+| C03 多文件、多目录、混合选择 | 11 | 7 | 4 | 0 | 0 | 0 | 0 |
+| C01/C02/C03 共用 Blink 详情 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | C04 文件列表真正空白 | 11 | 4 | 0 | 1 | 5 | 1 | 0 |
 | C05 搜索结果 | 14 | 9 | 2 | 1 | 2 | 0 | 0 |
-| C06 导航常用/固定项 | 6 | 1 | 3 | 0 | 2 | 0 | 0 |
-| C07 导航普通目录 | 12 | 5 | 5 | 1 | 1 | 0 | 0 |
+| C06 导航常用/固定项 | 6 | 2 | 3 | 0 | 1 | 0 | 0 |
+| C07 导航普通目录 | 12 | 7 | 4 | 1 | 0 | 0 | 0 |
 | C08 此电脑驱动器条目 | 14 | 4 | 3 | 0 | 5 | 2 | 0 |
 | C09 此电脑背景与虚拟位置 | 9 | 1 | 0 | 3 | 5 | 0 | 0 |
 | C10 回收站根与内容 | 6 | 0 | 0 | 0 | 6 | 0 | 0 |
 | C11 UNC/SMB与远端Provider | 6 | 0 | 0 | 1 | 4 | 1 | 0 |
-| C12 标签、地址、搜索输入、列头 | 24 | 3 | 7 | 0 | 9 | 0 | 5 |
+| C12 标签、地址、搜索输入、列头 | 25 | 7 | 7 | 0 | 6 | 0 | 5 |
 | DYN 系统动态子菜单与执行机制 | 12 | 3 | 0 | 1 | 1 | 0 | 7 |
-| 合计 | 208 | 80 | 34 | 10 | 59 | 6 | 19 |
+| 合计 | 210 | 89 | 32 | 10 | 54 | 6 | 19 |
 
-汇总按正文 208 条审计行统计。C08 已补充本地盘 Windows 属性页的实机证据。
+汇总按正文 210 条审计行统计。C12 新增四个标签菜单动作的键盘实机证据，并分列新窗口这一待开发动作。
 
 ## T-CORE 当前顶部常用命令与共享缺口
 
@@ -351,10 +352,11 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C12 | 标签栏 > 新建标签按钮 | 新建标签按钮 | New tab button | WinUI自有按钮 | 已有＋及Ctrl+T，不是标签右键项 | CreateAndActivateTab / Ctrl+T | Blink | IMPLEMENTED_VERIFIED | [TABS] | RunTabWindowStateTests |
 | C12 | 标签栏 > 关闭按钮 | 关闭按钮 | Close tab button | WinUI自有按钮 | 已有TabView关闭按钮及Ctrl+W，不是右键项 | CloseTab / Ctrl+W | Blink | IMPLEMENTED_VERIFIED | [TABS] | RunTabWindowStateTests |
-| C12 | 标签栏 > 右键 > 关闭 | 右键 > 关闭 | Context > Close | 未接入 | 未注册TabViewItem右键菜单 | —（尚未定义） | Blink | DEFERRED | [TABS] | NOT RUN: M-C12-03 |
-| C12 | 标签栏 > 右键 > 关闭其他 | 右键 > 关闭其他 | Context > Close other tabs | 未接入 | 未定义批量关闭规则；Explorer目标版本行为待核 | —（尚未定义） | Blink | DEFERRED | [TABS] | NOT RUN: M-C12-04 |
-| C12 | 标签栏 > 右键 > 关闭右侧 | 右键 > 关闭右侧 | Context > Close tabs to the right | 未接入 | 未定义批量关闭规则；Explorer目标版本行为待核 | —（尚未定义） | Blink | DEFERRED | [TABS] | NOT RUN: M-C12-05 |
-| C12 | 标签栏 > 右键 > 复制标签/新窗口 | 右键 > 复制标签/新窗口 | Context > Duplicate / New window | 未接入 | 不能以TabView拖动或当前导航能力冒充已实现 | —（尚未定义） | Blink | DEFERRED | [TABS] | NOT RUN: M-C12-06 |
+| C12 | 标签页菜单 > 关闭 | 关闭标签页 | Close tab | Fluent E711 | 关闭点中的标签。最后一页走窗口关闭流程 | TabContextClose | Blink | IMPLEMENTED_VERIFIED | [TABS] | 键盘实测后台标签和最后一页。实物鼠标待验 |
+| C12 | 标签页菜单 > 关闭其他 | 关闭其他标签页 | Close other tabs | 文本 | 保留点中的标签。无其他标签时禁用 | TabContextCloseOthers | Blink | IMPLEMENTED_VERIFIED | [TABS] | 键盘实测保留后台目标、路径与选择。实物鼠标待验 |
+| C12 | 标签页菜单 > 关闭右侧 | 关闭右侧标签页 | Close tabs to the right | 文本 | 按标签顺序关闭目标右边的标签。无右侧标签时禁用 | TabContextCloseRight | Blink | IMPLEMENTED_VERIFIED | [TABS] | 键盘实测左侧顺序和活动标签转移。实物鼠标待验 |
+| C12 | 标签页菜单 > 复制 | 复制标签页 | Duplicate tab | Fluent E8C8 | 在新标签打开目标已提交位置并继承视图和排序 | TabContextDuplicate | Blink | IMPLEMENTED_VERIFIED | [TABS] | 键盘实测后台标签、目录、网格、排序及独立选择。实物鼠标待验 |
+| C12 | 标签页菜单 > 移到新窗口 | 移到新窗口 | Move to new window | 待开发 | 多窗口能力待开发 | — | Blink | DEFERRED | [TABS] | NOT RUN |
 | C12 | 地址栏 > 层级段跳转/下级目录 | 层级段跳转/下级目录 | Breadcrumb segment / Child folders | 原生BreadcrumbBar + MenuFlyout | G03a层级跳转，G03b按需枚举直接子目录；真实隐藏/空/失败反馈，不含普通文件 | AddressBarPresentation / StartAddressChildren / NavigateToLocation | Blink | IMPLEMENTED_NEEDS_MANUAL | [ADDRESS] | G03b菜单15 + 地址20项；实物鼠标/完整矩阵待验 |
 | C12 | 地址栏 > 收缩/路径菜单 | 收缩/路径菜单 | Collapsed breadcrumb / Path menu | 原生overflow | 保留原生收缩；collapsed项的独立子按钮支持真实Enter及后续菜单选择 | BreadcrumbBar / IElementFactory | Blink | IMPLEMENTED_NEEDS_MANUAL | [ADDRESS] | G03b#11及地址既有overflow通过；全环境待验 |
 | C12 | 地址栏 > 地址历史/候选 | 地址历史/候选 | Address history / Suggestions | MenuFlyout历史 + Popup目录候选 | 已提交历史及最多12个直接目录候选；Tab补全、选中Enter/点击导航，未选Enter仍原文提交 | BuildAddressHistory / QueueSuggestions / StartAddressSuggestions | Blink | IMPLEMENTED_NEEDS_MANUAL | [ADDRESS] | G03c补全15+地址20通过，真实IME/完整矩阵待验 |
