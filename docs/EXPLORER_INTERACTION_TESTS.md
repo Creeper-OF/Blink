@@ -105,7 +105,7 @@ B-VIEW 的输入仅自有 PID/HWND InputSite 键盘消息及 WinUI UIA，未使�
 | EXP-KEY-26 | Delete | 普通/搜索列表与导航目录走回收站删除；Ctrl/Alt修饰不转普通删除 | TextBox Delete应只删字符；导航菜单适用性已验，实际普通回收站UI仍未执行，回收失败不转永久删除 | IMPLEMENTED_NEEDS_MANUAL / 普通回收站UI NOT RUN |
 | EXP-KEY-27 | Shift+Delete | 普通/搜索列表与导航目录沿原永久删除确认；文本框保留文本编辑语义 | H-SEARCH-UI #15为历史搜索项确认；G06c-DELETE #08/#09实际验证自有非空导航目录默认Cancel/Enter及明确确认后的精确删除/树自动刷新 | IMPLEMENTED_VERIFIED（所列自有导航目录及历史搜索分支）；其他焦点/文本/IME组合NOT RUN |
 | EXP-KEY-28 | Alt+Enter | 普通列表按已选项打开 Windows 属性页，搜索列表沿用系统属性页 | 普通目录的原生属性窗口和关闭返回已通过。文本焦点和搜索快捷键组合单独核对 | PARTIAL |
-| EXP-KEY-29 | Shift+F10、菜单键 Apps | 列表打开 Blink 主菜单，搜索在 PreviewKeyDown 先处理 | TextBox 使用其文本菜单；H-SEARCH-UI #14 覆盖搜索 Shift+F10，普通空列表可聚焦 | IMPLEMENTED_NEEDS_MANUAL / NOT RUN |
+| EXP-KEY-29 | Shift+F10、菜单键 Apps | 主文件区从 WinUI 项容器定位焦点行并打开 Blink 菜单。搜索由 PreviewKeyDown 处理 | Windows 11 已验盘符未选中、与焦点不同的选中项、普通文件、多选与空目录。历史 H-SEARCH-UI #14 覆盖搜索 Shift+F10 | IMPLEMENTED_VERIFIED（所列主文件区组合）；文本框及完整焦点矩阵待验 |
 | EXP-KEY-30 | Ctrl+Z、Ctrl+Y | 没有文件操作撤销/重做日志或绑定 | TextBox 的编辑撤销/重做由控件管理；不能扩展成文件撤销成功 | DEFERRED（文件操作）/ NOT RUN |
 | EXP-KEY-31 | Ctrl+Shift+数字 | 未接 Explorer 视图数字快捷键 | 已有 Details/List/Grid 菜单/工具栏不等于所有 8 视图键 | DEFERRED / NOT RUN |
 | EXP-KEY-32 | F11、Ctrl+滚轮缩放 | 未接全屏和列表图标缩放 | 普通滚轮、系统窗口最大化是其他能力 | DEFERRED / NOT RUN |
@@ -203,7 +203,7 @@ TabView 默认键的事实依据：[Microsoft Tab view — Keyboard navigation](
 | EXP-MENU-05 | 搜索文件/目录：路径/身份重验、Open/Locate/Copy/Cut、父目录 Paste、Properties/F2/Delete，旧 query/Tab peer 失效 | T-SEARCH/T-SHELL；H-SEARCH-UI；当前单选 | NOT RUN |
 | EXP-MENU-06 | 左树已固定/快速访问：固定/取消固定及对应菜单 | 当前 known-folder 快速入口不等于可编辑 pin 模型；尚无完整菜单 | NOT RUN（DEFERRED） |
 | EXP-MENU-07 | 左树普通可展开目录：选择、展开、作用目标与系统菜单 | G06c 已有独立新建、改名和永久删除分项。后续实机核对了原生菜单目标、取消后的原列表选中项、从原生命令回到 Blink 改名，以及 Bandizip ZIP 内容 | 所列分项通过。普通回收站、实际剪贴板及完整矩阵待验 |
-| EXP-MENU-08 | ThisPC 本地盘/可移动盘/光驱/网络映射盘：打开、属性、适用设备命令 | 当前 fixed/removable 有限入口；无完整设备菜单，设备操作不得由目录案例泛化 | NOT RUN（PARTIAL） |
+| EXP-MENU-08 | ThisPC 驱动器打开、属性及适用设备命令 | 实机校验本地盘的当前标签、新标签和原生属性页。覆盖仅在当前本地固定盘 | PARTIAL（所列本地盘动作 PASS）；可移动盘、光驱、网络映射盘及设备命令待验 |
 | EXP-MENU-09 | ThisPC 背景/其他虚拟页：不出现普通路径写入动作，按真实能力显示 | B-VIEW #12 仅验证 ThisPC 顶部三视图/Show，地址仍为虚拟 ThisPC；C-UI #13另实测顶部变更/Sort禁用，虚拟Location保持；完整背景菜单仍待验 | 部分PASS：G01 ThisPC View/Show及C-UI顶部能力禁用；完整背景菜单/其他虚拟页NOT RUN |
 | EXP-MENU-10 | 回收站根/内容菜单与恢复/清空 | 浏览页未实现；现存 recycle/restore fixture 只证明后端删除 | NOT RUN（DEFERRED） |
 | EXP-MENU-11 | UNC/SMB/远端：权限、断线、菜单/凭据/传输语义 | 本地变更限制见 EXP-OBJ-07；Provider 原型不能作为生产证据 | NOT RUN（PARTIAL/DEFERRED） |

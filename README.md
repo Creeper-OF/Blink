@@ -8,6 +8,8 @@ Blink 是一个使用 C++20、C++/WinRT 和 WinUI 3 开发的 Windows 文件管�
 
 当前优先级为功能实现、响应效率和易用性，体积优化后置。同批功能集中实现、统一构建、逐功能验证，沿用自有文件身份模型和唯一文件操作队列。规则见[AGENTS.md](AGENTS.md)、[维护规则](docs/WORKSPACE_MAINTENANCE.md)及[验证指南](docs/VALIDATION_GUIDE.md)。
 
+「此电脑」和普通文件列表的键盘菜单跟随当前焦点。只移动焦点就能按菜单键或 Shift+F10 打开对应项目的菜单。已核对驱动器在当前标签和新标签中的打开位置，以及 Windows 属性页。见[键盘菜单验证](docs/VALIDATION_GUIDE.md#主文件区键盘菜单)。
+
 左侧导航树的普通文件夹和指向真实文件夹的常用位置支持「压缩与更多系统选项…」。Windows 按目标目录提供原生菜单和已注册扩展，常用文件操作继续通过 Blink 执行。见[侧栏系统菜单](docs/VALIDATION_GUIDE.md#侧栏系统菜单)。
 
 普通目录中的「属性」在右键、命令栏和 Alt+Enter 中打开 Windows 属性页。多选时传入同一目录下的完整选中集合。右键的「Blink 详情」保留只读信息和文件夹统计。见[属性验证](docs/VALIDATION_GUIDE.md#windows-属性与-blink-详情)。

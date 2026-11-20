@@ -82,15 +82,15 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C05 搜索结果 | 14 | 9 | 2 | 1 | 2 | 0 | 0 |
 | C06 导航常用/固定项 | 6 | 1 | 3 | 0 | 2 | 0 | 0 |
 | C07 导航普通目录 | 12 | 5 | 5 | 1 | 1 | 0 | 0 |
-| C08 此电脑驱动器条目 | 14 | 3 | 4 | 0 | 5 | 2 | 0 |
+| C08 此电脑驱动器条目 | 14 | 4 | 3 | 0 | 5 | 2 | 0 |
 | C09 此电脑背景与虚拟位置 | 9 | 1 | 0 | 3 | 5 | 0 | 0 |
 | C10 回收站根与内容 | 6 | 0 | 0 | 0 | 6 | 0 | 0 |
 | C11 UNC/SMB与远端Provider | 6 | 0 | 0 | 1 | 4 | 1 | 0 |
 | C12 标签、地址、搜索输入、列头 | 24 | 3 | 7 | 0 | 9 | 0 | 5 |
 | DYN 系统动态子菜单与执行机制 | 12 | 3 | 0 | 1 | 1 | 0 | 7 |
-| 合计 | 208 | 79 | 35 | 10 | 59 | 6 | 19 |
+| 合计 | 208 | 80 | 34 | 10 | 59 | 6 | 19 |
 
-汇总按当前正文208条审计行逐项重算；本次能力状态只调整C07的新建、改名和删除。C06/C08/C12同时修正此前漏同步的汇总数字，既有行的待验范围保持。
+汇总按正文 208 条审计行统计。C08 已补充本地盘 Windows 属性页的实机证据。
 
 ## T-CORE 当前顶部常用命令与共享缺口
 
@@ -297,7 +297,7 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C08 | 驱动器条目实际右键 > 打开 | 打开 | Open | Fluent E8E5 | ThisPC行捕获真实根Location，当前标签进入根 | TargetContextOpen | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI01/02 |
 | C08 | 驱动器条目实际右键 > 刷新 | 刷新 | Refresh | 此菜单不显示 | G06a仅列目标动作；全页刷新仍在顶部/背景 | FolderCommand::Refresh（顶部/背景） | Blink | UNSUPPORTED_BY_DESIGN | [TARGET] | 专用菜单不混入全页刷新 |
 | C08 | 驱动器目标专用右键 > 在新标签页打开 | 在新标签页打开 | Open in new tab | Fluent E8A7 | 新标签直接进入捕获根，原ThisPC标签保持 | TargetContextNewTab | Blink | IMPLEMENTED_VERIFIED | [TARGET] | G06a UI02 |
-| C08 | 驱动器目标专用右键 > 原生驱动器属性 | 属性 | Properties | Fluent E946 | 根entry和parent使用真实根身份；原有进程外properties协议 | TargetContextProperties | 系统跳转 | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | 根捕获/协议原生检查及enabled已验，实际属性页NOT RUN |
+| C08 | 驱动器目标专用右键 > 原生驱动器属性 | 属性 | Properties | Fluent E946 | 根条目和父身份使用实际根目录。复用进程外属性协议 | TargetContextProperties | 系统跳转 | IMPLEMENTED_VERIFIED | [TARGET] | Windows 11 使用聚焦的 D 盘打开真实属性页。核对盘符、正常关闭及原选中状态 |
 | C08 | 驱动器目标专用右键 > 复制完整路径 | 复制完整路径 | Copy full path | Fluent E71B | 使用所点驱动器根Location，复用文本剪贴板发布 | TargetContextCopyPath | Blink | IMPLEMENTED_NEEDS_MANUAL | [TARGET] | enabled已验，实际写入NOT RUN |
 | C08 | 驱动器目标专用右键 > 粘贴 | 粘贴 | Paste | Fluent E77F | 根是实际目录目标，仅在浏览owner可用且有CF_HDROP时启用；不提供根Cut/Copy | TargetContextPaste | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-TRANSFER] | readonly13核对适用性；真实盘根写入NOT RUN |
 | C08 | 驱动器目标专用右键 > 新建文件夹 | 新建文件夹 | New folder | Fluent E8F4 | 真实盘根只提供适用新建，不提供根Rename/Delete | TargetContextNewFolder | Blink | IMPLEMENTED_NEEDS_MANUAL | [NAV-MUTATION] | G06c #01仅验证入口适用性，实际盘根写入未验 |

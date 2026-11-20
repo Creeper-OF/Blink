@@ -9426,18 +9426,18 @@ struct App : AppT<App>
     [[nodiscard]] std::optional<std::size_t> ResolveRowIndexFromElement(
         const IInspectable& source) const
     {
-        auto element = source.try_as<FrameworkElement>();
-        while (element)
+        for (auto element = source.try_as<DependencyObject>(); element && element != entries_;
+            element = VisualTreeHelper::GetParent(element))
         {
-            const auto data_context = element.DataContext();
-            if (data_context)
+            // Keyboard focus can be on the container itself, whose DataContext
+            // need not expose the bound row. Ask the active list for its item.
+            if (element.try_as<Microsoft::UI::Xaml::Controls::Primitives::SelectorItem>())
             {
-                if (const auto index = RowIndexForItem(data_context); index.has_value())
+                if (const auto item = entries_.ItemFromContainer(element))
                 {
-                    return index;
+                    return RowIndexForItem(item);
                 }
             }
-            element = VisualTreeHelper::GetParent(element).try_as<FrameworkElement>();
         }
         return std::nullopt;
     }

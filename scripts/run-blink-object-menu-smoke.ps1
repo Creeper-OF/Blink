@@ -2,7 +2,8 @@
 param(
  [ValidateSet('Debug','Release')][string]$Configuration='Release',
  [string]$Binary='',
- [ValidateRange(5,90)][int]$StepTimeoutSeconds=30
+ [ValidateRange(5,90)][int]$StepTimeoutSeconds=30,
+ [switch]$KeyboardOnly
 )
 # G06a: new owned PID/HWND, real UIA and scoped keyboard input, GUID-only fixtures.
 # Does not build, use global input/Clipboard, edit services or force any process exit.
@@ -18,8 +19,9 @@ $Binary=[IO.Path]::GetFullPath($Binary)
 $guid=[Guid]::NewGuid().ToString('N');$token=$guid.Substring(0,8)
 $fixture=Join-Path $integration ('ui-object-menu-fixtures\owned-'+$guid)
 $source=Join-Path $fixture ('catalog-'+$token);$child=Join-Path $source ('00-child-'+$token)
+$empty=Join-Path $fixture ('empty-'+$token)
 $markerName='marker-'+$token+'.txt';$childMarkerName='child-'+$token+'.txt'
-$allowedDirectories=@($fixture,$source,$child);$allowedFiles=@{};$fileIdentities=@{};$directoryIdentities=@{}
+$allowedDirectories=@($fixture,$source,$child,$empty);$allowedFiles=@{};$fileIdentities=@{};$directoryIdentities=@{}
 $allowedFiles[(Join-Path $source $markerName)]='Blink object menu root '+$guid
 $allowedFiles[(Join-Path $child $childMarkerName)]='Blink object menu child '+$guid
 $compilerTemp=Join-Path $integration ('compiler-temp\'+$guid);$oldTemp=$env:TEMP;$oldTmp=$env:TMP
@@ -95,6 +97,14 @@ function Select-Tab($Token,[string]$Path){
 }
 function Navigate([string]$Path){if($Path -notin $allowedDirectories){throw 'Unowned fixture navigation'};Focus-Peer (By-Id 'AddressHistoryButton') 'address history';Key 0x4C 1;Wait-Ui 'address editor visible' {$null -ne (Editor)};(Editor).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($Path);Focus-Peer (Editor) 'address editor';Key 13;Wait-Ui 'exact owned directory committed' {-not(Editor) -and (Address-Text) -ieq $Path -and (Ready) -and $(if($Path -ieq $source){@(Row-Names) -ccontains $markerName}elseif($Path -ieq $child){@(Row-Names) -ccontains $childMarkerName}else{$true})}}
 function Menu-Open($Peer,[string]$MenuId,[bool]$ShiftF10=$false){Focus-Peer $Peer 'context target';if($ShiftF10){Key 0x79 2}else{Key 0x5D};Wait-Ui ('real context menu '+$MenuId) {$null -ne (Owned-Id $MenuId) -and $null -ne (Owned-Id 'TargetContextOpen')};$menu=Owned-Id $MenuId;$report.menu_evidence+=@([pscustomobject]@{step=$script:currentStep;method=$(if($ShiftF10){'owned Shift+F10'}else{'owned Apps key'});source=(Peer-Evidence $Peer);menu=(Peer-Evidence $menu);items=@('TargetContextOpen','TargetContextNewTab','TargetContextExpandCollapse','TargetContextCopyPath','TargetContextProperties'|ForEach-Object{Peer-Evidence (Owned-Id $_)})});Save-Report;return $menu}
+function Press-DriveMenu($Row, [bool]$ShiftF10, [string[]]$Before) {
+ Focus-Peer $Row 'drive row'
+ if(-not (Same-Names @(Selected-Names) $Before)){throw 'Unexpected drive selection before keyboard input'}
+ if($ShiftF10){Key 0x79 2}else{Key 0x5D}
+ Wait-Ui 'owned drive target menu' {$null -ne (Owned-Id 'LocationContextMenu')}
+ Assert-FolderMenu 'LocationContextMenu' $script:driveRoot
+ if(-not (Is-ThisPc) -or -not (Same-Names @(Selected-Names) @($Row.Current.Name))){throw 'Drive menu navigated or selected the wrong row'}
+}
 function Assert-FolderMenu([string]$MenuId,[string]$Target){
  $menu=Owned-Id $MenuId;if(-not $menu -or $menu.Current.HelpText -ine $Target){throw ('Menu target mismatch; expected '+$Target)}
  foreach($id in @('TargetContextOpen','TargetContextNewTab','TargetContextCopyPath','TargetContextProperties','TargetContextNewFolder')){$p=Owned-Id $id;if(-not(Visible $p) -or -not $p.Current.IsEnabled){throw ('Expected enabled target action '+$id)}}
@@ -103,7 +113,7 @@ function Assert-FolderMenu([string]$MenuId,[string]$Target){
  foreach($id in @('TargetContextCut','TargetContextCopy','TargetContextRename','TargetContextDelete')){$p=Owned-Id $id;if($root){if($p){throw ('Root exposed inapplicable directory command '+$id)}}elseif(-not(Visible $p) -or -not $p.Current.IsEnabled){throw ('Expected ordinary directory target command '+$id)}}
  $paste=Owned-Id 'TargetContextPaste';if(-not(Visible $paste)){throw 'Independent target Paste missing'}
 }
-function Dismiss-Menu{Key 27;Wait-Ui 'context menu dismissed' {-not(Owned-Id 'NavigationContextMenu') -and -not(Owned-Id 'LocationContextMenu')}}
+function Dismiss-Menu{Key 27;Wait-Ui 'context menu dismissed' {-not(Owned-Id 'NavigationContextMenu') -and -not(Owned-Id 'LocationContextMenu') -and -not(Owned-Id 'FolderContextMenu')}}
 function Select-Marker{$p=@(Rows|Where-Object{$_.Current.Name -ceq $markerName});if($p.Count -ne 1){throw 'Owned marker row required'};$p[0].GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select();Wait-Ui 'owned marker remains exactly selected' {(Same-Names @(Selected-Names) @($markerName))}}
 function Fixture-Unchanged{foreach($path in $allowedFiles.Keys){if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw ('Owned payload missing '+$path)};$bytes=[Text.UTF8Encoding]::new($false).GetBytes([string]$allowedFiles[$path]);if([Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -cne [Convert]::ToBase64String($bytes) -or [BlinkObjectMenuUiNative]::Identity($path) -cne $fileIdentities[$path]){throw ('Owned payload bytes or identity changed '+$path)}}}
 function Ownership-Failures{
@@ -211,12 +221,18 @@ public static class BlinkObjectMenuUiNative {
  $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;if(-not $process.Start()){throw 'Owned launch failed'};$ownedHandle=$process.Handle;$report.process_id=$process.Id;Save-Report
  Wait-Ui 'new owned WinUI window' {$null -ne (Window)};[BlinkObjectMenuUiNative]::OwnedWindow=$process.MainWindowHandle;$report.window_dpi=[BlinkObjectMenuUiNative]::GetDpiForWindow($process.MainWindowHandle)
  Wait-Ui 'real initial ThisPC locations' {Is-ThisPc};$initialTab=Selected-Tab;$initialAddress=Address-Text
- Check '01 actual Apps key opens a dedicated drive menu without navigating or ordinary file actions' {
+ Check '01 drive menu follows keyboard focus with no selection or a different selection' {
   $driveRows=@(Rows|Where-Object{$_.Current.Name -match '(?i)[a-z]:'});if(-not $driveRows.Count){Skip 'No actual local drive row exposed by this host'}
   $preferred=[IO.Path]::GetPathRoot($project).Substring(0,2);$matched=@($driveRows|Where-Object{$_.Current.Name -match [regex]::Escape($preferred)});$script:driveRow=$(if($matched.Count){$matched[0]}else{$driveRows[0]})
-  $script:driveRow.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select();$before=@(Selected-Names);$menu=Menu-Open $script:driveRow 'LocationContextMenu'
-  $script:driveRoot=$menu.Current.HelpText;if($script:driveRoot -notmatch '^[A-Za-z]:\\$' -or -not(Test-Path -LiteralPath $script:driveRoot -PathType Container)){throw 'Actual menu did not capture an available drive root'}
-  Assert-FolderMenu 'LocationContextMenu' $script:driveRoot;if(-not(Is-ThisPc) -or -not(Same-Names @(Selected-Names) $before)){throw 'Opening drive menu navigated or changed its selected row'}
+  $script:driveRoot=[regex]::Match($script:driveRow.Current.Name,'(?i)[a-z]:').Value+'\'
+  if(-not(Test-Path -LiteralPath $script:driveRoot -PathType Container)){throw 'Expected an available drive root'}
+  Press-DriveMenu $script:driveRow $false @()
+  Dismiss-Menu
+  $other=$driveRows|Where-Object{$_.Current.Name -cne $script:driveRow.Current.Name}|Select-Object -First 1
+  if(-not $other){$other=Rows|Where-Object{$_.Current.Name -cne $script:driveRow.Current.Name}|Select-Object -First 1}
+  if(-not $other){throw 'Expected a second This PC row for the conflicting selection'}
+  $other.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+  Press-DriveMenu $script:driveRow $true @($other.Current.Name)
  }
  Check '02 drive NewTab and Open use the exact captured root and preserve the previous tab' {
   $count=@(Tabs).Count;Act (Owned-Id 'TargetContextNewTab');Wait-Ui 'drive opens exact root in new tab' {@(Tabs).Count -eq $count+1 -and (Address-Text) -ieq $script:driveRoot -and (Ready)}
@@ -225,6 +241,7 @@ public static class BlinkObjectMenuUiNative {
   $script:driveRow.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select();$null=Menu-Open $script:driveRow 'LocationContextMenu' $true;Assert-FolderMenu 'LocationContextMenu' $script:driveRoot
   Act (Owned-Id 'TargetContextOpen');Wait-Ui 'drive Open enters exact root in same tab' {@(Tabs).Count -eq $count+1 -and (Address-Text) -ieq $script:driveRoot -and (Ready)}
  }
+ if(-not $KeyboardOnly){
  Check '03 virtual ThisPC tree target has only applicable commands and NewTab stays virtual' {
   Wait-Ui 'actual ThisPC tree root' {$null -ne (Tree-Item $thisPcLabels)};$before=Address-Text;$count=@(Tabs).Count;$root=Tree-Item $thisPcLabels
   $menu=Menu-Open $root 'NavigationContextMenu';if($menu.Current.HelpText -notin $thisPcLabels -or (Owned-Id 'TargetContextCopyPath') -or (Owned-Id 'TargetContextProperties') -or -not(Owned-Id 'TargetContextExpandCollapse')){throw 'ThisPC virtual target exposed a filesystem path/property or lost tree actions'}
@@ -259,6 +276,35 @@ public static class BlinkObjectMenuUiNative {
   $before=Address-Text;$null=Menu-Open (Quick-Home) 'NavigationContextMenu' $true;Dismiss-Menu
   Wait-Ui 'actual owned navigation focus after Escape' {$focus=[Windows.Automation.AutomationElement]::FocusedElement;$focus -and $focus.Current.ProcessId -eq $process.Id -and $focus.Current.HasKeyboardFocus -and (Is-OwnDescendant $focus (By-Id 'NavigationPane'))}
   if((Address-Text) -ine $before){throw 'Menu dismissal changed current directory'};Fixture-Unchanged
+ }
+ }
+ Check '11 a focused file opens its item menu and a focused selected file keeps the multi-selection' {
+  Navigate $source
+  $rows=@(Rows);$file=$rows|Where-Object{$_.Current.Name -ceq $markerName}|Select-Object -First 1
+  $folder=$rows|Where-Object{$_.Current.Name -ceq [IO.Path]::GetFileName($child)}|Select-Object -First 1
+  Focus-Peer $file 'unselected file row'
+  if(@(Selected-Names).Count){throw 'Expected an empty file selection before Apps'}
+  Key 0x5D
+  Wait-Ui 'file item context menu' {$null -ne (Owned-Id 'FolderContextMenu') -and (Owned-Id 'ContextOpen').Current.IsEnabled}
+  if(-not (Same-Names @(Selected-Names) @($markerName))){throw 'Apps did not select the exact focused file'}
+  Dismiss-Menu
+  $folder.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).AddToSelection()
+  $both=@($markerName,$folder.Current.Name)
+  Focus-Peer $file 'selected file row'
+  if(-not (Same-Names @(Selected-Names) $both)){throw 'Expected both owned rows selected before Shift+F10'}
+  Key 0x79 2
+  Wait-Ui 'multi-selection item context menu' {$null -ne (Owned-Id 'FolderContextMenu') -and $null -ne (Owned-Id 'ContextProperties')}
+  if(-not (Same-Names @(Selected-Names) $both)){throw 'Shift+F10 changed the selected group'}
+  Dismiss-Menu
+  Fixture-Unchanged
+ }
+ Check '12 an empty directory still opens the background menu from the keyboard' {
+  Navigate $empty
+  Focus-Peer (Entries) 'empty file list'
+  Key 0x5D
+  Wait-Ui 'folder background menu' {$null -ne (Owned-Id 'FolderContextMenu') -and $null -ne (Owned-Id 'ContextRefresh') -and -not (Owned-Id 'ContextOpen')}
+  if((Address-Text) -ine $empty -or @(Selected-Names).Count){throw 'The background menu changed the folder or selection'}
+  Dismiss-Menu
  }
  $notes.Add('Menu opening uses actual scoped Apps/Shift+F10. UIA Invoke proves menu actions, not physical right-click hit testing. Properties/CopyPath are checked for presence, target and enablement; no actual clipboard write or native property-sheet interaction was performed.')
  $report.status='PASS'
