@@ -17,7 +17,7 @@ namespace blink::app
 )XAML";
             for (std::size_t index = 1; index < DetailsColumnDefinitions.size(); ++index)
             {
-                const auto& column = DetailsColumnDefinitions[index];
+                const auto& column = DetailsColumnDefinitions[DetailsColumnIndex(columns.Order()[index - 1])];
                 xaml += L"      <ColumnDefinition Width=\"" +
                     std::to_wstring(column.IsVisible(columns) ? column.width : 0) + L"\" />\n";
             }
@@ -31,7 +31,7 @@ namespace blink::app
 )XAML";
             for (std::size_t index = 1; index < DetailsColumnDefinitions.size(); ++index)
             {
-                const auto& column = DetailsColumnDefinitions[index];
+                const auto& column = DetailsColumnDefinitions[DetailsColumnIndex(columns.Order()[index - 1])];
                 if (column.IsVisible(columns))
                 {
                     xaml += L"    <TextBlock Grid.Column=\"" + std::to_wstring(index) +
@@ -138,14 +138,15 @@ namespace blink::app
         using namespace winrt::Microsoft::UI::Xaml;
         const auto index = (columns.show_type ? 1u : 0u) |
             (columns.show_size ? 2u : 0u) | (columns.show_modified ? 4u : 0u);
-        auto& item_template = details_templates_[index];
-        if (!item_template)
+        auto& cached = details_templates_[index];
+        if (!cached.item_template || cached.columns != columns)
         {
-            item_template = Markup::XamlReader::Load(winrt::hstring(DetailsTemplate(columns))).as<DataTemplate>();
+            cached.item_template = Markup::XamlReader::Load(winrt::hstring(DetailsTemplate(columns))).as<DataTemplate>();
+            cached.columns = columns;
         }
-        if (control.ItemTemplate() != item_template)
+        if (control.ItemTemplate() != cached.item_template)
         {
-            control.ItemTemplate(item_template);
+            control.ItemTemplate(cached.item_template);
         }
     }
 }

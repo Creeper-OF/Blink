@@ -656,6 +656,53 @@ namespace blink::app
         return view_mode_;
     }
 
+    bool DetailsColumns::IsVisible(const SortField field) const noexcept
+    {
+        switch (field)
+        {
+        case SortField::Name: return true;
+        case SortField::Type: return show_type;
+        case SortField::Size: return show_size;
+        case SortField::Modified: return show_modified;
+        }
+        return false;
+    }
+
+    std::optional<SortField> DetailsColumns::VisibleNeighbor(const SortField field,
+        const DetailsColumnDirection direction) const noexcept
+    {
+        const auto current = std::find(order_.begin(), order_.end(), field);
+        if (current == order_.end() || !IsVisible(field)) { return std::nullopt; }
+        const auto step = direction == DetailsColumnDirection::Right ? 1 : -1;
+        const auto count = static_cast<std::ptrdiff_t>(order_.size());
+        for (auto index = current - order_.begin() + step; index >= 0 && index < count; index += step)
+        {
+            const auto neighbor = order_[static_cast<std::size_t>(index)];
+            if (IsVisible(neighbor)) { return neighbor; }
+        }
+        return std::nullopt;
+    }
+
+    bool DetailsColumns::Move(const SortField from, const SortField to) noexcept
+    {
+        auto source = std::find(order_.begin(), order_.end(), from);
+        const auto target = std::find(order_.begin(), order_.end(), to);
+        if (source == order_.end() || target == order_.end() || source == target ||
+            !IsVisible(from) || !IsVisible(to)) { return false; }
+
+        const auto step = source < target ? 1 : -1;
+        for (auto next = source; next != target;)
+        {
+            next += step;
+            if (IsVisible(*next))
+            {
+                std::iter_swap(source, next);
+                source = next;
+            }
+        }
+        return true;
+    }
+
     void TabState::SetDetailsColumns(const DetailsColumns columns) noexcept
     {
         details_columns_ = columns;

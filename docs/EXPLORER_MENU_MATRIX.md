@@ -87,11 +87,11 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C09 此电脑背景与虚拟位置 | 9 | 1 | 0 | 3 | 5 | 0 | 0 |
 | C10 回收站根与内容 | 6 | 0 | 0 | 0 | 6 | 0 | 0 |
 | C11 UNC/SMB与远端Provider | 6 | 0 | 0 | 1 | 4 | 1 | 0 |
-| C12 标签、地址、搜索输入、列头 | 25 | 8 | 7 | 0 | 5 | 0 | 5 |
+| C12 标签、地址、搜索输入、列头 | 25 | 9 | 7 | 0 | 4 | 0 | 5 |
 | DYN 系统动态子菜单与执行机制 | 12 | 3 | 0 | 1 | 1 | 0 | 7 |
-| 合计 | 210 | 90 | 32 | 10 | 53 | 6 | 19 |
+| 合计 | 210 | 91 | 32 | 10 | 52 | 6 | 19 |
 
-汇总按正文 210 条审计行统计。C12 已补充详情选列的键盘实机证据。
+汇总按正文 210 条审计行统计。C12 覆盖详情列显隐和菜单移动列的键盘及 UI Automation 实机验证。
 
 ## T-CORE 当前顶部常用命令与共享缺口
 
@@ -370,10 +370,10 @@ G01曾对三视图、隐藏项与四个命令叶完成15项GUI，历史证据仍
 | C12 | 详细信息列头实际点击 > 大小 | 大小 | Size | 文字按钮；无右键图标 | 按钮切字段/升降序；固定列宽；不是列头右键菜单 | SortField::Size / MakeSortHeader | Blink | IMPLEMENTED_NEEDS_MANUAL | [COLUMNS] | type_sort_changes_projection_without_selection_history_or_listing_mutation |
 | C12 | 详细信息列头实际点击 > 修改时间 | 修改时间 | Modified | 文字按钮；无右键图标 | 按钮切字段/升降序；固定列宽；不是列头右键菜单 | SortField::Modified / MakeSortHeader | Blink | IMPLEMENTED_NEEDS_MANUAL | [COLUMNS] | type_sort_changes_projection_without_selection_history_or_listing_mutation |
 | C12 | 详情列头菜单 > 列显隐和恢复默认 | 名称／类型／大小／修改时间，恢复默认列 | Name / Type / Size / Modified, Restore default columns | WinUI 勾选项 | 普通目录按标签保存。名称固定，隐藏列释放宽度，复用当前排序与选择 | DetailsColumnMenu、ColumnMenuRestoreDefaults | Blink | IMPLEMENTED_VERIFIED | [COLUMNS] | Windows 11 键盘实测表头及数据单元格、导航和标签独立布局。实物鼠标待验 |
-| C12 | 列头目标右键/列管理 > 其他属性列 | 其他属性列 | More property columns | 未接入 | 当前固定四列Button，未注册列头ContextRequested/列配置 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-25 |
-| C12 | 列头目标右键/列管理 > 调整列宽/自动适应 | 调整列宽/自动适应 | Resize / Size to fit | 未接入 | 当前固定四列Button，未注册列头ContextRequested/列配置 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-26 |
-| C12 | 列头目标右键/列管理 > 列重排 | 列重排 | Reorder columns | 未接入 | 当前固定四列Button，未注册列头ContextRequested/列配置 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-27 |
-| C12 | 列头目标右键/列管理 > 分组依据 | 分组依据 | Group by | 未接入 | 当前固定四列Button，未注册列头ContextRequested/列配置 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-28 |
+| C12 | 列头目标右键/列管理 > 其他属性列 | 其他属性列 | More property columns | 未接入 | 列头菜单使用现有四种字段 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-25 |
+| C12 | 列头目标右键/列管理 > 调整列宽/自动适应 | 调整列宽/自动适应 | Resize / Size to fit | 未接入 | 名称使用剩余宽度，其他列使用各自预设宽度 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-26 |
+| C12 | 详情列头菜单 > 列重排 | 向左移动列／向右移动列 | Move column left / right | WinUI 菜单项 | 按标签移动可见列，名称固定在首位，表头与数据一致 | ColumnMenuMoveLeft / ColumnMenuMoveRight | Blink | IMPLEMENTED_VERIFIED | [COLUMNS] | Windows 11 实测双向移动、排序和选中项保留、隐藏列恢复后的位置。表头拖动已接入，实物鼠标待验 |
+| C12 | 列头目标右键/列管理 > 分组依据 | 分组依据 | Group by | 未接入 | 详情视图目前按单字段排序 | —（尚未定义） | Blink | DEFERRED | [COLUMNS] | NOT RUN: M-C12-28 |
 | C12 | Shift+F10/菜单键 > 文件列表/搜索/导航目标 | 键盘上下文菜单 | Keyboard context menu | 对应WinUI菜单 | 焦点范围内捕获当前列表、搜索或导航目标，虚拟对象仅列适用动作 | ShowKeyboardFolderContextMenu/ShowKeyboardContextMenu/ShowNavigationContextMenu | Blink | IMPLEMENTED_VERIFIED | [TARGET] [F-KEY] | G06a10窗口检查；旧H-FOLDER21/H-SEARCH18保持历史证据 |
 
 ## DYN 系统动态子菜单与执行机制

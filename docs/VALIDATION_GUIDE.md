@@ -55,6 +55,17 @@ Apps 和 Shift+F10 使用当前列表焦点行。有其他盘符选中时，菜�
 
 窗口脚本使用自有目录和定向键盘输入，核对可见表头和实际文件单元格、释放的列宽、原有排序和选中项、导航、视图切换和标签隔离。候选版可用 `-Binary` 指定。鼠标实物操作单独验证。
 
+## 详情视图列重排
+
+```powershell
+& .\x64\Release\Blink.Phase1.Tests.exe --suite folder-view
+.\scripts\run-blink-object-menu-smoke.ps1 -ColumnOrderOnly
+```
+
+可拖动类型、大小或修改时间的表头至另一可见可移动列，也可在表头菜单中选择「向左移动列」或「向右移动列」。名称始终固定在左边，隐藏列保留其所在的列位。普通新标签使用默认顺序，复制标签继承当前顺序，「恢复默认列」同时重置可见列与顺序。拖动入口使用 [WinUI 拖放 API](https://learn.microsoft.com/en-us/windows/apps/develop/data/drag-and-drop)。
+
+窗口脚本使用定向键盘和 UI Automation 核对表头及真实文件单元格的横坐标、隐藏列重新显示的位置、排序和选中项保留、标签隔离、复制和恢复默认列。候选可用 `-Binary` 指定。实物鼠标拖动单独验证。
+
 ## Windows 属性与 Blink 详情
 
 ```powershell

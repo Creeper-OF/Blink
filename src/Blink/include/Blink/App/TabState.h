@@ -7,6 +7,7 @@
 
 #include <Windows.h>
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -83,13 +84,33 @@ namespace blink::app
         Grid,
     };
 
+    enum class DetailsColumnDirection
+    {
+        Left,
+        Right,
+    };
+
     struct DetailsColumns
     {
         bool show_type{ true };
         bool show_size{ true };
         bool show_modified{ true };
 
+        constexpr DetailsColumns() noexcept = default;
+        constexpr DetailsColumns(bool type, bool size, bool modified) noexcept
+            : show_type(type), show_size(size), show_modified(modified) {}
+
+        [[nodiscard]] const std::array<SortField, 3>& Order() const noexcept { return order_; }
+        [[nodiscard]] bool IsVisible(SortField field) const noexcept;
+        [[nodiscard]] std::optional<SortField> VisibleNeighbor(SortField field,
+            DetailsColumnDirection direction) const noexcept;
+        [[nodiscard]] bool Move(SortField from, SortField to) noexcept;
+
         friend bool operator==(const DetailsColumns&, const DetailsColumns&) = default;
+
+    private:
+        // Name stays on the left. Hidden optional columns keep their slots.
+        std::array<SortField, 3> order_{ SortField::Type, SortField::Size, SortField::Modified };
     };
 
     struct TabSnapshot

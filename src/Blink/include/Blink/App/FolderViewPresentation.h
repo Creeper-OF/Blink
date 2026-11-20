@@ -15,9 +15,9 @@ namespace blink::app
         int width;
         bool DetailsColumns::* shown;
 
-        [[nodiscard]] constexpr bool IsVisible(const DetailsColumns columns) const noexcept
+        [[nodiscard]] bool IsVisible(const DetailsColumns& columns) const noexcept
         {
-            return !shown || columns.*shown;
+            return columns.IsVisible(field);
         }
     };
 
@@ -27,6 +27,15 @@ namespace blink::app
         DetailsColumnDefinition{ SortField::Size, L"Size", L"Column.Size", 110, &DetailsColumns::show_size },
         DetailsColumnDefinition{ SortField::Modified, L"Modified", L"Column.Modified", 180, &DetailsColumns::show_modified },
     };
+
+    [[nodiscard]] constexpr std::uint32_t DetailsColumnIndex(const SortField field) noexcept
+    {
+        for (std::uint32_t index = 0; index < DetailsColumnDefinitions.size(); ++index)
+        {
+            if (DetailsColumnDefinitions[index].field == field) { return index; }
+        }
+        return static_cast<std::uint32_t>(DetailsColumnDefinitions.size());
+    }
 
     // UI-only layouts. All modes consume the same tab-owned row objects;
     // neither templates nor controls own navigation, selection or enumeration.
@@ -41,8 +50,12 @@ namespace blink::app
             DetailsColumns columns);
 
     private:
-        std::array<winrt::Microsoft::UI::Xaml::DataTemplate, 8> details_templates_{
-            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+        struct CachedDetailsTemplate
+        {
+            DetailsColumns columns;
+            winrt::Microsoft::UI::Xaml::DataTemplate item_template{ nullptr };
+        };
+        std::array<CachedDetailsTemplate, 8> details_templates_{};
         std::array<winrt::Microsoft::UI::Xaml::DataTemplate, 2> compact_templates_{ nullptr, nullptr };
         std::array<winrt::Microsoft::UI::Xaml::Controls::ItemsPanelTemplate, 2> panels_{ nullptr, nullptr };
         std::array<winrt::Microsoft::UI::Xaml::Style, 2> container_styles_{ nullptr, nullptr };

@@ -366,6 +366,8 @@ namespace blink::app
                 { L"Column.Size", L"Size" },
                 { L"Column.Modified", L"Modified" },
                 { L"Column.RestoreDefaults", L"Restore default columns" },
+                { L"Column.MoveLeft", L"Move column left" },
+                { L"Column.MoveRight", L"Move column right" },
                 { L"Command.Open", L"Open" },
                 { L"Command.Cut", L"Cut" },
                 { L"Command.Copy", L"Copy" },

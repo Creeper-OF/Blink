@@ -1246,6 +1246,7 @@ struct App : AppT<App>
     void CloseOperationDialogs() noexcept
     {
         CancelTargetOperationWork();
+        details_column_drag_.reset();
         DismissTabContextMenu();
         DismissDetailsColumnMenu();
         DismissCommandBarMenus();
@@ -1913,6 +1914,12 @@ struct App : AppT<App>
     }
     void FileDragTabOver(const blink::app::TabId id, const DragEventArgs& args)
     {
+        if (args.DataView().Contains(kDetailsColumnDragFormat))
+        {
+            args.AcceptedOperation(Windows::ApplicationModel::DataTransfer::DataPackageOperation::None);
+            args.Handled(true);
+            return;
+        }
         const auto weak = get_weak();
         file_drag_drop_.Over(args, [weak, id]() -> std::optional<FileOperationOrigin> {
             if (const auto app = weak.get()) { return app->TabDropTarget(id); } return {};
@@ -4717,6 +4724,7 @@ struct App : AppT<App>
         // template failure must not discard the user's existing presentation.
         auto replacement = CreateFolderViewControl(mode);
         folder_view_presentation_.Configure(replacement, mode, ActiveState().GetDetailsColumns());
+        details_column_drag_.reset();
         DismissDetailsColumnMenu();
         selection_sync_suppressed_ = true;
         const auto previous = entries_;
@@ -4933,6 +4941,7 @@ struct App : AppT<App>
             auto button = MakeSortHeader(column.label, column.field);
             Automation::AutomationProperties::SetAutomationId(button,
                 hstring(std::wstring(L"DetailsHeader") + column.property));
+            if (column.shown) { ConfigureDetailsColumnDrag(button, column.field); }
             Grid::SetColumn(button, index);
             header.Children().Append(button);
         }
@@ -4941,13 +4950,15 @@ struct App : AppT<App>
             Windows::Foundation::Point position{ 8, static_cast<float>(details_header_.ActualHeight()) };
             Windows::Foundation::Point pointer{};
             if (args.TryGetPosition(details_header_, pointer)) { position = pointer; }
-            if (ShowDetailsColumnMenu(details_header_, position)) { args.Handled(true); }
+            if (ShowDetailsColumnMenu(details_header_, position, DetailsHeaderField(args.OriginalSource())))
+            { args.Handled(true); }
         });
         header.ContextCanceled([this](auto&&, auto&&) { DismissDetailsColumnMenu(); });
         const auto show_keyboard_menu = [this] {
             auto anchor = FocusManager::GetFocusedElement(details_header_.XamlRoot()).try_as<FrameworkElement>();
             if (!anchor) { anchor = details_header_; }
-            (void)ShowDetailsColumnMenu(anchor, { 8, static_cast<float>(anchor.ActualHeight()) });
+            (void)ShowDetailsColumnMenu(anchor, { 8, static_cast<float>(anchor.ActualHeight()) },
+                DetailsHeaderField(anchor));
         };
         AddAccelerator(header, Windows::System::VirtualKey::Application,
             Windows::System::VirtualKeyModifiers::None, show_keyboard_menu, true);
@@ -4962,17 +4973,39 @@ struct App : AppT<App>
         folder_view_presentation_.SetDetailsColumns(entries_, columns);
         for (std::uint32_t index = 1; index < blink::app::DetailsColumnDefinitions.size(); ++index)
         {
-            const auto& column = blink::app::DetailsColumnDefinitions[index];
+            const auto column_index = blink::app::DetailsColumnIndex(columns.Order()[index - 1]);
+            const auto& column = blink::app::DetailsColumnDefinitions[column_index];
             const bool visible = column.IsVisible(columns);
             const auto visibility = visible ? Visibility::Visible : Visibility::Collapsed;
-            const auto header = details_header_.Children().GetAt(index);
+            const auto header = details_header_.Children().GetAt(column_index).as<FrameworkElement>();
+            const auto grid_column = static_cast<std::int32_t>(index);
+            if (Grid::GetColumn(header) != grid_column)
+            {
+                Grid::SetColumn(header, grid_column);
+            }
+            const auto definition = details_header_.ColumnDefinitions().GetAt(index);
+            const double width = visible ? column.width : 0;
+            if (definition.Width().Value != width) { definition.Width({ width, GridUnitType::Pixel }); }
             if (header.Visibility() != visibility)
             {
-                details_header_.ColumnDefinitions().GetAt(index).Width(
-                    { visible ? static_cast<double>(column.width) : 0, GridUnitType::Pixel });
                 header.Visibility(visibility);
             }
         }
+    }
+
+    std::optional<blink::app::SortField> DetailsHeaderField(const IInspectable& source) const
+    {
+        for (auto element = source.try_as<DependencyObject>(); element && element != details_header_;
+            element = VisualTreeHelper::GetParent(element))
+        {
+            std::uint32_t index{};
+            if (const auto child = element.try_as<UIElement>();
+                child && details_header_.Children().IndexOf(child, index))
+            {
+                return blink::app::DetailsColumnDefinitions[index].field;
+            }
+        }
+        return std::nullopt;
     }
 
     bool CanConfigureDetailsColumns() const
@@ -4991,28 +5024,81 @@ struct App : AppT<App>
         }
     }
 
-    bool ShowDetailsColumnMenu(const FrameworkElement& anchor, const Windows::Foundation::Point position)
+    void ApplyDetailsColumns(const blink::app::DetailsColumns columns)
     {
+        DismissDetailsColumnMenu();
+        SyncDetailsColumns(columns);
+        ActiveState().SetDetailsColumns(columns);
+    }
+
+    static constexpr auto kDetailsColumnDragFormat = L"Blink.DetailsColumn";
+
+    std::optional<blink::app::DetailsColumns> DetailsColumnDropLayout(
+        const blink::app::SortField target, const DragEventArgs& args) const
+    {
+        if (!details_column_drag_ || details_column_drag_->tab_id != tab_window_state_.ActiveTabId() ||
+            !CanConfigureDetailsColumns() || !args.DataView().Contains(kDetailsColumnDragFormat)) { return {}; }
+        auto columns = ActiveState().GetDetailsColumns();
+        if (!columns.Move(details_column_drag_->field, target)) { return {}; }
+        return columns;
+    }
+
+    void ConfigureDetailsColumnDrag(const Button& button, const blink::app::SortField field)
+    {
+        using Windows::ApplicationModel::DataTransfer::DataPackageOperation;
+        button.CanDrag(true);
+        button.AllowDrop(true);
+        const auto weak = get_weak();
+        button.DragStarting([weak, field](auto&&, const DragStartingEventArgs& args) {
+            const auto app = weak.get();
+            if (!app || !app->CanConfigureDetailsColumns() || !app->ActiveState().GetDetailsColumns().IsVisible(field))
+            { args.Cancel(true); return; }
+            auto data = args.Data();
+            data.SetData(kDetailsColumnDragFormat, box_value(static_cast<std::uint32_t>(field)));
+            data.RequestedOperation(DataPackageOperation::Move);
+            args.AllowedOperations(DataPackageOperation::Move);
+            app->details_column_drag_ = DetailsColumnDrag{ app->tab_window_state_.ActiveTabId(), field };
+        });
+        button.DragOver([weak, field](auto&&, const DragEventArgs& args) {
+            if (const auto app = weak.get(); app && app->DetailsColumnDropLayout(field, args))
+            {
+                args.AcceptedOperation(DataPackageOperation::Move);
+                args.Handled(true);
+            }
+        });
+        button.Drop([weak, field](auto&&, const DragEventArgs& args) {
+            if (const auto app = weak.get())
+            {
+                if (const auto columns = app->DetailsColumnDropLayout(field, args))
+                {
+                    args.AcceptedOperation(DataPackageOperation::Move);
+                    args.Handled(true);
+                    app->ApplyDetailsColumns(*columns);
+                }
+            }
+        });
+        button.DropCompleted([weak](auto&&, auto&&) {
+            if (const auto app = weak.get()) { app->details_column_drag_.reset(); }
+        });
+    }
+
+    bool ShowDetailsColumnMenu(const FrameworkElement& anchor, const Windows::Foundation::Point position,
+        const std::optional<blink::app::SortField> field)
+    {
+        using blink::app::DetailsColumnDirection;
         using blink::app::DetailsColumns;
+        using blink::app::SortField;
         if (!CanConfigureDetailsColumns()) { return false; }
         DismissDetailsColumnMenu();
         details_column_menu_ = MenuFlyout();
         blink::app::ApplyContextMenuAppearance(details_column_menu_, anchor, L"DetailsColumnMenu");
 
         const auto columns = ActiveState().GetDetailsColumns();
-        const auto choose = [weak = get_weak(), tab_id = tab_window_state_.ActiveTabId()](bool DetailsColumns::* shown) {
+        const auto choose = [weak = get_weak(), tab_id = tab_window_state_.ActiveTabId()](const DetailsColumns updated) {
             if (const auto app = weak.get(); app && app->tab_window_state_.ActiveTabId() == tab_id &&
                 app->CanConfigureDetailsColumns())
             {
-                auto updated = DetailsColumns{};
-                if (shown)
-                {
-                    updated = app->ActiveState().GetDetailsColumns();
-                    updated.*shown = !(updated.*shown);
-                }
-                app->DismissDetailsColumnMenu();
-                app->SyncDetailsColumns(updated);
-                app->ActiveState().SetDetailsColumns(updated);
+                app->ApplyDetailsColumns(updated);
             }
         };
         for (const auto& column : blink::app::DetailsColumnDefinitions)
@@ -5026,17 +5112,36 @@ struct App : AppT<App>
                 hstring(std::wstring(L"ColumnMenu") + column.property));
             if (column.shown)
             {
-                item.Click([choose, shown = column.shown](auto&&, auto&&) { choose(shown); });
+                auto updated = columns;
+                updated.*column.shown = !column.IsVisible(columns);
+                item.Click([choose, updated](auto&&, auto&&) { choose(updated); });
             }
             details_column_menu_.Items().Append(item);
         }
         details_column_menu_.Items().Append(MenuFlyoutSeparator());
+        if (field && *field != SortField::Name && columns.IsVisible(*field))
+        {
+            const auto add_move = [&](const DetailsColumnDirection direction, const wchar_t* label, const wchar_t* id) {
+                auto updated = columns;
+                const auto neighbor = columns.VisibleNeighbor(*field, direction);
+                MenuFlyoutItem move;
+                move.Text(hstring(localization_.GetString(label)));
+                move.IsEnabled(neighbor && updated.Move(*field, *neighbor));
+                blink::app::StyleContextMenuItem(move);
+                Automation::AutomationProperties::SetAutomationId(move, id);
+                move.Click([choose, updated](auto&&, auto&&) { choose(updated); });
+                details_column_menu_.Items().Append(move);
+            };
+            add_move(DetailsColumnDirection::Left, L"Column.MoveLeft", L"ColumnMenuMoveLeft");
+            add_move(DetailsColumnDirection::Right, L"Column.MoveRight", L"ColumnMenuMoveRight");
+            details_column_menu_.Items().Append(MenuFlyoutSeparator());
+        }
         MenuFlyoutItem reset;
         reset.Text(hstring(localization_.GetString(L"Column.RestoreDefaults")));
         reset.IsEnabled(columns != DetailsColumns{});
         blink::app::StyleContextMenuItem(reset);
         Automation::AutomationProperties::SetAutomationId(reset, L"ColumnMenuRestoreDefaults");
-        reset.Click([choose](auto&&, auto&&) { choose(nullptr); });
+        reset.Click([choose](auto&&, auto&&) { choose({}); });
         details_column_menu_.Items().Append(reset);
 
         auto options = Microsoft::UI::Xaml::Controls::Primitives::FlyoutShowOptions();
@@ -8174,6 +8279,7 @@ struct App : AppT<App>
             item.Drop([weak, id](auto&&, const DragEventArgs& args) {
                 if (const auto app = weak.get(); app && !app->window_style_closed_)
                 {
+                    if (args.DataView().Contains(kDetailsColumnDragFormat)) { return; }
                     app->CancelDragTabHover(); app->ActivateDropTab(id);
                     app->file_drag_drop_.Drop(args, [weak, id]() -> std::optional<FileOperationOrigin> {
                         if (const auto live = weak.get()) { return live->TabDropTarget(id); } return {};
@@ -9814,6 +9920,12 @@ struct App : AppT<App>
     TitleBar title_bar_{ nullptr };
     MenuFlyout folder_menu_{ nullptr };
     MenuFlyout tab_context_menu_{ nullptr };
+    struct DetailsColumnDrag
+    {
+        blink::app::TabId tab_id;
+        blink::app::SortField field;
+    };
+    std::optional<DetailsColumnDrag> details_column_drag_;
     MenuFlyout details_column_menu_{ nullptr };
     std::optional<FolderMenuContext> folder_system_menu_context_;
     bool window_style_closed_{};

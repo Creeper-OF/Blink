@@ -1079,9 +1079,11 @@ namespace
 
     [[nodiscard]] bool RunFolderViewStateTests()
     {
+        using blink::app::DetailsColumnDirection;
         using blink::app::DetailsColumns;
         using blink::app::FolderViewMode;
         using blink::app::Location;
+        using blink::app::SortField;
         using blink::app::TabState;
         using blink::app::TabWindowState;
 
@@ -1093,6 +1095,43 @@ namespace
             "view_defaults_to_details_in_state_and_snapshots");
         passed &= Check(tab.GetDetailsColumns() == DetailsColumns{ true, true, true },
             "details_columns_default_to_all_optional_columns_visible");
+        {
+            DetailsColumns columns;
+            const auto initial = columns.Order();
+            passed &= Check(initial == std::array{ SortField::Type, SortField::Size, SortField::Modified } &&
+                    !columns.VisibleNeighbor(SortField::Type, DetailsColumnDirection::Left) &&
+                    columns.VisibleNeighbor(SortField::Type, DetailsColumnDirection::Right) == SortField::Size &&
+                    !columns.VisibleNeighbor(SortField::Modified, DetailsColumnDirection::Right),
+                "details_column_order_has_visible_neighbors_and_fixed_edges");
+            passed &= Check(columns.Move(SortField::Type, SortField::Modified) &&
+                    columns.Order() == std::array{ SortField::Size, SortField::Modified, SortField::Type },
+                "details_column_drop_moves_across_other_visible_columns");
+            passed &= Check(columns.Move(SortField::Type, SortField::Size) && columns.Order() == initial,
+                "details_column_drop_can_move_back_toward_the_left_edge");
+            columns.show_size = false;
+            passed &= Check(columns.VisibleNeighbor(SortField::Modified, DetailsColumnDirection::Left) == SortField::Type &&
+                    columns.Move(SortField::Modified, SortField::Type) &&
+                    columns.Order() == std::array{ SortField::Modified, SortField::Size, SortField::Type } &&
+                    !columns.show_size,
+                "details_column_move_skips_hidden_columns_and_retains_their_slots");
+            const auto moved = columns;
+            passed &= Check(!columns.Move(SortField::Name, SortField::Type) &&
+                    !columns.Move(SortField::Type, SortField::Name) &&
+                    !columns.Move(SortField::Size, SortField::Type) &&
+                    !columns.Move(SortField::Type, SortField::Size) &&
+                    !columns.Move(SortField::Type, SortField::Type) && columns == moved,
+                "details_column_move_ignores_fixed_hidden_and_identical_endpoints");
+            columns.show_size = true;
+            TabWindowState tab_layouts;
+            const auto configured = tab_layouts.ActiveTabId();
+            const auto separate = tab_layouts.CreateTab();
+            tab_layouts.Find(configured)->state->SetDetailsColumns(columns);
+            passed &= Check(tab_layouts.ActivateTab(separate) &&
+                    tab_layouts.ActiveTab()->state->GetDetailsColumns().Order() == initial &&
+                    tab_layouts.ActivateTab(configured) &&
+                    tab_layouts.ActiveTab()->state->GetDetailsColumns().Order() == columns.Order(),
+                "details_column_order_stays_with_the_tab_across_switches");
+        }
 
         const std::wstring path_a = L"C:\\phase1-view\\A";
         const std::wstring path_b = L"C:\\phase1-view\\中文目录_B";

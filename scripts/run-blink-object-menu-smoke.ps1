@@ -6,19 +6,20 @@ param(
  [ValidateRange(5,90)][int]$StepTimeoutSeconds=30,
  [Parameter(ParameterSetName='Objects')][switch]$KeyboardOnly,
  [Parameter(ParameterSetName='Tabs')][switch]$TabMenuOnly,
- [Parameter(ParameterSetName='Columns')][switch]$ColumnsOnly
+ [Parameter(ParameterSetName='Columns')][switch]$ColumnsOnly,
+ [Parameter(ParameterSetName='ColumnOrder')][switch]$ColumnOrderOnly
 )
 # G06a: new owned PID/HWND, real UIA and scoped keyboard input, GUID-only fixtures.
 # Does not build, use global input/Clipboard, edit services or force any process exit.
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $project=Split-Path -Parent $PSScriptRoot
-$topic=if($ColumnsOnly){'details-columns'}elseif($TabMenuOnly){'tab-context-menu'}else{'explorer-object-menu'}
+$topic=if($ColumnOrderOnly){'details-column-order'}elseif($ColumnsOnly){'details-columns'}elseif($TabMenuOnly){'tab-context-menu'}else{'explorer-object-menu'}
 if(-not $OutputDirectory){$OutputDirectory='.build\'+$topic+'\integration'}
 if(-not [IO.Path]::IsPathRooted($OutputDirectory)){$OutputDirectory=Join-Path $project $OutputDirectory}
 $integration=[IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $integration -Force|Out-Null
-$reportPath=Join-Path $integration $(if($ColumnsOnly){'ui-details-columns-report.json'}elseif($TabMenuOnly){'ui-tab-menu-report.json'}else{'ui-object-menu-report.json'})
+$reportPath=Join-Path $integration $(if($ColumnOrderOnly){'ui-column-order-report.json'}elseif($ColumnsOnly){'ui-details-columns-report.json'}elseif($TabMenuOnly){'ui-tab-menu-report.json'}else{'ui-object-menu-report.json'})
 if(-not $Binary){$Binary=Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe')}
 if(-not [IO.Path]::IsPathRooted($Binary)){$Binary=Join-Path $project $Binary}
 $Binary=[IO.Path]::GetFullPath($Binary)
@@ -240,10 +241,25 @@ function Check-TabMenus {
 function Test-DetailsLayout([string]$Marker, [string[]]$VisibleColumns) {
  $row=Rows|Where-Object{$_.Current.Name -ceq $Marker}|Select-Object -First 1
  if(-not $row){return $false}
+ $headerPositions=@{}
+ $cellPositions=@{}
  foreach($field in @('Name','Type','Size','Modified')){
   $expected=$field -cin $VisibleColumns
-  if([bool](By-Id ('DetailsHeader'+$field)) -ne $expected -or
-      [bool](Find-In $row ('DetailsCell'+$field)) -ne $expected){return $false}
+  $header=By-Id ('DetailsHeader'+$field)
+  $cell=Find-In $row ('DetailsCell'+$field)
+  if([bool]$header -ne $expected -or [bool]$cell -ne $expected){return $false}
+  if($ColumnOrderOnly -and $expected){
+   $headerPositions[$field]=$header.Current.BoundingRectangle.Left
+   $cellPositions[$field]=$cell.Current.BoundingRectangle.Left
+  }
+ }
+ if($ColumnOrderOnly){
+  for($index=1;$index -lt $VisibleColumns.Count;$index++){
+   $before=$VisibleColumns[$index-1]
+   $after=$VisibleColumns[$index]
+   if($headerPositions[$before] -ge $headerPositions[$after] -or $cellPositions[$before] -ge $cellPositions[$after]){return $false}
+  }
+  $report.column_layouts+=@([pscustomobject]@{step=$script:currentStep;order=@($VisibleColumns);headers=$headerPositions;cells=$cellPositions})
  }
  return $true
 }
@@ -253,8 +269,10 @@ function Open-DetailsColumnMenu([string]$Field='Name', [bool]$ShiftF10=$false) {
  Focus-Peer $header ('column header '+$Field)
  if($ShiftF10){Key 0x79 2}else{Key 0x5D}
  Wait-Ui 'details-column context menu and checkbox peer' {$null -ne (Owned-Id 'DetailsColumnMenu') -and $null -ne (Owned-Id 'ColumnMenuName')}
+ $items=@('Name','Type','Size','Modified','RestoreDefaults')
+ if($ColumnOrderOnly){$items+=@('MoveLeft','MoveRight')}
  $report.menu_evidence+=@([pscustomobject]@{step=$script:currentStep;source=(Peer-Evidence $header);
-  menu=(Peer-Evidence (Owned-Id 'DetailsColumnMenu'));items=@('Name','Type','Size','Modified','RestoreDefaults'|ForEach-Object{Peer-Evidence (Owned-Id ('ColumnMenu'+$_))})})
+  menu=(Peer-Evidence (Owned-Id 'DetailsColumnMenu'));items=@($items|ForEach-Object{Peer-Evidence (Owned-Id ('ColumnMenu'+$_))})})
  Save-Report
 }
 
@@ -348,6 +366,64 @@ function Check-DetailsColumns {
   Wait-Ui 'restoring columns restores all four headers and cells' {Test-DetailsLayout $markerName $all}
   Select-Tab ([pscustomobject]@{ordinal=0;name=$sourceName}) $source
   Wait-Ui 'restoring duplicate did not change the original tab' {Test-DetailsLayout $markerName @('Name')}
+  Fixture-Unchanged
+ }
+}
+
+function Check-DetailsColumnOrder {
+ $default=@('Name','Type','Size','Modified')
+ $reordered=@('Name','Modified','Type','Size')
+ $sourceName=[IO.Path]::GetFileName($source)
+ $report.column_layouts=@()
+ Check 'R01 moving Type right updates the header and the file cells, preserving sort and selection' {
+  Navigate $source
+  Wait-Ui 'default header and row order' {Test-DetailsLayout $markerName $default}
+  Act (By-Id 'DetailsHeaderType')
+  Wait-Ui 'Type sort is applied' {(By-Id 'CommandSort').Current.HelpText -in @(Resource-Labels 'Column.Type')}
+  $sortDirection=(By-Id 'CommandSort').Current.ItemStatus
+  Select-Marker
+  Open-DetailsColumnMenu 'Type' $true
+  if((Owned-Id 'ColumnMenuMoveLeft').Current.IsEnabled -or -not (Owned-Id 'ColumnMenuMoveRight').Current.IsEnabled){
+   throw 'The leftmost optional column should only move right'
+  }
+  Act (Owned-Id 'ColumnMenuMoveRight')
+  Wait-Ui 'new visual header and cell order' {Test-DetailsLayout $markerName @('Name','Size','Type','Modified')}
+  if(-not (Same-Names @(Selected-Names) @($markerName)) -or (Address-Text) -ine $source -or
+   (By-Id 'CommandSort').Current.HelpText -notin @(Resource-Labels 'Column.Type') -or
+   (By-Id 'CommandSort').Current.ItemStatus -cne $sortDirection){throw 'Column order affected the folder, selection or sort'}
+ }
+ Check 'R02 moving left skips the hidden column and restoring visibility keeps its slot' {
+  Open-DetailsColumnMenu
+  if((Owned-Id 'ColumnMenuMoveLeft') -or (Owned-Id 'ColumnMenuMoveRight')){throw 'Name should stay on the left'}
+  Choose-DetailsColumn 'Type'
+  Wait-Ui 'hidden Type has no header or actual cell' {Test-DetailsLayout $markerName @('Name','Size','Modified')}
+  Open-DetailsColumnMenu 'Modified'
+  if(-not (Owned-Id 'ColumnMenuMoveLeft').Current.IsEnabled -or (Owned-Id 'ColumnMenuMoveRight').Current.IsEnabled){
+   throw 'The rightmost visible field should move left over the hidden one'
+  }
+  Act (Owned-Id 'ColumnMenuMoveLeft')
+  Wait-Ui 'Modified moves left of Size' {Test-DetailsLayout $markerName @('Name','Modified','Size')}
+  Open-DetailsColumnMenu
+  Choose-DetailsColumn 'Type'
+  Wait-Ui 'Type returns to its original slot' {Test-DetailsLayout $markerName $reordered}
+ }
+ Check 'R03 new tabs have default order and the original tab restores its customized order' {
+  Add-TestTab $child
+  Wait-Ui 'new tab independently uses the original order' {Test-DetailsLayout $childMarkerName $default}
+  Select-Tab ([pscustomobject]@{ordinal=0;name=$sourceName}) $source
+  Wait-Ui 'switching back restores the arrangement and selection' {(Test-DetailsLayout $markerName $reordered) -and
+   (Same-Names @(Selected-Names) @($markerName))}
+ }
+ Check 'R04 duplicating inherits the order, and resetting it leaves the source tab untouched' {
+  Open-TabMenu 0 Apps
+  Act (Owned-Id 'TabContextDuplicate')
+  Wait-Ui 'duplicate inherits the source arrangement' {@(Tabs).Count -eq 3 -and (Selected-Tab).ordinal -eq 2 -and
+    (Address-Text) -ieq $source -and (Test-DetailsLayout $markerName $reordered)}
+  Open-DetailsColumnMenu
+  Act (Owned-Id 'ColumnMenuRestoreDefaults')
+  Wait-Ui 'restore defaults also resets the order' {Test-DetailsLayout $markerName $default}
+  Select-Tab ([pscustomobject]@{ordinal=0;name=$sourceName}) $source
+  Wait-Ui 'original tab still has its own order' {Test-DetailsLayout $markerName $reordered}
   Fixture-Unchanged
  }
 }
@@ -450,7 +526,9 @@ public static class BlinkObjectMenuUiNative {
  $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;if(-not $process.Start()){throw 'Owned launch failed'};$ownedHandle=$process.Handle;$report.process_id=$process.Id;Save-Report
  Wait-Ui 'new owned WinUI window' {$null -ne (Window)};[BlinkObjectMenuUiNative]::OwnedWindow=$process.MainWindowHandle;$report.window_dpi=[BlinkObjectMenuUiNative]::GetDpiForWindow($process.MainWindowHandle)
  Wait-Ui 'real initial ThisPC locations' {Is-ThisPc};$initialTab=Selected-Tab;$initialAddress=Address-Text
- if($ColumnsOnly){
+ if($ColumnOrderOnly){
+  Check-DetailsColumnOrder
+ }elseif($ColumnsOnly){
   Check-DetailsColumns
  }elseif($TabMenuOnly){
   Check-TabMenus
