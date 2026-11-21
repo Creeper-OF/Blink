@@ -90,6 +90,18 @@ namespace blink::app
         Right,
     };
 
+    struct DetailsColumnLayout
+    {
+        static constexpr int Stretch = -1;
+
+        std::array<SortField, 4> fields;
+        // Widths in display order. Zero hides a column; Stretch fills the available name space.
+        std::array<int, 4> widths;
+        int scroll_extent{};
+
+        friend bool operator==(const DetailsColumnLayout&, const DetailsColumnLayout&) = default;
+    };
+
     struct DetailsColumns
     {
         bool show_type{ true };
@@ -105,12 +117,19 @@ namespace blink::app
         [[nodiscard]] std::optional<SortField> VisibleNeighbor(SortField field,
             DetailsColumnDirection direction) const noexcept;
         [[nodiscard]] bool Move(SortField from, SortField to) noexcept;
+        [[nodiscard]] static constexpr int MinimumWidth(SortField field) noexcept
+        { return field == SortField::Name ? 120 : 72; }
+        static constexpr int MaximumWidth = 4096;
+        [[nodiscard]] bool SetWidth(SortField field, int width) noexcept;
+        [[nodiscard]] DetailsColumnLayout Layout(double viewport_width) const noexcept;
 
         friend bool operator==(const DetailsColumns&, const DetailsColumns&) = default;
 
     private:
         // Name stays on the left. Hidden optional columns keep their slots.
         std::array<SortField, 3> order_{ SortField::Type, SortField::Size, SortField::Modified };
+        // Indexed by SortField. Name starts at zero to fill the remaining width.
+        std::array<int, 4> widths_{ 0, 110, 180, 140 };
     };
 
     struct TabSnapshot

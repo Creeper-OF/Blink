@@ -1080,6 +1080,7 @@ namespace
     [[nodiscard]] bool RunFolderViewStateTests()
     {
         using blink::app::DetailsColumnDirection;
+        using blink::app::DetailsColumnLayout;
         using blink::app::DetailsColumns;
         using blink::app::FolderViewMode;
         using blink::app::Location;
@@ -1131,6 +1132,39 @@ namespace
                     tab_layouts.ActivateTab(configured) &&
                     tab_layouts.ActiveTab()->state->GetDetailsColumns().Order() == columns.Order(),
                 "details_column_order_stays_with_the_tab_across_switches");
+        }
+        {
+            DetailsColumns columns;
+            const auto wide = columns.Layout(800);
+            const auto narrow = columns.Layout(549.5);
+            passed &= Check(wide.widths == std::array{ DetailsColumnLayout::Stretch, 140, 110, 180 } &&
+                    wide.scroll_extent == 0 && narrow.widths == std::array{ 120, 140, 110, 180 } &&
+                    narrow.scroll_extent == 550 && columns.Layout(550).scroll_extent == 0,
+                "details_column_auto_name_uses_space_or_a_scrollable_minimum");
+            passed &= Check(columns.SetWidth(SortField::Name, 300) &&
+                    columns.Layout(731).widths == std::array{ 300, 140, 110, 180 } &&
+                    columns.Layout(731).scroll_extent == 0 && columns.Layout(720).scroll_extent == 730,
+                "details_column_name_width_can_be_fixed_and_scrolls_when_needed");
+            passed &= Check(columns.SetWidth(SortField::Type, 210) && columns.Move(SortField::Type, SortField::Size) &&
+                    columns.Layout(900).widths == std::array{ 300, 110, 210, 180 },
+                "details_column_width_follows_the_field_when_reordered");
+            columns.show_type = false;
+            passed &= Check(!columns.SetWidth(SortField::Type, 140) &&
+                    columns.Layout(700).widths == std::array{ 300, 110, 0, 180 } &&
+                    columns.Layout(700).scroll_extent == 0,
+                "details_column_hidden_width_contributes_no_extent");
+            columns.show_type = true;
+            passed &= Check(columns.Layout(900).widths[2] == 210 && !columns.SetWidth(SortField::Type, 210) &&
+                    columns.SetWidth(SortField::Type, -90) && columns.Layout(900).widths[2] == 72 &&
+                    columns.SetWidth(SortField::Size, 5000) && columns.Layout(100).widths[1] == DetailsColumns::MaximumWidth,
+                "details_column_reveal_restores_width_and_explicit_sizes_respect_bounds");
+            tab.SetDetailsColumns(columns);
+            TabState fresh_tab;
+            const auto inherited = tab.GetDetailsColumns();
+            tab.SetDetailsColumns({});
+            passed &= Check(inherited == columns && fresh_tab.GetDetailsColumns() == tab.GetDetailsColumns() &&
+                    tab.GetDetailsColumns().Layout(800) == wide,
+                "details_column_widths_are_copied_by_value_and_restored_with_defaults");
         }
 
         const std::wstring path_a = L"C:\\phase1-view\\A";

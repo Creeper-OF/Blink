@@ -7,19 +7,20 @@ param(
  [Parameter(ParameterSetName='Objects')][switch]$KeyboardOnly,
  [Parameter(ParameterSetName='Tabs')][switch]$TabMenuOnly,
  [Parameter(ParameterSetName='Columns')][switch]$ColumnsOnly,
- [Parameter(ParameterSetName='ColumnOrder')][switch]$ColumnOrderOnly
+ [Parameter(ParameterSetName='ColumnOrder')][switch]$ColumnOrderOnly,
+ [Parameter(ParameterSetName='ColumnWidth')][switch]$ColumnWidthOnly
 )
 # G06a: new owned PID/HWND, real UIA and scoped keyboard input, GUID-only fixtures.
 # Does not build, use global input/Clipboard, edit services or force any process exit.
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $project=Split-Path -Parent $PSScriptRoot
-$topic=if($ColumnOrderOnly){'details-column-order'}elseif($ColumnsOnly){'details-columns'}elseif($TabMenuOnly){'tab-context-menu'}else{'explorer-object-menu'}
+$topic=if($ColumnWidthOnly){'details-column-width'}elseif($ColumnOrderOnly){'details-column-order'}elseif($ColumnsOnly){'details-columns'}elseif($TabMenuOnly){'tab-context-menu'}else{'explorer-object-menu'}
 if(-not $OutputDirectory){$OutputDirectory='.build\'+$topic+'\integration'}
 if(-not [IO.Path]::IsPathRooted($OutputDirectory)){$OutputDirectory=Join-Path $project $OutputDirectory}
 $integration=[IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $integration -Force|Out-Null
-$reportPath=Join-Path $integration $(if($ColumnOrderOnly){'ui-column-order-report.json'}elseif($ColumnsOnly){'ui-details-columns-report.json'}elseif($TabMenuOnly){'ui-tab-menu-report.json'}else{'ui-object-menu-report.json'})
+$reportPath=Join-Path $integration $(if($ColumnWidthOnly){'ui-column-width-report.json'}elseif($ColumnOrderOnly){'ui-column-order-report.json'}elseif($ColumnsOnly){'ui-details-columns-report.json'}elseif($TabMenuOnly){'ui-tab-menu-report.json'}else{'ui-object-menu-report.json'})
 if(-not $Binary){$Binary=Join-Path $project ('src\Blink\x64\'+$Configuration+'\Blink.exe')}
 if(-not [IO.Path]::IsPathRooted($Binary)){$Binary=Join-Path $project $Binary}
 $Binary=[IO.Path]::GetFullPath($Binary)
@@ -31,6 +32,10 @@ $markerName='marker-'+$token+'.txt';$childMarkerName='child-'+$token+'.txt'
 $allowedDirectories=@($fixture,$source,$child,$empty);$allowedFiles=@{};$fileIdentities=@{};$directoryIdentities=@{}
 $allowedFiles[(Join-Path $source $markerName)]='Blink object menu root '+$guid
 $allowedFiles[(Join-Path $child $childMarkerName)]='Blink object menu child '+$guid
+if($ColumnWidthOnly){
+ $longName=[string]::new([char]'W',76)+'-'+$token+'.txt'
+ $allowedFiles[(Join-Path $source $longName)]='Blink visible width fixture '+$guid
+}
 $compilerTemp=Join-Path $integration ('compiler-temp\'+$guid);$oldTemp=$env:TEMP;$oldTmp=$env:TMP
 $process=$null;$fixtureCreated=$false;$tempChanged=$false;$script:windowCache=$null;$script:currentStep='preflight'
 $checks=[Collections.Generic.List[object]]::new();$notes=[Collections.Generic.List[string]]::new()
@@ -271,6 +276,7 @@ function Open-DetailsColumnMenu([string]$Field='Name', [bool]$ShiftF10=$false) {
  Wait-Ui 'details-column context menu and checkbox peer' {$null -ne (Owned-Id 'DetailsColumnMenu') -and $null -ne (Owned-Id 'ColumnMenuName')}
  $items=@('Name','Type','Size','Modified','RestoreDefaults')
  if($ColumnOrderOnly){$items+=@('MoveLeft','MoveRight')}
+ if($ColumnWidthOnly){$items+=@('Narrow','Widen','FitVisible')}
  $report.menu_evidence+=@([pscustomobject]@{step=$script:currentStep;source=(Peer-Evidence $header);
   menu=(Peer-Evidence (Owned-Id 'DetailsColumnMenu'));items=@($items|ForEach-Object{Peer-Evidence (Owned-Id ('ColumnMenu'+$_))})})
  Save-Report
@@ -427,6 +433,141 @@ function Check-DetailsColumnOrder {
   Fixture-Unchanged
  }
 }
+
+function Read-DetailsGeometry([string]$Marker,[string]$Field,[string]$NextField='') {
+ $row=Rows|Where-Object{$_.Current.Name -ceq $Marker}|Select-Object -First 1
+ $header=By-Id ('DetailsHeader'+$Field)
+ $cell=Find-In $row ('DetailsCell'+$Field)
+ if(-not $header -or -not $cell){return $null}
+ $headerBounds=$header.Current.BoundingRectangle
+ $cellBounds=$cell.Current.BoundingRectangle
+ $span=$null
+ if($NextField){
+  $next=Find-In $row ('DetailsCell'+$NextField)
+  if(-not $next){return $null}
+  $span=$next.Current.BoundingRectangle.Left - $cellBounds.Left
+ }
+ return [pscustomobject]@{header_x=$headerBounds.Left;cell_x=$cellBounds.Left;
+  header_width=$headerBounds.Width;cell_width=$cellBounds.Width;cell_span=$span}
+}
+
+function Read-FolderScroll {
+ $peer=Entries
+ $pattern=$null
+ if($peer -and $peer.TryGetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern,[ref]$pattern)){return $pattern}
+}
+
+function Check-DetailsColumnWidth {
+ $tolerance=3.0
+ $widths=@{}
+ $sourceName=[IO.Path]::GetFileName($source)
+ $report.width_measurements=[ordered]@{}
+ Check 'W01 widening Type changes the real header and cell by one step, retaining sort and selection' {
+  [BlinkObjectMenuUiNative]::SizeOwnedWindow($process.Id,1060)
+  Navigate $source
+  Wait-Ui 'default visible fixture and Type column' {@(Row-Names) -ccontains $longName -and (Read-DetailsGeometry $markerName 'Type' 'Size')}
+  $widths['default']=Read-DetailsGeometry $markerName 'Type' 'Size'
+  # UIA reports screen pixels. Use the default 140-DIP column as the scale reference.
+  $widths['pixels_per_dip']=$widths['default'].cell_span/140.0
+  $report.width_measurements['PixelsPerDip']=$widths['pixels_per_dip']
+  $report.width_measurements['TypeBefore']=$widths['default']
+  $widths['name']=Read-DetailsGeometry $markerName 'Name'
+  $widths['size']=Read-DetailsGeometry $markerName 'Size'
+  Act (By-Id 'DetailsHeaderType')
+  Wait-Ui 'Type sort applied' {(By-Id 'CommandSort').Current.HelpText -in @(Resource-Labels 'Column.Type')}
+  $sortDirection=(By-Id 'CommandSort').Current.ItemStatus
+  Select-Marker
+  Open-DetailsColumnMenu 'Type' $true
+  Act (Owned-Id 'ColumnMenuWiden')
+  Wait-Ui 'Type header and cell both widen by 32 DIPs' {
+   $actual=Read-DetailsGeometry $markerName 'Type' 'Size'
+   $report.width_measurements['TypeObserved']=$actual
+   $expectedDelta=32*$widths['pixels_per_dip']
+   $actual -and [Math]::Abs($actual.header_width - $widths['default'].header_width - $expectedDelta) -le $tolerance -and
+    [Math]::Abs($actual.cell_span - $widths['default'].cell_span - $expectedDelta) -le $tolerance
+  }
+  $widths['widened']=Read-DetailsGeometry $markerName 'Type' 'Size'
+  if(-not (Same-Names @(Selected-Names) @($markerName)) -or (Address-Text) -ine $source -or
+   (By-Id 'CommandSort').Current.HelpText -notin @(Resource-Labels 'Column.Type') -or
+   (By-Id 'CommandSort').Current.ItemStatus -cne $sortDirection){throw 'Resizing changed the folder, selection or sort'}
+  $report.width_measurements['TypeWidened']=$widths['widened']
+ }
+ Check 'W02 the Type width survives hiding and showing, and the duplicate keeps its own layout' {
+  Open-DetailsColumnMenu
+  Choose-DetailsColumn 'Type'
+  Wait-Ui 'hidden Type column' {Test-DetailsLayout $markerName @('Name','Size','Modified')}
+  Open-DetailsColumnMenu
+  Choose-DetailsColumn 'Type'
+  Wait-Ui 'revealed Type retains width' {
+   $actual=Read-DetailsGeometry $markerName 'Type' 'Size'
+   $actual -and [Math]::Abs($actual.header_width - $widths['widened'].header_width) -le $tolerance -and
+    [Math]::Abs($actual.cell_span - $widths['widened'].cell_span) -le $tolerance
+  }
+  Open-TabMenu 0 Apps
+  Act (Owned-Id 'TabContextDuplicate')
+  Wait-Ui 'duplicate inherits Type width' {
+   $actual=Read-DetailsGeometry $markerName 'Type' 'Size'
+   @(Tabs).Count -eq 2 -and (Selected-Tab).ordinal -eq 1 -and (Address-Text) -ieq $source -and $actual -and
+    [Math]::Abs($actual.cell_span - $widths['widened'].cell_span) -le $tolerance
+  }
+  Open-DetailsColumnMenu 'Type'
+  Act (Owned-Id 'ColumnMenuNarrow')
+  Wait-Ui 'only the duplicate narrows by one step' {
+   $actual=Read-DetailsGeometry $markerName 'Type' 'Size'
+   $actual -and [Math]::Abs($actual.cell_span - $widths['default'].cell_span) -le $tolerance
+  }
+  Select-Tab ([pscustomobject]@{ordinal=0;name=$sourceName}) $source
+  Wait-Ui 'source retains custom width' {
+   $actual=Read-DetailsGeometry $markerName 'Type' 'Size'
+   $actual -and [Math]::Abs($actual.cell_span - $widths['widened'].cell_span) -le $tolerance
+  }
+ }
+ Check 'W03 fitting Name measures the visible long filename and horizontally scrolls headers and cells together' {
+  Open-DetailsColumnMenu 'Name' $true
+  Act (Owned-Id 'ColumnMenuFitVisible')
+  Wait-Ui 'long name creates a usable horizontal scroll range' {
+   $scroll=Read-FolderScroll
+   $actual=Read-DetailsGeometry $longName 'Name'
+   $report.width_measurements['LongNameObserved']=$actual
+   if($scroll){$report.width_measurements['HorizontalBeforeMove']=$scroll.Current.HorizontalScrollPercent}
+   $scroll -and $scroll.Current.HorizontallyScrollable -and $actual -and
+    $actual.header_width -gt $widths['name'].header_width+320*$widths['pixels_per_dip']
+  }
+  $report.width_measurements['NameBefore']=$widths['name']
+  $report.width_measurements['LongNameFitted']=Read-DetailsGeometry $longName 'Name'
+  $scroll=Read-FolderScroll
+  $null=Require-Owned-Desktop 'before scrolling the owned listing'
+  $expectedGap=$widths['size'].cell_x - $widths['size'].header_x
+  $scroll.SetScrollPercent(100,-1)
+  Wait-Ui 'trailing columns align at the right end of the scroll range' {
+   $actual=Read-DetailsGeometry $markerName 'Size'
+   $report.width_measurements['SizeAtEnd']=$actual
+   $report.width_measurements['HorizontalAtEnd']=$scroll.Current.HorizontalScrollPercent
+   $actual -and $scroll.Current.HorizontalScrollPercent -ge 99 -and
+    [Math]::Abs($actual.cell_x - $actual.header_x - $expectedGap) -le $tolerance -and (By-Id 'DetailsHeaderModified')
+  }
+  $left=$report.width_measurements['LongNameFitted']
+  $scroll.SetScrollPercent(0,-1)
+  Wait-Ui 'header and file cell return to their aligned positions at the left end' {
+   $actual=Read-DetailsGeometry $longName 'Name'
+   $report.width_measurements['NameBackAtStart']=$actual
+   $report.width_measurements['HorizontalBackAtStart']=$scroll.Current.HorizontalScrollPercent
+   $actual -and $scroll.Current.HorizontalScrollPercent -le 1 -and
+    [Math]::Abs($actual.header_x - $left.header_x) -le $tolerance -and
+    [Math]::Abs($actual.cell_x - $left.cell_x) -le $tolerance -and
+    [Math]::Abs($actual.header_width - $left.header_width) -le $tolerance
+  }
+  if(-not (Same-Names @(Selected-Names) @($markerName))){throw 'Horizontal scroll lost the original selection'}
+  Open-DetailsColumnMenu 'Name'
+  Act (Owned-Id 'ColumnMenuRestoreDefaults')
+  Wait-Ui 'default widths restore the wide layout' {
+   $actual=Read-DetailsGeometry $markerName 'Type'
+   $actual -and [Math]::Abs($actual.header_width-$widths['default'].header_width) -le $tolerance -and
+    -not (Read-FolderScroll).Current.HorizontallyScrollable
+  }
+  Fixture-Unchanged
+ }
+}
 Save-Report
 try{
  New-Item -ItemType Directory -Path $compilerTemp -Force|Out-Null;$env:TEMP=$compilerTemp;$env:TMP=$compilerTemp;$tempChanged=$true
@@ -440,6 +581,7 @@ using System.Text;
 public sealed class BlinkObjectMenuUiDesktop { public bool InputReady; public string Reason,DesktopName,CursorWindowClass,CenterWindowClass,ForegroundClass; public int SessionId,CursorX,CursorY,CenterX,CenterY; public uint CursorWindowPid,CenterWindowPid,ForegroundPid; public long Foreground; }
 public static class BlinkObjectMenuUiNative {
     [StructLayout(LayoutKind.Sequential)] struct Point { public int X,Y; public Point(int x,int y){X=x;Y=y;} }
+    [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left,Top,Right,Bottom; }
     delegate bool EnumWindowProc(IntPtr window,IntPtr parameter);
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll",SetLastError=true)] static extern bool EnumWindows(EnumWindowProc callback,IntPtr parameter);
@@ -451,6 +593,8 @@ public static class BlinkObjectMenuUiNative {
     [DllImport("user32.dll",EntryPoint="SendMessageTimeoutW",CharSet=CharSet.Unicode,ExactSpelling=true,SetLastError=true)] static extern IntPtr SendMessageTimeout(IntPtr window,uint message,UIntPtr w,IntPtr l,uint flags,uint timeout,out UIntPtr result);
     [DllImport("user32.dll",SetLastError=true)] static extern bool GetCursorPos(out Point point);
     [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Point point);
+    [DllImport("user32.dll",SetLastError=true)] static extern bool GetWindowRect(IntPtr window,out Rect bounds);
+    [DllImport("user32.dll",SetLastError=true)] static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll",SetLastError=true)] static extern IntPtr OpenInputDesktop(uint flags,bool inherit,uint access);
@@ -489,6 +633,18 @@ public static class BlinkObjectMenuUiNative {
         return result;
     }
     static void Own(IntPtr window,int pid) { uint owner;GetWindowThreadProcessId(window,out owner);if(window==IntPtr.Zero||owner!=(uint)pid)throw new InvalidOperationException("Owned HWND required"); }
+    public static void SizeOwnedWindow(int pid,int dipWidth) {
+        Own(OwnedWindow,pid);
+        const uint NoMove=0x0002,NoZOrder=0x0004,NoActivate=0x0010;
+        var previous=SetThreadDpiAwarenessContext(new IntPtr(-4));
+        try {
+            Rect bounds;
+            if(!GetWindowRect(OwnedWindow,out bounds))throw new Win32Exception(Marshal.GetLastWin32Error());
+            int width=(int)Math.Round(dipWidth*GetDpiForWindow(OwnedWindow)/96.0);
+            if(!SetWindowPos(OwnedWindow,IntPtr.Zero,0,0,width,bounds.Bottom-bounds.Top,NoMove|NoZOrder|NoActivate))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+        }finally{if(previous!=IntPtr.Zero)SetThreadDpiAwarenessContext(previous);}
+    }
     static IntPtr InputSite(IntPtr parent) { IntPtr child=IntPtr.Zero;while((child=FindWindowEx(parent,child,null,null))!=IntPtr.Zero){var name=new StringBuilder(128);GetClassName(child,name,128);if(name.ToString()=="InputSiteWindowClass")return child;var nested=InputSite(child);if(nested!=IntPtr.Zero)return nested;}return IntPtr.Zero; }
     static void Message(IntPtr window,int pid,uint msg,uint key,IntPtr data) { Own(window,pid);UIntPtr result;if(SendMessageTimeout(window,msg,new UIntPtr(key),data,2,3000,out result)==IntPtr.Zero)throw new Win32Exception(Marshal.GetLastWin32Error(),"Owned message timed out"); }
     public static void Key(int pid,uint key,int modifiers) {
@@ -526,7 +682,9 @@ public static class BlinkObjectMenuUiNative {
  $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;if(-not $process.Start()){throw 'Owned launch failed'};$ownedHandle=$process.Handle;$report.process_id=$process.Id;Save-Report
  Wait-Ui 'new owned WinUI window' {$null -ne (Window)};[BlinkObjectMenuUiNative]::OwnedWindow=$process.MainWindowHandle;$report.window_dpi=[BlinkObjectMenuUiNative]::GetDpiForWindow($process.MainWindowHandle)
  Wait-Ui 'real initial ThisPC locations' {Is-ThisPc};$initialTab=Selected-Tab;$initialAddress=Address-Text
- if($ColumnOrderOnly){
+ if($ColumnWidthOnly){
+  Check-DetailsColumnWidth
+ }elseif($ColumnOrderOnly){
   Check-DetailsColumnOrder
  }elseif($ColumnsOnly){
   Check-DetailsColumns

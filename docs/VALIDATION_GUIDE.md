@@ -66,6 +66,17 @@ Apps 和 Shift+F10 使用当前列表焦点行。有其他盘符选中时，菜�
 
 窗口脚本使用定向键盘和 UI Automation 核对表头及真实文件单元格的横坐标、隐藏列重新显示的位置、排序和选中项保留、标签隔离、复制和恢复默认列。候选可用 `-Binary` 指定。实物鼠标拖动单独验证。
 
+## 详情视图列宽
+
+```powershell
+& .\x64\Release\Blink.Phase1.Tests.exe --suite folder-view
+.\scripts\run-blink-object-menu-smoke.ps1 -ColumnWidthOnly
+```
+
+在普通目录拖动表头右边缘调整宽度。双击边缘可适应表头和当前屏幕内的行。聚焦表头后，菜单键或 Shift+F10 可打开「缩窄列」「加宽列」「适应可见内容」。宽度跟随列字段，切换目录、显隐或重排后仍保留。复制标签继承宽度，「恢复默认列」同时重置宽度、顺序和显隐。自动名称列通常使用剩余宽度，放不下时与其他列一起横向滚动。参见 [WinUI ScrollViewer](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/scroll-controls)。
+
+窗口脚本检查实际表头和单元格宽度、排序与选中项、显隐和标签宽度隔离，以及长文件名适配后横向滚动两端的对齐。候选可用 `-Binary` 指定。表头边缘的鼠标拖动和双击单独验证。
+
 ## Windows 属性与 Blink 详情
 
 ```powershell

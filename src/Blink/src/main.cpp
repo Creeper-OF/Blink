@@ -77,6 +77,7 @@
 #include <functional>
 #include <iomanip>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -1158,12 +1159,23 @@ struct App : AppT<App>
         AddGridRow(content_grid_, 1, GridUnitType::Star);
 
         BuildFolderViewCommands();
+        details_header_viewport_ = Grid();
+        auto header_clip = RectangleGeometry();
+        details_header_viewport_.Clip(header_clip);
+        details_header_viewport_.SizeChanged([this, header_clip](auto&&, const SizeChangedEventArgs& args) {
+            const auto size = args.NewSize();
+            header_clip.Rect({ 0, 0, size.Width, size.Height });
+            if (const auto* tab = ActiveTab(); size.Width > 0 && !window_style_closed_ && tab && tab->state)
+            { SyncDetailsColumns(tab->state->GetDetailsColumns()); }
+        });
         details_header_ = Grid();
-        auto details_header = details_header_;
-        details_header.Height(32);
-        BuildDetailsHeader(details_header);
-        Grid::SetRow(details_header, 1);
-        content_grid_.Children().Append(details_header);
+        details_header_.Height(32);
+        details_header_offset_ = TranslateTransform();
+        details_header_.RenderTransform(details_header_offset_);
+        BuildDetailsHeader(details_header_);
+        details_header_viewport_.Children().Append(details_header_);
+        Grid::SetRow(details_header_viewport_, 1);
+        content_grid_.Children().Append(details_header_viewport_);
 
         if (ui_probe_mode_ != UiProbeMode::NoFolderList)
         {
@@ -1187,6 +1199,16 @@ struct App : AppT<App>
             content_grid_.Children().Append(entries_);
             Grid::SetRow(entries_, 2);
         }
+        details_resize_guide_ = Border();
+        details_resize_guide_.Width(1);
+        details_resize_guide_.HorizontalAlignment(HorizontalAlignment::Left);
+        details_resize_guide_.Background(SolidColorBrush(Windows::UI::Color{ 0xFF, 0x80, 0x80, 0x80 }));
+        details_resize_guide_.IsHitTestVisible(false);
+        details_resize_guide_.Visibility(Visibility::Collapsed);
+        details_resize_guide_offset_ = TranslateTransform();
+        details_resize_guide_.RenderTransform(details_resize_guide_offset_);
+        // The guide is above the header and independent of the row template.
+        details_header_viewport_.Children().Append(details_resize_guide_);
         body.Children().Append(content_grid_);
         Grid::SetColumn(content_grid_, 1);
         BuildSearchSurface();
@@ -1247,6 +1269,7 @@ struct App : AppT<App>
     {
         CancelTargetOperationWork();
         details_column_drag_.reset();
+        CancelDetailsColumnResize();
         DismissTabContextMenu();
         DismissDetailsColumnMenu();
         DismissCommandBarMenus();
@@ -4573,6 +4596,12 @@ struct App : AppT<App>
     {
         ListViewBase control = mode == blink::app::FolderViewMode::Grid ?
             GridView().as<ListViewBase>() : ListView().as<ListViewBase>();
+        if (mode == blink::app::FolderViewMode::Details && ui_probe_mode_ == UiProbeMode::None)
+        {
+            control.Loaded([this](const IInspectable& sender, const RoutedEventArgs&) {
+                if (sender == entries_ && !window_style_closed_) { ConnectDetailsScrolling(); }
+            });
+        }
         control.SelectionMode(ListViewSelectionMode::Extended);
         ConfigureFileDragControl(control);
         // Keep an empty folder's command surface reachable from the keyboard.
@@ -4725,6 +4754,10 @@ struct App : AppT<App>
         auto replacement = CreateFolderViewControl(mode);
         folder_view_presentation_.Configure(replacement, mode, ActiveState().GetDetailsColumns());
         details_column_drag_.reset();
+        CancelDetailsColumnResize();
+        details_scroll_changed_.revoke();
+        details_scroll_viewer_ = nullptr;
+        details_header_offset_.X(0);
         DismissDetailsColumnMenu();
         selection_sync_suppressed_ = true;
         const auto previous = entries_;
@@ -4822,7 +4855,7 @@ struct App : AppT<App>
             Automation::AutomationProperties::SetItemStatus(button, hstring(direction_label));
             ToolTipService::SetToolTip(button, winrt::box_value(hstring(field_label + L" / " + direction_label)));
         }
-        details_header_.Visibility(mode == blink::app::FolderViewMode::Details ?
+        details_header_viewport_.Visibility(mode == blink::app::FolderViewMode::Details ?
             Visibility::Visible : Visibility::Collapsed);
         SyncCommandBarState();
     }
@@ -4933,17 +4966,23 @@ struct App : AppT<App>
 
     void BuildDetailsHeader(const Grid& header)
     {
+        const auto layout = blink::app::DetailsColumns{}.Layout(0);
+        const auto cursor = Microsoft::UI::Input::InputSystemCursor::Create(
+            Microsoft::UI::Input::InputSystemCursorShape::SizeWestEast);
         for (std::uint32_t index = 0; index < blink::app::DetailsColumnDefinitions.size(); ++index)
         {
             const auto& column = blink::app::DetailsColumnDefinitions[index];
-            AddGridColumn(header, index == 0 ? 1 : column.width,
+            AddGridColumn(header, index == 0 ? 1 : layout.widths[index],
                 index == 0 ? GridUnitType::Star : GridUnitType::Pixel);
             auto button = MakeSortHeader(column.label, column.field);
             Automation::AutomationProperties::SetAutomationId(button,
                 hstring(std::wstring(L"DetailsHeader") + column.property));
             if (column.shown) { ConfigureDetailsColumnDrag(button, column.field); }
-            Grid::SetColumn(button, index);
-            header.Children().Append(button);
+            auto slot = Grid();
+            slot.Children().Append(button);
+            slot.Children().Append(BuildDetailsResizeGrip(column, cursor));
+            Grid::SetColumn(slot, index);
+            header.Children().Append(slot);
         }
 
         header.ContextRequested([this](auto&&, const ContextRequestedEventArgs& args) {
@@ -4970,27 +5009,187 @@ struct App : AppT<App>
     {
         if (!entries_ || ui_probe_mode_ != UiProbeMode::None ||
             rendered_view_mode_ != blink::app::FolderViewMode::Details) { return; }
-        folder_view_presentation_.SetDetailsColumns(entries_, columns);
-        for (std::uint32_t index = 1; index < blink::app::DetailsColumnDefinitions.size(); ++index)
+        const auto layout = columns.Layout(details_header_viewport_.ActualWidth());
+        if (!layout.scroll_extent && details_header_offset_.X() != 0)
         {
-            const auto column_index = blink::app::DetailsColumnIndex(columns.Order()[index - 1]);
-            const auto& column = blink::app::DetailsColumnDefinitions[column_index];
-            const bool visible = column.IsVisible(columns);
-            const auto visibility = visible ? Visibility::Visible : Visibility::Collapsed;
-            const auto header = details_header_.Children().GetAt(column_index).as<FrameworkElement>();
-            const auto grid_column = static_cast<std::int32_t>(index);
-            if (Grid::GetColumn(header) != grid_column)
+            if (details_scroll_viewer_)
             {
-                Grid::SetColumn(header, grid_column);
+                details_scroll_viewer_.ChangeView(box_value(0.0).as<Windows::Foundation::IReference<double>>(),
+                    nullptr, nullptr, true);
+            }
+            details_header_offset_.X(0);
+        }
+        folder_view_presentation_.SetDetailsColumns(entries_, layout);
+        const auto current_width = details_header_.Width();
+        if (layout.scroll_extent && current_width != layout.scroll_extent)
+        {
+            details_header_.HorizontalAlignment(HorizontalAlignment::Left);
+            details_header_.Width(layout.scroll_extent);
+        }
+        else if (!layout.scroll_extent && !std::isnan(current_width))
+        {
+            details_header_.Width(std::numeric_limits<double>::quiet_NaN());
+            details_header_.HorizontalAlignment(HorizontalAlignment::Stretch);
+        }
+        for (std::int32_t index = 0; index < static_cast<std::int32_t>(layout.fields.size()); ++index)
+        {
+            const auto slot = DetailsHeaderSlot(layout.fields[index]);
+            if (Grid::GetColumn(slot) != index)
+            {
+                Grid::SetColumn(slot, index);
             }
             const auto definition = details_header_.ColumnDefinitions().GetAt(index);
-            const double width = visible ? column.width : 0;
-            if (definition.Width().Value != width) { definition.Width({ width, GridUnitType::Pixel }); }
-            if (header.Visibility() != visibility)
+            const auto width = layout.widths[index];
+            const GridLength length = width == blink::app::DetailsColumnLayout::Stretch ?
+                GridLength{ 1, GridUnitType::Star } : GridLength{ static_cast<double>(width), GridUnitType::Pixel };
+            if (definition.Width() != length) { definition.Width(length); }
+            const auto visibility = width != 0 ? Visibility::Visible : Visibility::Collapsed;
+            if (slot.Visibility() != visibility)
             {
-                header.Visibility(visibility);
+                slot.Visibility(visibility);
             }
         }
+    }
+
+    Grid DetailsHeaderSlot(const blink::app::SortField field) const
+    {
+        return details_header_.Children().GetAt(blink::app::DetailsColumnIndex(field)).as<Grid>();
+    }
+
+    static ScrollViewer FindFolderScrollViewer(const DependencyObject& root)
+    {
+        const auto count = VisualTreeHelper::GetChildrenCount(root);
+        for (std::int32_t index = 0; index < count; ++index)
+        {
+            const auto child = VisualTreeHelper::GetChild(root, index);
+            if (const auto viewer = child.try_as<ScrollViewer>()) { return viewer; }
+            if (const auto viewer = FindFolderScrollViewer(child)) { return viewer; }
+        }
+        return nullptr;
+    }
+
+    void ConnectDetailsScrolling()
+    {
+        const auto viewer = FindFolderScrollViewer(entries_);
+        if (!viewer) { return; }
+        details_scroll_viewer_ = viewer;
+        details_scroll_changed_ = viewer.ViewChanged(winrt::auto_revoke,
+            [this](const IInspectable& sender, const ScrollViewerViewChangedEventArgs&) {
+                if (sender != details_scroll_viewer_ || window_style_closed_) { return; }
+                const auto offset = std::isnan(details_header_.Width()) ? 0.0 : -details_scroll_viewer_.HorizontalOffset();
+                if (details_header_offset_.X() != offset)
+                {
+                    CancelDetailsColumnResize();
+                    details_header_offset_.X(offset);
+                }
+            });
+        SyncDetailsColumns(ActiveState().GetDetailsColumns());
+    }
+
+    double DetailsHeaderWidth(const Grid& slot) const
+    {
+        return details_header_.ColumnDefinitions().GetAt(Grid::GetColumn(slot)).ActualWidth();
+    }
+
+    void ApplyDetailsColumnWidth(const blink::app::SortField field, const int width)
+    {
+        if (!CanConfigureDetailsColumns()) { return; }
+        auto updated = ActiveState().GetDetailsColumns();
+        if (updated.SetWidth(field, width)) { ApplyDetailsColumns(updated); }
+    }
+
+    void FitDetailsColumn(const blink::app::SortField field)
+    {
+        if (!CanConfigureDetailsColumns() || !ActiveState().GetDetailsColumns().IsVisible(field)) { return; }
+        const auto button = DetailsHeaderSlot(field).Children().GetAt(0).as<Button>();
+        ApplyDetailsColumnWidth(field, blink::app::MeasureDetailsColumnWidth(entries_, button, field));
+    }
+
+    void CancelDetailsColumnResize() noexcept
+    {
+        if (const auto resize = std::exchange(details_column_resize_, std::nullopt))
+        {
+            try
+            {
+                details_resize_guide_.Visibility(Visibility::Collapsed);
+                resize->grip.ReleasePointerCapture(resize->pointer);
+            }
+            catch (...) {}
+        }
+    }
+
+    [[nodiscard]] bool IsDetailsResizePointer(const PointerRoutedEventArgs& args) const
+    {
+        return details_column_resize_ && details_column_resize_->pointer.PointerId() == args.Pointer().PointerId();
+    }
+
+    [[nodiscard]] double DetailsResizeWidth(const PointerRoutedEventArgs& args) const
+    {
+        const auto& resize = *details_column_resize_;
+        return std::clamp(resize.width + args.GetCurrentPoint(details_header_viewport_).Position().X - resize.x,
+            static_cast<double>(blink::app::DetailsColumns::MinimumWidth(resize.field)),
+            static_cast<double>(blink::app::DetailsColumns::MaximumWidth));
+    }
+
+    Border BuildDetailsResizeGrip(const blink::app::DetailsColumnDefinition& column,
+        const Microsoft::UI::Input::InputCursor& cursor)
+    {
+        const auto field = column.field;
+        Border grip;
+        grip.Width(blink::app::DetailsColumnGripWidth);
+        grip.HorizontalAlignment(HorizontalAlignment::Right);
+        grip.Background(SolidColorBrush(Windows::UI::Colors::Transparent()));
+        grip.BorderBrush(SolidColorBrush(Windows::UI::Color{ 0x72, 0x80, 0x80, 0x80 }));
+        grip.BorderThickness({ 0, 0, 1, 0 });
+        grip.Margin({ 0, 5, 0, 5 });
+        grip.as<IUIElementProtected>().ProtectedCursor(cursor);
+        Automation::AutomationProperties::SetAutomationId(grip,
+            hstring(std::wstring(L"DetailsResizeGrip") + column.property));
+        ToolTipService::SetToolTip(grip, box_value(hstring(localization_.GetString(L"Column.ResizeGrip"))));
+        grip.PointerPressed([this, field](const IInspectable& sender, const PointerRoutedEventArgs& args) {
+            if (!CanConfigureDetailsColumns() || details_column_resize_) { return; }
+            const auto point = args.GetCurrentPoint(details_header_viewport_);
+            if (!point.Properties().IsLeftButtonPressed()) { return; }
+            const auto target = sender.as<Border>();
+            const auto pointer = args.Pointer();
+            if (!target.CapturePointer(pointer)) { return; }
+            const auto slot = DetailsHeaderSlot(field);
+            const auto boundary = slot.TransformToVisual(details_header_viewport_).TransformPoint(
+                { static_cast<float>(slot.ActualWidth()), 0 }).X;
+            details_column_resize_ = DetailsColumnResize{ target, pointer, field, point.Position().X,
+                DetailsHeaderWidth(slot), boundary };
+            args.Handled(true);
+        });
+        grip.PointerMoved([this](auto&&, const PointerRoutedEventArgs& args) {
+            if (!IsDetailsResizePointer(args)) { return; }
+            const auto& resize = *details_column_resize_;
+            const auto x = resize.boundary + DetailsResizeWidth(args) - resize.width;
+            details_resize_guide_offset_.X(std::clamp(x, 0.0,
+                std::max(0.0, details_header_viewport_.ActualWidth() - 1)));
+            details_resize_guide_.Visibility(Visibility::Visible);
+            args.Handled(true);
+        });
+        grip.PointerReleased([this](auto&&, const PointerRoutedEventArgs& args) {
+            if (!IsDetailsResizePointer(args)) { return; }
+            const auto resize = *details_column_resize_;
+            const auto width = DetailsResizeWidth(args);
+            CancelDetailsColumnResize();
+            if (std::abs(width - resize.width) >= 1)
+            {
+                ApplyDetailsColumnWidth(resize.field, static_cast<int>(std::lround(width)));
+            }
+            args.Handled(true);
+        });
+        const auto cancel = [this](auto&&, const PointerRoutedEventArgs& args) {
+            if (IsDetailsResizePointer(args)) { CancelDetailsColumnResize(); }
+        };
+        grip.PointerCaptureLost(cancel);
+        grip.PointerCanceled(cancel);
+        grip.DoubleTapped([this, field](auto&&, const DoubleTappedRoutedEventArgs& args) {
+            FitDetailsColumn(field);
+            args.Handled(true);
+        });
+        return grip;
     }
 
     std::optional<blink::app::SortField> DetailsHeaderField(const IInspectable& source) const
@@ -5119,21 +5318,43 @@ struct App : AppT<App>
             details_column_menu_.Items().Append(item);
         }
         details_column_menu_.Items().Append(MenuFlyoutSeparator());
-        if (field && *field != SortField::Name && columns.IsVisible(*field))
+        if (field && columns.IsVisible(*field))
         {
-            const auto add_move = [&](const DetailsColumnDirection direction, const wchar_t* label, const wchar_t* id) {
-                auto updated = columns;
-                const auto neighbor = columns.VisibleNeighbor(*field, direction);
-                MenuFlyoutItem move;
-                move.Text(hstring(localization_.GetString(label)));
-                move.IsEnabled(neighbor && updated.Move(*field, *neighbor));
-                blink::app::StyleContextMenuItem(move);
-                Automation::AutomationProperties::SetAutomationId(move, id);
-                move.Click([choose, updated](auto&&, auto&&) { choose(updated); });
-                details_column_menu_.Items().Append(move);
+            const auto add_column_action = [&](const wchar_t* label, const wchar_t* id,
+                const bool enabled, const RoutedEventHandler& action) {
+                MenuFlyoutItem item;
+                item.Text(hstring(localization_.GetString(label)));
+                item.IsEnabled(enabled);
+                blink::app::StyleContextMenuItem(item);
+                Automation::AutomationProperties::SetAutomationId(item, id);
+                item.Click(action);
+                details_column_menu_.Items().Append(item);
             };
-            add_move(DetailsColumnDirection::Left, L"Column.MoveLeft", L"ColumnMenuMoveLeft");
-            add_move(DetailsColumnDirection::Right, L"Column.MoveRight", L"ColumnMenuMoveRight");
+            if (*field != SortField::Name)
+            {
+                const auto add_move = [&](const DetailsColumnDirection direction, const wchar_t* label, const wchar_t* id) {
+                    auto updated = columns;
+                    const auto neighbor = columns.VisibleNeighbor(*field, direction);
+                    const bool changed = neighbor && updated.Move(*field, *neighbor);
+                    add_column_action(label, id, changed, [choose, updated](auto&&, auto&&) { choose(updated); });
+                };
+                add_move(DetailsColumnDirection::Left, L"Column.MoveLeft", L"ColumnMenuMoveLeft");
+                add_move(DetailsColumnDirection::Right, L"Column.MoveRight", L"ColumnMenuMoveRight");
+                details_column_menu_.Items().Append(MenuFlyoutSeparator());
+            }
+            const auto actual_width = static_cast<int>(std::lround(DetailsHeaderWidth(DetailsHeaderSlot(*field))));
+            const auto add_width = [&](const int delta, const wchar_t* label, const wchar_t* id) {
+                auto updated = columns;
+                const bool changed = updated.SetWidth(*field, actual_width + delta);
+                add_column_action(label, id, changed, [choose, updated](auto&&, auto&&) { choose(updated); });
+            };
+            add_width(-32, L"Column.Narrow", L"ColumnMenuNarrow");
+            add_width(32, L"Column.Widen", L"ColumnMenuWiden");
+            add_column_action(L"Column.FitVisible", L"ColumnMenuFitVisible", true,
+                [weak = get_weak(), target = *field, tab = tab_window_state_.ActiveTabId()](auto&&, auto&&) {
+                    if (const auto app = weak.get(); app && app->tab_window_state_.ActiveTabId() == tab)
+                    { app->FitDetailsColumn(target); }
+                });
             details_column_menu_.Items().Append(MenuFlyoutSeparator());
         }
         MenuFlyoutItem reset;
@@ -5162,7 +5383,7 @@ struct App : AppT<App>
             winrt::box_value(hstring(localization_.Format(L"Toolbar.SortBy", label))));
         button.HorizontalAlignment(HorizontalAlignment::Stretch);
         button.VerticalAlignment(VerticalAlignment::Stretch);
-        button.Margin(Thickness{ 0, 0, 4, 0 });
+        button.Margin(Thickness{ 0, 0, blink::app::DetailsColumnGripWidth, 0 });
         button.Click([this, field](IInspectable const&, RoutedEventArgs const&) {
             auto descriptor = ActiveState().GetSortDescriptor();
             if (descriptor.field == field)
@@ -8381,6 +8602,7 @@ struct App : AppT<App>
 
     void BindFolderViewToActiveTab()
     {
+        CancelDetailsColumnResize();
         DismissTargetContextMenu();
         DismissCommandBarMenus();
         // Any tab/source presentation invalidates a delayed focus restore,
@@ -8785,12 +9007,11 @@ struct App : AppT<App>
         search_box_.IsEnabled(!snapshot.has_pending || (active && active->search_visible));
         const bool can_sort = enabled && snapshot.committed_location.IsFolder();
         SyncCommandBarState();
-        for (const auto& child : details_header_.Children())
+        for (const auto& column : blink::app::DetailsColumnDefinitions)
         {
-            if (const auto control = child.try_as<Control>())
-            {
-                control.IsEnabled(can_sort);
-            }
+            const auto children = DetailsHeaderSlot(column.field).Children();
+            children.GetAt(0).as<Button>().IsEnabled(can_sort);
+            children.GetAt(1).Visibility(can_sort ? Visibility::Visible : Visibility::Collapsed);
         }
         startup_.Stage("navigation-buttons.refresh");
         startup_.Stage("navigation-buttons.end");
@@ -8838,6 +9059,7 @@ struct App : AppT<App>
         tab_view_sync_suppressed_ = true;
         try
         {
+            CancelDetailsColumnResize();
             DismissTabContextMenu();
             DismissDetailsColumnMenu();
             DismissTargetContextMenu();
@@ -9926,6 +10148,16 @@ struct App : AppT<App>
         blink::app::SortField field;
     };
     std::optional<DetailsColumnDrag> details_column_drag_;
+    struct DetailsColumnResize
+    {
+        Border grip;
+        Pointer pointer;
+        blink::app::SortField field;
+        float x;
+        double width;
+        float boundary;
+    };
+    std::optional<DetailsColumnResize> details_column_resize_;
     MenuFlyout details_column_menu_{ nullptr };
     std::optional<FolderMenuContext> folder_system_menu_context_;
     bool window_style_closed_{};
@@ -9989,6 +10221,12 @@ struct App : AppT<App>
     TreeView navigation_tree_{ nullptr };
     Grid content_grid_{ nullptr };
     Grid details_header_{ nullptr };
+    Grid details_header_viewport_{ nullptr };
+    TranslateTransform details_header_offset_{ nullptr };
+    Border details_resize_guide_{ nullptr };
+    TranslateTransform details_resize_guide_offset_{ nullptr };
+    ScrollViewer details_scroll_viewer_{ nullptr };
+    ScrollViewer::ViewChanged_revoker details_scroll_changed_;
     blink::app::CommandBarPresentation command_bar_;
     AppBarButton view_mode_button_{ nullptr };
     MenuFlyout folder_view_menu_{ nullptr };

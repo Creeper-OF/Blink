@@ -37,6 +37,10 @@
   <data name="Column.RestoreDefaults" xml:space="preserve"><value>恢复默认列</value></data>
   <data name="Column.MoveLeft" xml:space="preserve"><value>向左移动列</value></data>
   <data name="Column.MoveRight" xml:space="preserve"><value>向右移动列</value></data>
+  <data name="Column.Narrow" xml:space="preserve"><value>缩窄列</value></data>
+  <data name="Column.Widen" xml:space="preserve"><value>加宽列</value></data>
+  <data name="Column.FitVisible" xml:space="preserve"><value>适应可见内容</value></data>
+  <data name="Column.ResizeGrip" xml:space="preserve"><value>拖动调整列宽，双击适应可见内容</value></data>
   <data name="Status.Selected" xml:space="preserve"><value>已选择 {0} 项</value><comment>已选择的项目数。</comment></data>
   <data name="Status.IndexNotConnected" xml:space="preserve"><value>索引：未连接</value><comment>IndexService 尚未连接。</comment></data>
   <data name="Status.Loading" xml:space="preserve"><value>正在加载  {0}</value><comment>正在枚举本地文件夹。</comment></data>

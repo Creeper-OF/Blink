@@ -703,6 +703,38 @@ namespace blink::app
         return true;
     }
 
+    bool DetailsColumns::SetWidth(const SortField field, const int width) noexcept
+    {
+        if (!IsVisible(field)) { return false; }
+        auto& current = widths_[static_cast<std::size_t>(field)];
+        const auto bounded = std::clamp(width, MinimumWidth(field), MaximumWidth);
+        return std::exchange(current, bounded) != bounded;
+    }
+
+    DetailsColumnLayout DetailsColumns::Layout(const double viewport_width) const noexcept
+    {
+        const bool auto_name = widths_[0] == 0;
+        DetailsColumnLayout layout{
+            { SortField::Name, order_[0], order_[1], order_[2] },
+            { auto_name ? MinimumWidth(SortField::Name) : widths_[0], 0, 0, 0 } };
+        for (std::size_t index = 1; index < layout.fields.size(); ++index)
+        {
+            const auto field = layout.fields[index];
+            if (IsVisible(field)) { layout.widths[index] = widths_[static_cast<std::size_t>(field)]; }
+        }
+
+        const auto total = std::accumulate(layout.widths.begin(), layout.widths.end(), 0);
+        if (viewport_width > 0 && total > viewport_width)
+        {
+            layout.scroll_extent = total;
+        }
+        else if (auto_name)
+        {
+            layout.widths[0] = DetailsColumnLayout::Stretch;
+        }
+        return layout;
+    }
+
     void TabState::SetDetailsColumns(const DetailsColumns columns) noexcept
     {
         details_columns_ = columns;

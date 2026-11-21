@@ -40,6 +40,10 @@
   <data name="Column.RestoreDefaults" xml:space="preserve"><value>Restore default columns</value></data>
   <data name="Column.MoveLeft" xml:space="preserve"><value>Move column left</value></data>
   <data name="Column.MoveRight" xml:space="preserve"><value>Move column right</value></data>
+  <data name="Column.Narrow" xml:space="preserve"><value>Narrow column</value></data>
+  <data name="Column.Widen" xml:space="preserve"><value>Widen column</value></data>
+  <data name="Column.FitVisible" xml:space="preserve"><value>Fit visible content</value></data>
+  <data name="Column.ResizeGrip" xml:space="preserve"><value>Drag to resize, double-click to fit visible content</value></data>
   <data name="Status.Selected" xml:space="preserve"><value>{0} selected</value><comment>Selected item count.</comment></data>
   <data name="Status.IndexNotConnected" xml:space="preserve"><value>Index: Not connected</value><comment>IndexService is not connected.</comment></data>
   <data name="Status.Loading" xml:space="preserve"><value>Loading  {0}</value><comment>Local folder enumeration is running.</comment></data>

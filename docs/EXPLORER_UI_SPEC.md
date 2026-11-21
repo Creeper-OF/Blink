@@ -121,7 +121,7 @@ flowchart TD
 | 在途浏览与已提交页面 | `BrowseState.h:14`；`TabState.h:19`；`TabState.cpp:58 CommitBrowse` | BrowseState为Idle/Loading/Completed/Failed；FolderState是Idle/Ready/Empty，不能混写成同一枚举。新请求失败不改原committed path/history；状态文案说明失败 |
 | 页面结果与选择 | `TabState`、`RowIdentity`；`main.cpp:640 TabUiState` | `FileIdentity`标对象，RowIdentity区分硬链接名称；虚拟容器/行号只作展示索引；列表选择回写模型 |
 | 视图与排序 | `TabState.view_mode_/sort_`；`main.cpp:3560 ApplyFolderViewMode/:3589 SetFolderViewMode/:3650附近 SetFolderSort` | Details/List/Grid共用同一行对象；改视图不导航、不重读目录；按Tab保存。重新创建控件后的焦点恢复带TabId和view generation |
-| 详情列选择 | `TabState::GetDetailsColumns`、`FolderViewPresentation::SetDetailsColumns` | 类型、大小和修改时间可按标签显隐。表头和行模板共用列定义，具体布局复用已生成的模板。点击表头仍走原排序入口 |
+| 详情列布局 | `TabState::GetDetailsColumns`、`FolderViewPresentation::SetDetailsColumns` | 类型、大小和修改时间可按标签显隐与重排，全部四列可调宽。表头和文件行共用布局，横向滚动保持对齐。点击表头仍走原排序入口 |
 | 隐藏项目 | `ItemVisibilityPolicy`、`TabWindowState::SetVisibilityPolicy` | 当前是窗口级统一策略，传播各Tab和树；默认隐藏Hidden，System始终不显示；搜索隐藏开关复用该策略。不是跨重启持久化设置 |
 | 搜索 | `TabRecord`、`SearchState.h:8`、`SearchPresentation.cpp:445 Update` | 每Tab独立query草稿、范围、模式、selection与动作代次；FollowLocation从committed Location解析；输入不逐字符RPC，Enter/搜索提交；retry复用已提交query |
 | 搜索动作/菜单 | `SearchContextSelection{tab_id,query_generation,result}` | 传真实结果副本并重新校验目标；空白右键不复用旧selection；隐藏、切Tab、结果更新使旧菜单失效 |
